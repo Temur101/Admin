@@ -337,6 +337,7 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
       redis,
       sessionTtlSec: 3600,
       logger,
+      prisma,
     });
 
     // Create 500 distinct resolved bot profiles
@@ -376,7 +377,7 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
           date: 1700000000,
           chat: { id: 1000 + (i % 500), type: "private", first_name: "Test" },
           from: { id: 1000 + (i % 500), is_bot: false, first_name: "Test" },
-          text: "/start",
+          text: "ping",
         },
       });
     }

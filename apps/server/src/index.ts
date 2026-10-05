@@ -26,6 +26,13 @@ export * from "./adapters/telegram/index.js";
 export * from "./adapters/telegram/transport.js";
 export * from "./adapters/telegram/mock-transport.js";
 export * from "./gateway/index.js";
+export * from "./bots/shared/i18n.js";
+export * from "./bots/shared/masking.js";
+export * from "./bots/shared/subscription.js";
+export * from "./bots/shared/notification.js";
+export * from "./bots/shared/user-service.js";
+export * from "./bots/shared/admin-menu.js";
+export * from "./workers/subscription-worker.js";
 
 import type { PrismaClient } from "@prisma/client";
 
@@ -85,6 +92,7 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
     redis: appRedis,
     sessionTtlSec: env.SESSION_TTL_SEC,
     logger,
+    prisma: appPrisma,
   });
 
   registerWebhookGateway(app, {

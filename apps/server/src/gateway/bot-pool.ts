@@ -8,6 +8,8 @@ import type { Logger } from "../core/logger.js";
 import type { PlatformBotContext, PlatformBotSession, ResolvedBot } from "./types.js";
 import { registerLeadCatchBot } from "../bots/leadcatch/index.js";
 import { registerQuickBookBot } from "../bots/quickbook/index.js";
+import type { PrismaClient } from "@prisma/client";
+import { registerSharedBotHandlers } from "../bots/shared/handlers.js";
 
 export interface BotPoolOptions {
   capacity: number;
@@ -16,6 +18,7 @@ export interface BotPoolOptions {
   redis: Redis;
   sessionTtlSec: number;
   logger: Logger;
+  prisma: PrismaClient;
 }
 
 export class BotPool {
@@ -25,6 +28,7 @@ export class BotPool {
   private readonly redis: Redis;
   private readonly sessionTtlSec: number;
   private readonly logger: Logger;
+  private readonly prisma: PrismaClient;
 
   constructor(opts: BotPoolOptions) {
     this.cache = new LruCache<string, Bot<PlatformBotContext>>(opts.capacity);
@@ -33,6 +37,7 @@ export class BotPool {
     this.redis = opts.redis;
     this.sessionTtlSec = opts.sessionTtlSec;
     this.logger = opts.logger;
+    this.prisma = opts.prisma;
   }
 
   getOrCreateBot(resolved: ResolvedBot): Bot<PlatformBotContext> {
@@ -88,6 +93,9 @@ export class BotPool {
         },
       }),
     );
+
+    // Register shared handlers (start, admin invite code, lang, admin menu)
+    registerSharedBotHandlers(bot, this.prisma);
 
     // Register bot-specific handlers
     if (resolved.botType === "LEADCATCH") {
