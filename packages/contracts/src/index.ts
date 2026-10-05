@@ -41,3 +41,18 @@ export const HealthResponseSchema = z.object({
   uptime: z.number().nonnegative(),
 });
 export type HealthResponse = z.infer<typeof HealthResponseSchema>;
+
+export const TelegramUpdateSchema = z
+  .object({
+    update_id: z.number().int(),
+  })
+  .passthrough();
+export type TelegramUpdate = z.infer<typeof TelegramUpdateSchema>;
+
+export const WebhookResponseSchema = z.object({
+  ok: z.boolean(),
+  duplicate: z.boolean().optional(),
+  error: z.string().optional(),
+});
+export type WebhookResponse = z.infer<typeof WebhookResponseSchema>;
+

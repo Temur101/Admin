@@ -4,7 +4,12 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
-    testTimeout: 15000,
+    testTimeout: 20000,
+    poolOptions: {
+      forks: {
+        execArgv: ["--expose-gc"],
+      },
+    },
     include: ["apps/*/test/**/*.test.ts", "packages/*/test/**/*.test.ts"],
     coverage: {
       provider: "v8",
@@ -12,3 +17,4 @@ export default defineConfig({
     },
   },
 });
+

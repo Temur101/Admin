@@ -12,6 +12,7 @@ node_modules/
 tools/
 uploads/
 *.log
+*.rdb
 
 # Build outputs
 dist/

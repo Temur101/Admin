@@ -6,7 +6,12 @@ declare global {
 }
 
 export function createPrismaClient(databaseUrl?: string): PrismaClient {
-  const url = databaseUrl ?? env.DATABASE_URL;
+  const defaultUrl =
+    process.env.NODE_ENV === "test" && env.TEST_DATABASE_URL
+      ? env.TEST_DATABASE_URL
+      : env.DATABASE_URL;
+  const url = databaseUrl ?? defaultUrl;
+
 
   // Append connection_limit=10 if not present to respect 2GB VPS memory limit
   let connectionUrl = url;

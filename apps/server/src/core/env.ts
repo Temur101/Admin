@@ -26,7 +26,20 @@ const EnvSchema = z.object({
   REDIS_URL: z.string().min(1, "REDIS_URL is required"),
   TEST_REDIS_URL: z.string().optional().default(""),
 
-  TOKEN_ENCRYPTION_KEY: z.string().min(1, "TOKEN_ENCRYPTION_KEY is required"),
+  // Webhook gateway tuning (defaults sized for a 2 GB VPS)
+  UPDATE_DEDUP_TTL_SEC: z.coerce.number().int().positive().default(900),
+  BOT_RESOLVE_CACHE_TTL_SEC: z.coerce.number().int().positive().default(600),
+  BOT_INFO_CACHE_TTL_SEC: z.coerce.number().int().positive().default(86400),
+  BOT_INSTANCE_CACHE_SIZE: z.coerce.number().int().positive().default(200),
+  SESSION_TTL_SEC: z.coerce.number().int().positive().default(3600),
+  WEBHOOK_MAX_INFLIGHT: z.coerce.number().int().positive().default(500),
+
+  TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .min(1, "TOKEN_ENCRYPTION_KEY is required")
+    .refine((v) => Buffer.from(v, "base64").length === 32, {
+      message: "TOKEN_ENCRYPTION_KEY must be base64 of exactly 32 bytes (AES-256)",
+    }),
   JWT_ACCESS_SECRET: z.string().min(1, "JWT_ACCESS_SECRET is required"),
   JWT_REFRESH_SECRET: z.string().min(1, "JWT_REFRESH_SECRET is required"),
   JWT_ACCESS_TTL: z.string().default("15m"),
