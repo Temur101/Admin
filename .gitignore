@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Local data & binaries
+.local_data/
+tools/
+uploads/
+*.log
+
+# Build outputs
+dist/
+build/
+coverage/
+*.tsbuildinfo
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj

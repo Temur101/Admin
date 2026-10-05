@@ -1,0 +1,38 @@
+{
+  "name": "@lcqb/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "start": "node dist/index.js",
+    "dev": "tsx watch src/index.ts",
+    "clean": "rimraf dist"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.2",
+    "@fastify/cors": "^11.3.0",
+    "@fastify/jwt": "^10.2.2",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/sensible": "^6.0.6",
+    "@grammyjs/storage-redis": "^2.4.2",
+    "@lcqb/contracts": "workspace:*",
+    "@prisma/client": "^6.4.1",
+    "argon2": "^0.41.1",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "grammy": "^1.35.0",
+    "ioredis": "^5.6.0",
+    "pino": "^9.6.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "pino-pretty": "^13.0.0",
+    "prisma": "^6.4.1",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2"
+  }
+}

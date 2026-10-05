@@ -1,0 +1,7 @@
+node_modules
+dist
+.local_data
+tools
+uploads
+*.log
+pnpm-lock.yaml

@@ -1,0 +1,33 @@
+{
+  "name": "leadcatch-quickbook-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "depcruise": "depcruise --config .dependency-cruiser.cjs apps packages",
+    "knip": "knip",
+    "check-mocks": "tsx scripts/check-mocks.ts",
+    "verify": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm knip && pnpm check-mocks && pnpm test && pnpm build",
+    "dev:server": "pnpm --filter @lcqb/server dev",
+    "dev:admin": "pnpm --filter @lcqb/admin dev"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "@types/node": "^22.13.9",
+    "dependency-cruiser": "^16.10.0",
+    "eslint": "^9.21.0",
+    "knip": "^5.45.0",
+    "prettier": "^3.5.3",
+    "rimraf": "^6.0.1",
+    "tsx": "^4.19.3",
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.26.0",
+    "vitest": "^3.0.7"
+  }
+}

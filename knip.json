@@ -1,0 +1,36 @@
+{
+  "$schema": "https://unpkg.com/knip@5/overview/config-schema.json",
+  "workspaces": {
+    "apps/server": {
+      "entry": ["test/**/*.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"]
+    },
+    "apps/admin": {
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/contracts": {
+      "project": ["src/**/*.ts"]
+    }
+  },
+  "ignoreDependencies": [
+    "@fastify/cookie",
+    "@fastify/jwt",
+    "@fastify/rate-limit",
+    "@grammyjs/storage-redis",
+    "@lcqb/contracts",
+    "@prisma/client",
+    "argon2",
+    "grammy",
+    "ioredis",
+    "pino",
+    "pino-pretty",
+    "prisma",
+    "@tanstack/react-query",
+    "lucide-react",
+    "react-router-dom",
+    "tailwindcss",
+    "@vitest/coverage-v8",
+    "rimraf"
+  ],
+  "ignoreExportsUsedInFile": true
+}
