@@ -9,7 +9,17 @@
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",
     "dev": "tsx watch src/index.ts",
-    "clean": "rimraf dist"
+    "clean": "rimraf dist",
+    "prisma:validate": "dotenv -e ../../.env -- prisma validate",
+    "prisma:generate": "dotenv -e ../../.env -- prisma generate",
+    "prisma:migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
+    "prisma:migrate:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "prisma:migrate:reset": "dotenv -e ../../.env -- prisma migrate reset --force",
+    "prisma:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "prisma:studio": "dotenv -e ../../.env -- prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx prisma/seed.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.2",
@@ -29,6 +39,7 @@
     "zod": "^3.24.2"
   },
   "devDependencies": {
+    "dotenv-cli": "^8.0.0",
     "pino-pretty": "^13.0.0",
     "prisma": "^6.4.1",
     "rimraf": "^6.0.1",

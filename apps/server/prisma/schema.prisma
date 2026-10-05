@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BotType {
+  LEADCATCH
+  QUICKBOOK
+}
+
+enum SubStatus {
+  TRIAL
+  ACTIVE
+  EXPIRED
+  GRACE_PERIOD
+  BLOCKED
+}
+
+enum ReceiptKind {
+  PHOTO
+  TEXT
+}
+
+enum ReceiptStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum Lang {
+  RU
+  UZ
+}
+
+model Tenant {
+  id           String   @id @default(uuid()) @db.Uuid
+  clientName   String   @db.VarChar(255)
+  contactPhone String   @db.VarChar(50)
+  createdAt    DateTime @default(now()) @db.Timestamptz
+  bots         Bot[]
+}
+
+model Bot {
+  id              String           @id @default(uuid()) @db.Uuid
+  tenantId        String           @db.Uuid
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  botType         BotType
+  botTokenEnc     String
+  botTokenHash    String           @unique @db.VarChar(64)
+  webhookSecret   String           @db.VarChar(64)
+  botUsername     String?          @db.VarChar(100)
+  adminInviteCode String           @unique @db.VarChar(32)
+  settings        Json             @default("{}")
+  createdAt       DateTime         @default(now()) @db.Timestamptz
+  subscription    Subscription?
+  users           BotUser[]
+  leads           Lead[]
+  bookings        Booking[]
+  receipts        PaymentReceipt[]
+}
+
+model Subscription {
+  id                    String    @id @default(uuid()) @db.Uuid
+  botId                 String    @unique @db.Uuid
+  bot                   Bot       @relation(fields: [botId], references: [id], onDelete: Cascade)
+  status                SubStatus @default(TRIAL)
+  trialEndsAt           DateTime  @db.Timestamptz
+  paidUntil             DateTime? @db.Timestamptz
+  failedReceiptAttempts Int       @default(0)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz
+}
+
+model BotUser {
+  id        String   @id @default(uuid()) @db.Uuid
+  botId     String   @db.Uuid
+  bot       Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  tgId      BigInt
+  firstName String?  @db.VarChar(255)
+  username  String?  @db.VarChar(100)
+  lang      Lang?
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz
+
+  @@unique([botId, tgId])
+  @@index([botId, isAdmin])
+}
+
+model PaymentReceipt {
+  id              String        @id @default(uuid()) @db.Uuid
+  botId           String        @db.Uuid
+  bot             Bot           @relation(fields: [botId], references: [id], onDelete: Cascade)
+  submittedByTgId BigInt
+  kind            ReceiptKind
+  imagePath       String?       @db.VarChar(500)
+  telegramFileId  String?       @db.VarChar(255)
+  textNote        String?
+  months          Int
+  amount          Int
+  prevPaidUntil   DateTime?     @db.Timestamptz
+  prevStatus      SubStatus
+  grantedUntil    DateTime      @db.Timestamptz
+  status          ReceiptStatus @default(PENDING)
+  rejectionReason String?
+  createdAt       DateTime      @default(now()) @db.Timestamptz
+  reviewedAt      DateTime?     @db.Timestamptz
+
+  @@index([status, createdAt])
+}
+
+model Lead {
+  id               String   @id @default(uuid()) @db.Uuid
+  botId            String   @db.Uuid
+  bot              Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  customerTgId     BigInt
+  customerName     String?  @db.VarChar(255)
+  customerUsername String?  @db.VarChar(100)
+  phoneRaw         String   @db.VarChar(50)
+  answers          Json
+  isMasked         Boolean  @default(false)
+  createdAt        DateTime @default(now()) @db.Timestamptz
+
+  @@index([botId, createdAt])
+}
+
+model Booking {
+  id            String        @id @default(uuid()) @db.Uuid
+  botId         String        @db.Uuid
+  bot           Bot           @relation(fields: [botId], references: [id], onDelete: Cascade)
+  customerTgId  BigInt
+  customerName  String?       @db.VarChar(255)
+  customerPhone String        @db.VarChar(50)
+  serviceId     String        @db.VarChar(64)
+  serviceName   String        @db.VarChar(255)
+  staffId       String        @db.VarChar(64)
+  durationMin   Int
+  slotTime      DateTime      @db.Timestamptz
+  status        BookingStatus @default(PENDING)
+  reminderSent  Boolean       @default(false)
+  isMasked      Boolean       @default(false)
+  createdAt     DateTime      @default(now()) @db.Timestamptz
+
+  @@index([botId, slotTime])
+}
+
+model Admin {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now()) @db.Timestamptz
+}
+
+model PlatformSettings {
+  id             Int      @id @default(1)
+  paymentDetails String
+  tariffs        Json
+  supportContact String
+  updatedAt      DateTime @updatedAt @db.Timestamptz
+}

@@ -2,7 +2,9 @@ import Fastify from "fastify";
 import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
 import { env, type Env } from "./core/env.js";
+import { prisma } from "./core/prisma.js";
 
+export { prisma };
 export type { Env };
 
 export async function buildApp() {
