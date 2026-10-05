@@ -56,3 +56,36 @@ export const WebhookResponseSchema = z.object({
 });
 export type WebhookResponse = z.infer<typeof WebhookResponseSchema>;
 
+export const LocalizedTextSchema = z.object({
+  ru: z.string().min(1),
+  uz: z.string().min(1),
+});
+export type LocalizedText = z.infer<typeof LocalizedTextSchema>;
+
+export const QuizOptionSchema = z.object({
+  id: z.string().min(1),
+  text: LocalizedTextSchema,
+  nextNodeId: z.string().min(1).nullable().optional(),
+});
+export type QuizOption = z.infer<typeof QuizOptionSchema>;
+
+export const QuizNodeSchema = z.object({
+  id: z.string().min(1),
+  title: LocalizedTextSchema,
+  options: z.array(QuizOptionSchema).min(1),
+});
+export type QuizNode = z.infer<typeof QuizNodeSchema>;
+
+export const QuizConfigSchema = z.object({
+  startNodeId: z.string().min(1),
+  nodes: z.array(QuizNodeSchema).min(1),
+});
+export type QuizConfig = z.infer<typeof QuizConfigSchema>;
+
+export const QuizAnswerSchema = z.object({
+  question: z.string(),
+  answer: z.string(),
+  optionId: z.string().optional(),
+});
+export type QuizAnswer = z.infer<typeof QuizAnswerSchema>;
+

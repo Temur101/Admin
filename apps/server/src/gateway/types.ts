@@ -16,7 +16,25 @@ export interface ResolvedBot {
   paidUntil: string | null;
 }
 
-export type PlatformBotSession = Record<string, unknown>;
+export interface QuizSessionAnswer {
+  question: string;
+  answer: string;
+  optionId?: string;
+}
+
+export interface QuizSessionState {
+  currentNodeId: string;
+  stepCount: number;
+  answers: Record<string, QuizSessionAnswer>;
+  startedAt: number;
+}
+
+export interface PlatformBotSession {
+  lang?: "RU" | "UZ";
+  isAdmin?: boolean;
+  quiz?: QuizSessionState;
+  [key: string]: unknown;
+}
 
 export type PlatformBotContext = Context &
   SessionFlavor<PlatformBotSession> & {

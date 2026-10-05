@@ -6,7 +6,7 @@ import { decryptSecret } from "../core/crypto.js";
 import type { TelegramTransport } from "../adapters/telegram/transport.js";
 import type { Logger } from "../core/logger.js";
 import type { PlatformBotContext, PlatformBotSession, ResolvedBot } from "./types.js";
-import { registerLeadCatchBot } from "../bots/leadcatch/index.js";
+import { registerLeadCatchBot, startLeadCatchQuiz } from "../bots/leadcatch/index.js";
 import { registerQuickBookBot } from "../bots/quickbook/index.js";
 import type { PrismaClient } from "@prisma/client";
 import { registerSharedBotHandlers } from "../bots/shared/handlers.js";
@@ -95,11 +95,21 @@ export class BotPool {
     );
 
     // Register shared handlers (start, admin invite code, lang, admin menu)
-    registerSharedBotHandlers(bot, this.prisma);
+    registerSharedBotHandlers(bot, this.prisma, {
+      onClientStart: async (ctx) => {
+        if (resolved.botType === "LEADCATCH") {
+          await startLeadCatchQuiz(ctx, this.prisma);
+        }
+      },
+    });
 
     // Register bot-specific handlers
     if (resolved.botType === "LEADCATCH") {
-      registerLeadCatchBot(bot);
+      registerLeadCatchBot(bot, {
+        prisma: this.prisma,
+        transport: this.transport,
+        logger: this.logger,
+      });
     } else if (resolved.botType === "QUICKBOOK") {
       registerQuickBookBot(bot);
     }

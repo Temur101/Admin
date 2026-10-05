@@ -32,6 +32,7 @@ export * from "./bots/shared/subscription.js";
 export * from "./bots/shared/notification.js";
 export * from "./bots/shared/user-service.js";
 export * from "./bots/shared/admin-menu.js";
+export * from "./bots/leadcatch/index.js";
 export * from "./workers/subscription-worker.js";
 
 import type { PrismaClient } from "@prisma/client";

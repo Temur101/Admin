@@ -22,9 +22,14 @@ async function sendReply(
   await ctx.api.sendMessage(chatId, text, extra as any);
 }
 
+export interface SharedBotHandlersOptions {
+  onClientStart?: (ctx: PlatformBotContext) => Promise<void>;
+}
+
 export function registerSharedBotHandlers(
   bot: Bot<PlatformBotContext>,
   prisma: PrismaClient,
+  opts?: SharedBotHandlersOptions,
 ): void {
   const handleStart = async (ctx: PlatformBotContext, matchParam?: string) => {
     const rawMatch = (matchParam ?? (typeof ctx.match === "string" ? ctx.match : "")).trim();
@@ -62,8 +67,11 @@ export function registerSharedBotHandlers(
       return;
     }
 
-    // Default welcome for normal clients
+    // Client flow: always greet the client, then trigger bot-specific client flow
     await sendReply(ctx, t(user.lang, "welcome_client"));
+    if (opts?.onClientStart) {
+      await opts.onClientStart(ctx);
+    }
   };
 
   // 1. /start command: supports both standard Telegram bot_command entity and plain text /start
@@ -105,6 +113,9 @@ export function registerSharedBotHandlers(
       });
     } else {
       await sendReply(ctx, t(lang, "welcome_client"));
+      if (opts?.onClientStart) {
+        await opts.onClientStart(ctx);
+      }
     }
   });
 

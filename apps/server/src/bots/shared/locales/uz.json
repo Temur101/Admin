@@ -28,5 +28,10 @@
   "booking_notification_open": "📅 Yangi buyurtma:\nMijoz: {name}\nTelefon: {phone}\nXizmat: {service}\nMutaxassis: {staff}\nVaqt: {time}",
   "booking_notification_masked": "📅 Yangi buyurtma (YASHIRILGAN):\nMijoz: {name}\nTelefon: {phone}\nXizmat: {service}\nMutaxassis: {staff}\nVaqt: {time}\n\n⚠️ Obuna faol bo'lmagani uchun ma'lumotlar yashirilgan. Kontaktlarni ochish uchun obunani to'lang!",
   "recent_entries_empty": "Ro'yxat hozircha bo'sh.",
-  "recent_entries_title": "Oxirgi arizalar/buyurtmalar (20 tagacha):"
+  "recent_entries_title": "Oxirgi arizalar/buyurtmalar (20 tagacha):",
+  "quiz_btn_share_phone": "📱 Telefon raqamini yuborish",
+  "quiz_prompt_phone": "Arizani yakunlash uchun, iltimos, quyidagi tugma orqali telefon raqamingizni yuboring yoki chatga yozing (masalan: +998 90 123 45 67):",
+  "quiz_invalid_phone": "⚠️ Iltimos, to'g'ri telefon raqamini kiriting (masalan, +998 90 123 45 67):",
+  "quiz_thank_you": "✅ Rahmat! Arizangiz muvaffaqiyatli qabul qilindi. Mutaxassisimiz tez orada siz bilan bog'lanadi.",
+  "quiz_restart_prompt": "So'rovnomani qayta boshlash: /start"
 }
