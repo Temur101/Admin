@@ -29,10 +29,19 @@ export interface QuizSessionState {
   startedAt: number;
 }
 
+export interface QuickBookSessionState {
+  serviceId?: string;
+  resourceId?: string;
+  dateStr?: string;
+  slotTimeIso?: string;
+  lockedUntil?: number;
+}
+
 export interface PlatformBotSession {
   lang?: "RU" | "UZ";
   isAdmin?: boolean;
   quiz?: QuizSessionState;
+  quickbook?: QuickBookSessionState;
   [key: string]: unknown;
 }
 

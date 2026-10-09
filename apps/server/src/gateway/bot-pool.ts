@@ -7,7 +7,7 @@ import type { TelegramTransport } from "../adapters/telegram/transport.js";
 import type { Logger } from "../core/logger.js";
 import type { PlatformBotContext, PlatformBotSession, ResolvedBot } from "./types.js";
 import { registerLeadCatchBot, startLeadCatchQuiz } from "../bots/leadcatch/index.js";
-import { registerQuickBookBot } from "../bots/quickbook/index.js";
+import { registerQuickBookBot, startQuickBookFlow } from "../bots/quickbook/index.js";
 import type { PrismaClient } from "@prisma/client";
 import { registerSharedBotHandlers } from "../bots/shared/handlers.js";
 
@@ -99,6 +99,8 @@ export class BotPool {
       onClientStart: async (ctx) => {
         if (resolved.botType === "LEADCATCH") {
           await startLeadCatchQuiz(ctx, this.prisma);
+        } else if (resolved.botType === "QUICKBOOK") {
+          await startQuickBookFlow(ctx, this.prisma);
         }
       },
     });
@@ -111,7 +113,12 @@ export class BotPool {
         logger: this.logger,
       });
     } else if (resolved.botType === "QUICKBOOK") {
-      registerQuickBookBot(bot);
+      registerQuickBookBot(bot, {
+        prisma: this.prisma,
+        redis: this.redis,
+        transport: this.transport,
+        logger: this.logger,
+      });
     }
 
     // Cache the bot instance

@@ -33,5 +33,20 @@
   "quiz_prompt_phone": "Arizani yakunlash uchun, iltimos, quyidagi tugma orqali telefon raqamingizni yuboring yoki chatga yozing (masalan: +998 90 123 45 67):",
   "quiz_invalid_phone": "⚠️ Iltimos, to'g'ri telefon raqamini kiriting (masalan, +998 90 123 45 67):",
   "quiz_thank_you": "✅ Rahmat! Arizangiz muvaffaqiyatli qabul qilindi. Mutaxassisimiz tez orada siz bilan bog'lanadi.",
-  "quiz_restart_prompt": "So'rovnomani qayta boshlash: /start"
+  "quiz_restart_prompt": "So'rovnomani qayta boshlash: /start",
+  "qb_choose_service": "Xizmatni tanlang:",
+  "qb_choose_resource": "{label}ni tanlang:",
+  "qb_any_resource": "Ixtiyoriy bo'sh mutaxassis",
+  "qb_choose_date": "Qabul sanasini tanlang:",
+  "qb_choose_time": "Qulay vaqtni tanlang:",
+  "qb_no_slots": "Afsuski, bu sanaga bo'sh vaqtlar qolmagan. Iltimos, boshqa sanani tanlang.",
+  "qb_slot_taken": "⚠️ Bu vaqt hozirgina band qilindi! Iltimos, boshqa bo'sh vaqtni tanlang:",
+  "qb_prompt_phone": "Band qilishni tasdiqlash uchun telefon raqamingizni pastdagi tugma orqali yuboring yoki chatga yozing (masalan: +998 90 123 45 67):",
+  "qb_booking_success": "✅ Siz muvaffaqiyatli yozildingiz!\n\nXizmat: {service}\n{label}: {resource}\nSana va vaqt: {time}\n\nSizni kutamiz!",
+  "qb_reminder_text": "⏰ Qabul eslatmasi:\nBugun soat {time} da\nXizmat: {service}\n{label}: {resource}\n\nTashrifingizni tasdiqlaysizmi?",
+  "qb_btn_confirm": "✅ Tasdiqlayman",
+  "qb_btn_cancel": "❌ Bekor qilish",
+  "qb_confirmed_reply": "Tasdiqlaganingiz uchun rahmat! Belgilangan vaqtda kutamiz.",
+  "qb_cancelled_reply": "Buyurtmangiz bekor qilindi. Boshqa safar sizni ko'rishdan xursand bo'lamiz!",
+  "qb_btn_back": "⬅️ Orqaga"
 }

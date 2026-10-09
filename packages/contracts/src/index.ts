@@ -89,3 +89,43 @@ export const QuizAnswerSchema = z.object({
 });
 export type QuizAnswer = z.infer<typeof QuizAnswerSchema>;
 
+export const ResourceTypeSchema = z.enum(["STAFF", "TABLE", "ROOM"]);
+export type ResourceType = z.infer<typeof ResourceTypeSchema>;
+
+export const QuickBookServiceSchema = z.object({
+  id: z.string().min(1),
+  name: LocalizedTextSchema,
+  description: LocalizedTextSchema.optional(),
+  durationMin: z.number().int().min(5).max(480),
+  priceUzs: z.number().int().nonnegative(),
+});
+export type QuickBookService = z.infer<typeof QuickBookServiceSchema>;
+
+export const TimeWindowSchema = z.object({
+  start: z.string().regex(/^\d{2}:\d{2}$/),
+  end: z.string().regex(/^\d{2}:\d{2}$/),
+});
+export type TimeWindow = z.infer<typeof TimeWindowSchema>;
+
+export const QuickBookResourceSchema = z.object({
+  id: z.string().min(1),
+  name: LocalizedTextSchema,
+  serviceIds: z.array(z.string().min(1)).optional(),
+  workDays: z.array(z.number().int().min(0).max(6)),
+  workHours: TimeWindowSchema,
+  breakHours: TimeWindowSchema.optional(),
+});
+export type QuickBookResource = z.infer<typeof QuickBookResourceSchema>;
+
+export const QuickBookConfigSchema = z.object({
+  resourceType: ResourceTypeSchema.default("STAFF"),
+  resourceLabel: LocalizedTextSchema.optional(),
+  services: z.array(QuickBookServiceSchema).min(1),
+  resources: z.array(QuickBookResourceSchema).min(1),
+  slotIntervalMin: z.number().int().min(5).max(120).default(30),
+  bookingHorizonDays: z.number().int().min(1).max(60).default(14),
+  timezone: z.string().default("Asia/Tashkent"),
+  customTexts: z.record(LocalizedTextSchema).optional(),
+});
+export type QuickBookConfig = z.infer<typeof QuickBookConfigSchema>;
+

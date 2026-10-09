@@ -15,7 +15,8 @@
     "check-mocks": "tsx scripts/check-mocks.ts",
     "verify": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm knip && pnpm check-mocks && pnpm test && pnpm build",
     "dev:server": "pnpm --filter @lcqb/server dev",
-    "dev:admin": "pnpm --filter @lcqb/admin dev"
+    "dev:admin": "pnpm --filter @lcqb/admin dev",
+    "dev:bot": "pnpm --filter @lcqb/server dev:bot"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
