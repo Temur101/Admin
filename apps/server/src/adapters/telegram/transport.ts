@@ -13,6 +13,8 @@ export interface TelegramTransport {
   readonly kind: "real" | "mock";
   /** Transformer to install into a bot's API client, or null for direct network access. */
   transformerFor(botId: string): Transformer | null;
+  /** Downloads a file buffer from Telegram API */
+  downloadFile(token: string, filePath: string): Promise<Buffer>;
 }
 
 class RealTelegramTransport implements TelegramTransport {
@@ -20,6 +22,16 @@ class RealTelegramTransport implements TelegramTransport {
 
   transformerFor(): Transformer | null {
     return null;
+  }
+
+  async downloadFile(token: string, filePath: string): Promise<Buffer> {
+    const url = `https://api.telegram.org/file/bot${token}/${filePath}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Failed to download Telegram file: ${res.statusText}`);
+    }
+    const arrayBuf = await res.arrayBuffer();
+    return Buffer.from(arrayBuf);
   }
 }
 

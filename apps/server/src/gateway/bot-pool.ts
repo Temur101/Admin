@@ -10,6 +10,7 @@ import { registerLeadCatchBot, startLeadCatchQuiz } from "../bots/leadcatch/inde
 import { registerQuickBookBot, startQuickBookFlow } from "../bots/quickbook/index.js";
 import type { PrismaClient } from "@prisma/client";
 import { registerSharedBotHandlers } from "../bots/shared/handlers.js";
+import { env } from "../core/env.js";
 
 export interface BotPoolOptions {
   capacity: number;
@@ -94,8 +95,11 @@ export class BotPool {
       }),
     );
 
-    // Register shared handlers (start, admin invite code, lang, admin menu)
+    // Register shared handlers (start, admin invite code, lang, admin menu, receipts)
     registerSharedBotHandlers(bot, this.prisma, {
+      redis: this.redis,
+      transport: this.transport,
+      uploadDir: env.UPLOAD_DIR,
       onClientStart: async (ctx) => {
         if (resolved.botType === "LEADCATCH") {
           await startLeadCatchQuiz(ctx, this.prisma);

@@ -37,11 +37,17 @@ export interface QuickBookSessionState {
   lockedUntil?: number;
 }
 
+export interface PaymentSessionState {
+  months: number;
+  amountUzs: number;
+}
+
 export interface PlatformBotSession {
   lang?: "RU" | "UZ";
   isAdmin?: boolean;
   quiz?: QuizSessionState;
   quickbook?: QuickBookSessionState;
+  payment?: PaymentSessionState;
   [key: string]: unknown;
 }
 

@@ -30,18 +30,10 @@ export type CreateBookingResult =
   | { success: false; error: "SERVICE_NOT_FOUND" | "STAFF_NOT_FOUND" }
   | { success: false; error: "SLOT_TAKEN"; alternativeSlots: TimeSlot[] };
 
-export const REMINDER_ZSET_KEY = "booking:reminders";
+import { formatTashkentDateTime } from "../shared/payment-service.js";
 
-export function formatTashkentDateTime(date: Date): string {
-  // Format as DD.MM.YYYY HH:mm in Tashkent time (UTC+5)
-  const d = new Date(date.getTime() + 5 * 3600 * 1000);
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const year = d.getUTCFullYear();
-  const hours = String(d.getUTCHours()).padStart(2, "0");
-  const mins = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${day}.${month}.${year} ${hours}:${mins}`;
-}
+export const REMINDER_ZSET_KEY = "booking:reminders";
+export { formatTashkentDateTime };
 
 export async function createBooking(
   params: CreateBookingParams,

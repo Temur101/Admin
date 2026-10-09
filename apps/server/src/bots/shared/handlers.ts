@@ -1,14 +1,16 @@
 import type { Lang, PrismaClient } from "@prisma/client";
 import type { Bot } from "grammy";
+import type { Redis } from "ioredis";
+import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import {
   buildAdminReplyKeyboard,
   buildLanguageInlineKeyboard,
-  buildTariffInlineKeyboard,
   fetchRecentEntriesText,
   formatSubscriptionStatusText,
 } from "./admin-menu.js";
 import { t } from "./i18n.js";
+import { registerReceiptHandlers } from "./receipt-handlers.js";
 import { setUserLanguage, upsertBotUser } from "./user-service.js";
 
 async function sendReply(
@@ -24,6 +26,9 @@ async function sendReply(
 
 export interface SharedBotHandlersOptions {
   onClientStart?: (ctx: PlatformBotContext) => Promise<void>;
+  redis?: Redis;
+  transport?: TelegramTransport;
+  uploadDir?: string;
 }
 
 export function registerSharedBotHandlers(
@@ -48,6 +53,7 @@ export function registerSharedBotHandlers(
 
     ctx.session.lang = user.lang ?? undefined;
     ctx.session.isAdmin = user.isAdmin;
+    ctx.session.payment = undefined;
 
     // If user has not chosen language yet -> prompt language selection
     if (!user.lang) {
@@ -119,7 +125,7 @@ export function registerSharedBotHandlers(
     }
   });
 
-  // 3. Admin menu callbacks & text button listeners
+  // 3. Admin menu callbacks
   bot.callbackQuery("admin:leads", async (ctx) => {
     if (!ctx.from) return;
     await ctx.answerCallbackQuery();
@@ -145,34 +151,6 @@ export function registerSharedBotHandlers(
     });
   });
 
-  bot.callbackQuery("admin:pay", async (ctx) => {
-    if (!ctx.from) return;
-    await ctx.answerCallbackQuery();
-    const lang = (ctx.session.lang as Lang) ?? "RU";
-    await sendReply(ctx, t(lang, "pay_select_tariff"), {
-      reply_markup: buildTariffInlineKeyboard(lang),
-    });
-  });
-
-  bot.callbackQuery(/^pay:tariff:(\d+)$/, async (ctx) => {
-    if (!ctx.from) return;
-    await ctx.answerCallbackQuery();
-    const matchStr = Array.isArray(ctx.match) ? ctx.match[1] : "1";
-    const months = Number(matchStr ?? 1);
-    const lang = (ctx.session.lang as Lang) ?? "RU";
-
-    const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
-    const amount =
-      months === 1 ? 100_000 : months === 6 ? 500_000 : 1_000_000;
-    const details = settings?.paymentDetails || "8600 0000 0000 0000 (Platform)";
-
-    const text = t(lang, "pay_details_prompt", {
-      amount: amount.toLocaleString("ru-RU"),
-      details,
-    });
-    await sendReply(ctx, text);
-  });
-
   // 4. Admin Reply Keyboard text handlers (handles Russian and Uzbek button text)
   bot.hears([/📋/], async (ctx) => {
     if (!ctx.from) return;
@@ -186,6 +164,7 @@ export function registerSharedBotHandlers(
     });
     if (!user?.isAdmin) return;
 
+    ctx.session.payment = undefined;
     const lang = user.lang ?? "RU";
     const text = await fetchRecentEntriesText(prisma, ctx.botMeta, lang);
     await sendReply(ctx, text);
@@ -203,6 +182,7 @@ export function registerSharedBotHandlers(
     });
     if (!user?.isAdmin) return;
 
+    ctx.session.payment = undefined;
     const lang = user.lang ?? "RU";
     const { text, keyboard } = formatSubscriptionStatusText(ctx.botMeta, lang);
     await sendReply(ctx, text, { reply_markup: keyboard });
@@ -220,9 +200,17 @@ export function registerSharedBotHandlers(
     });
     if (!user?.isAdmin) return;
 
+    ctx.session.payment = undefined;
     const lang = user.lang ?? "RU";
     await sendReply(ctx, t(lang, "choose_language"), {
       reply_markup: buildLanguageInlineKeyboard(),
     });
+  });
+
+  // 5. Payment & receipts handlers (delegated to receipt-handlers module)
+  registerReceiptHandlers(bot, prisma, {
+    redis: opts?.redis,
+    transport: opts?.transport,
+    uploadDir: opts?.uploadDir,
   });
 }

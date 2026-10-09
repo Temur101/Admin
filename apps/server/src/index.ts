@@ -33,6 +33,8 @@ export * from "./bots/shared/notification.js";
 export * from "./bots/shared/user-service.js";
 export * from "./bots/shared/admin-menu.js";
 export * from "./bots/shared/phone.js";
+export * from "./bots/shared/payment-service.js";
+export * from "./bots/shared/receipt-storage.js";
 export * from "./bots/leadcatch/index.js";
 export * from "./bots/quickbook/index.js";
 export * from "./workers/subscription-worker.js";

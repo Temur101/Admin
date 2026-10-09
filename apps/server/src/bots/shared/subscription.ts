@@ -24,8 +24,11 @@ export interface TransitionResult {
 
 export function addMonths(date: Date, months: number): Date {
   const result = new Date(date.getTime());
-  const expectedMonth = result.getMonth() + months;
-  result.setMonth(expectedMonth);
+  const expectedMonth = (result.getUTCMonth() + months) % 12;
+  result.setUTCMonth(result.getUTCMonth() + months);
+  if (result.getUTCMonth() !== expectedMonth) {
+    result.setUTCDate(0); // clamp to end of intended month
+  }
   return result;
 }
 

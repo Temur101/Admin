@@ -48,5 +48,14 @@
   "qb_btn_cancel": "❌ Bekor qilish",
   "qb_confirmed_reply": "Tasdiqlaganingiz uchun rahmat! Belgilangan vaqtda kutamiz.",
   "qb_cancelled_reply": "Buyurtmangiz bekor qilindi. Boshqa safar sizni ko'rishdan xursand bo'lamiz!",
-  "qb_btn_back": "⬅️ Orqaga"
+  "qb_btn_back": "⬅️ Orqaga",
+  "receipt_photo_too_large": "⚠️ Rasm hajmi 5 MB dan oshadi. Iltimos, kichikroq fayl yuboring.",
+  "receipt_invalid_file_type": "⚠️ Noto'g'ri format. Iltimos, rasm yoki matn yuboring.",
+  "receipt_text_too_short": "⚠️ Xabar juda qisqa (kamida 10 ta belgi). Masalan: '14:30 da *1234 kartasidan o'tkazdim'.",
+  "receipt_text_too_long": "⚠️ Xabar juda uzun (maksimal 1000 ta belgi).",
+  "receipt_submitted_success": "✅ To'lov tekshirishga qabul qilindi!\n\nRuxsat {date} gacha ochildi.\nBiz chekni tekshirib, sizga xabar beramiz.",
+  "receipt_approved_push": "🎉 To'lov tasdiqlandi!\nHamkorlik uchun rahmat.",
+  "receipt_rejected_grace_push": "⚠️ Chekingiz rad etildi: {reason}.\nTo'lov yuborish uchun 1 ta urinish qoldi.",
+  "receipt_rejected_blocked_push": "🚫 Chekingiz rad etildi: {reason}.\nBot bloklandi. Qo'llab-quvvatlash xizmati bilan bog'laning: {support}",
+  "receipt_rejected_active_push": "⚠️ Chek rad etildi: {reason}, lekin avval to'langan muddat {date} gacha amal qiladi."
 }
