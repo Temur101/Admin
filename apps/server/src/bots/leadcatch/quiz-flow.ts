@@ -164,19 +164,31 @@ export async function handleLeadCatchContact(
   const normalizedPhone = phoneRes.normalized;
   const answersRecord = ctx.session.quiz?.answers ?? {};
 
-  // 1. Persist lead in PostgreSQL
+  // 1. Persist lead in PostgreSQL (idempotent against retry of same attempt)
   try {
-    await prisma.lead.create({
-      data: {
+    const startedAt = ctx.session.quiz?.startedAt;
+    const existing = await prisma.lead.findFirst({
+      where: {
         botId: ctx.botMeta.id,
         customerTgId: BigInt(ctx.from?.id ?? 0),
-        customerName: ctx.from?.first_name ?? null,
-        customerUsername: ctx.from?.username ?? null,
         phoneRaw: normalizedPhone,
-        answers: answersRecord as unknown as Prisma.InputJsonValue,
-        isMasked: false,
+        ...(startedAt ? { createdAt: { gte: new Date(startedAt - 10000) } } : {}),
       },
     });
+
+    if (!existing) {
+      await prisma.lead.create({
+        data: {
+          botId: ctx.botMeta.id,
+          customerTgId: BigInt(ctx.from?.id ?? 0),
+          customerName: ctx.from?.first_name ?? null,
+          customerUsername: ctx.from?.username ?? null,
+          phoneRaw: normalizedPhone,
+          answers: answersRecord as unknown as Prisma.InputJsonValue,
+          isMasked: false,
+        },
+      });
+    }
   } catch (err) {
     logger.error({ err: (err as Error).message, botId: ctx.botMeta.id }, "Failed to save lead to database");
   }

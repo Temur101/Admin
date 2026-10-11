@@ -86,6 +86,7 @@ export function createTestRedisClient(name = "test-redis"): Redis {
 
 export async function safeCleanTestDb(prisma: PrismaClient): Promise<void> {
   assertTestEnvironment();
+  await prisma.webhookInbox.deleteMany();
   await prisma.booking.deleteMany();
   await prisma.lead.deleteMany();
   await prisma.paymentReceipt.deleteMany();

@@ -13,6 +13,7 @@ import {
   BotPool,
   TenantResolver,
   UpdateDeduplicator,
+  WebhookInboxService,
   registerWebhookGateway,
 } from "./gateway/index.js";
 
@@ -110,10 +111,20 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
     botPool.invalidateMeta(botTokenHash, botId);
   });
 
+  const inboxService = new WebhookInboxService({
+    prisma: appPrisma,
+    redis: appRedis,
+    botPool,
+    tenantResolver,
+    deduplicator,
+    logger,
+  });
+
   registerWebhookGateway(app, {
     tenantResolver,
     botPool,
     deduplicator,
+    inboxService,
     logger,
     maxInflight: env.WEBHOOK_MAX_INFLIGHT,
     onUpdateHandled: opts?.onUpdateHandled,

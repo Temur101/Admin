@@ -10,3 +10,4 @@ export type {
   PlatformBotContext,
   PlatformBotSession,
 } from "./types.js";
+export * from "./inbox-service.js";

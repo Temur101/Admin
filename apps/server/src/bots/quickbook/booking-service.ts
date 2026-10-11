@@ -90,6 +90,9 @@ export async function createBooking(
       });
 
       if (existing) {
+        if (existing.customerTgId === BigInt(customerTgId)) {
+          return existing;
+        }
         throw new Error("SLOT_ALREADY_BOOKED");
       }
 

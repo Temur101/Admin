@@ -38,6 +38,13 @@ enum BookingStatus {
   COMPLETED
 }
 
+enum InboxStatus {
+  RECEIVED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
 enum Lang {
   RU
   UZ
@@ -68,6 +75,7 @@ model Bot {
   leads           Lead[]
   bookings        Booking[]
   receipts        PaymentReceipt[]
+  inbox           WebhookInbox[]
 }
 
 model Subscription {
@@ -167,3 +175,23 @@ model PlatformSettings {
   supportContact String
   updatedAt      DateTime @updatedAt @db.Timestamptz
 }
+
+model WebhookInbox {
+  id          String      @id @default(uuid()) @db.Uuid
+  botId       String      @db.Uuid
+  bot         Bot         @relation(fields: [botId], references: [id], onDelete: Cascade)
+  updateId    BigInt
+  payload     Json
+  status      InboxStatus @default(RECEIVED)
+  attempts    Int         @default(0)
+  maxAttempts Int         @default(3)
+  lockedUntil DateTime?   @db.Timestamptz
+  lastError   String?
+  createdAt   DateTime    @default(now()) @db.Timestamptz
+  processedAt DateTime?   @db.Timestamptz
+
+  @@unique([botId, updateId])
+  @@index([status, lockedUntil])
+  @@index([botId, status])
+}
+
