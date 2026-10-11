@@ -4,7 +4,7 @@ export type SubscriptionEvent =
   | { type: "TICK" }
   | { type: "RECEIPT_SUBMITTED"; months: number }
   | { type: "RECEIPT_APPROVED" }
-  | { type: "RECEIPT_REJECTED"; prevPaidUntil: Date | null; prevStatus?: SubStatus }
+  | { type: "RECEIPT_REJECTED"; prevPaidUntil: Date | null; prevStatus?: SubStatus; months?: number }
   | { type: "MANUAL_EXTEND"; until: Date }
   | { type: "MANUAL_UNBLOCK" };
 
@@ -24,11 +24,13 @@ export interface TransitionResult {
 
 export function addMonths(date: Date, months: number): Date {
   const result = new Date(date.getTime());
-  const expectedMonth = (result.getUTCMonth() + months) % 12;
-  result.setUTCMonth(result.getUTCMonth() + months);
-  if (result.getUTCMonth() !== expectedMonth) {
-    result.setUTCDate(0); // clamp to end of intended month
-  }
+  const targetYear = result.getUTCFullYear() + Math.floor((result.getUTCMonth() + months) / 12);
+  const targetMonth = ((result.getUTCMonth() + months) % 12 + 12) % 12;
+  const originalDate = result.getUTCDate();
+
+  result.setUTCFullYear(targetYear, targetMonth, 1);
+  const daysInMonth = new Date(Date.UTC(targetYear, targetMonth + 1, 0)).getUTCDate();
+  result.setUTCDate(Math.min(originalDate, daysInMonth));
   return result;
 }
 
@@ -99,7 +101,11 @@ export function transitionSubscription(
 
     case "RECEIPT_REJECTED": {
       const nextFailedAttempts = failedReceiptAttempts + 1;
-      const nextPaidUntil = event.prevPaidUntil;
+      let nextPaidUntil: Date | null = event.prevPaidUntil;
+
+      if (event.months && paidUntil) {
+        nextPaidUntil = addMonths(paidUntil, -event.months);
+      }
 
       // If rolled-back paidUntil is still in the future, remain ACTIVE
       if (nextPaidUntil && nextPaidUntil > now) {
