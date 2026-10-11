@@ -16,6 +16,10 @@ import {
   WebhookInboxService,
   registerWebhookGateway,
 } from "./gateway/index.js";
+import {
+  BackgroundWorkerScheduler,
+  type SchedulerOptions,
+} from "./workers/scheduler.js";
 
 export { prisma };
 export { logger };
@@ -41,6 +45,7 @@ export * from "./bots/leadcatch/index.js";
 export * from "./bots/quickbook/index.js";
 export * from "./workers/subscription-worker.js";
 export * from "./workers/booking-reminder-worker.js";
+export * from "./workers/scheduler.js";
 
 import type { PrismaClient } from "@prisma/client";
 
@@ -48,6 +53,8 @@ export interface AppOptions {
   prisma?: PrismaClient;
   redis?: Redis;
   transport?: TelegramTransport;
+  enableScheduler?: boolean;
+  schedulerOptions?: Partial<SchedulerOptions>;
   onUpdateHandled?: (botId: string, updateId: number, err?: Error) => void;
 }
 
@@ -131,7 +138,27 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
     onUpdateHandled: opts?.onUpdateHandled,
   });
 
-  app.get("/health", async () => {
+  // Background workers scheduler
+  const scheduler = new BackgroundWorkerScheduler({
+    prisma: appPrisma,
+    redis: appRedis,
+    transport,
+    logger,
+    subscriptionIntervalMs: opts?.schedulerOptions?.subscriptionIntervalMs,
+    reminderIntervalMs: opts?.schedulerOptions?.reminderIntervalMs,
+    runImmediately: opts?.schedulerOptions?.runImmediately,
+  });
+
+  const shouldStartScheduler = opts?.enableScheduler ?? (process.env.NODE_ENV !== "test");
+  if (shouldStartScheduler) {
+    scheduler.start();
+  }
+
+  app.decorate("scheduler", scheduler);
+
+  // Health checks:
+  // Liveness probe
+  app.get("/health/live", async () => {
     return {
       status: "ok" as const,
       timestamp: new Date().toISOString(),
@@ -139,7 +166,86 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
     };
   });
 
+  const checkReadiness = async () => {
+    let dbStatus: "connected" | "error" = "connected";
+    let redisStatus: "connected" | "error" = "connected";
+    let healthy = true;
+
+    try {
+      await appPrisma.$queryRaw`SELECT 1`;
+    } catch {
+      dbStatus = "error";
+      healthy = false;
+    }
+
+    try {
+      const pingRes = await appRedis.ping();
+      if (pingRes !== "PONG") {
+        redisStatus = "error";
+        healthy = false;
+      }
+    } catch {
+      redisStatus = "error";
+      healthy = false;
+    }
+
+    return { healthy, dbStatus, redisStatus };
+  };
+
+  // Readiness probe
+  app.get("/health/ready", async (_req, reply) => {
+    const { healthy, dbStatus, redisStatus } = await checkReadiness();
+    if (!healthy) {
+      return reply.status(503).send({
+        status: "unhealthy" as const,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        dependencies: {
+          database: dbStatus,
+          redis: redisStatus,
+        },
+      });
+    }
+
+    return {
+      status: "ok" as const,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      dependencies: {
+        database: dbStatus,
+        redis: redisStatus,
+      },
+    };
+  });
+
+  // Standard health endpoint
+  app.get("/health", async (_req, reply) => {
+    const { healthy, dbStatus, redisStatus } = await checkReadiness();
+    if (!healthy) {
+      return reply.status(503).send({
+        status: "unhealthy" as const,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        dependencies: {
+          database: dbStatus,
+          redis: redisStatus,
+        },
+      });
+    }
+
+    return {
+      status: "ok" as const,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      dependencies: {
+        database: dbStatus,
+        redis: redisStatus,
+      },
+    };
+  });
+
   app.addHook("onClose", async () => {
+    await scheduler.stop();
     if (ownsRedis && appRedis.status !== "end") {
       await appRedis.quit().catch(() => {});
     }
@@ -149,10 +255,25 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
 }
 
 async function start() {
-  const app = await buildApp();
+  const app = await buildApp({ enableScheduler: true });
   try {
     await app.listen({ host: env.HOST, port: env.PORT });
     app.log.info(`🚀 Server running on http://${env.HOST}:${env.PORT}`);
+
+    const shutdown = async (signal: string) => {
+      app.log.info({ signal }, "Graceful shutdown signal received");
+      try {
+        await app.close();
+        app.log.info("Server closed cleanly");
+        process.exit(0);
+      } catch (err) {
+        app.log.error({ err }, "Error during graceful shutdown");
+        process.exit(1);
+      }
+    };
+
+    process.on("SIGINT", () => void shutdown("SIGINT"));
+    process.on("SIGTERM", () => void shutdown("SIGTERM"));
   } catch (err) {
     app.log.error(err);
     process.exit(1);

@@ -1,0 +1,133 @@
+import type { PrismaClient } from "@prisma/client";
+import type { Redis } from "ioredis";
+import type { TelegramTransport } from "../adapters/telegram/transport.js";
+import type { Logger } from "../core/logger.js";
+import { runSubscriptionWorker } from "./subscription-worker.js";
+import { runBookingReminderWorker } from "./booking-reminder-worker.js";
+
+export interface SchedulerOptions {
+  prisma: PrismaClient;
+  redis: Redis;
+  transport: TelegramTransport;
+  logger: Logger;
+  subscriptionIntervalMs?: number;
+  reminderIntervalMs?: number;
+  runImmediately?: boolean;
+}
+
+export class BackgroundWorkerScheduler {
+  private subscriptionTimer: NodeJS.Timeout | null = null;
+  private reminderTimer: NodeJS.Timeout | null = null;
+  private isRunning = false;
+  private readonly inFlightTasks = new Set<Promise<unknown>>();
+  private readonly opts: SchedulerOptions;
+
+  constructor(opts: SchedulerOptions) {
+    this.opts = opts;
+  }
+
+  public get running(): boolean {
+    return this.isRunning;
+  }
+
+  public get activeTaskCount(): number {
+    return this.inFlightTasks.size;
+  }
+
+  public start(): void {
+    if (this.isRunning) return;
+    this.isRunning = true;
+
+    const subInterval = this.opts.subscriptionIntervalMs ?? 60_000;
+    const remInterval = this.opts.reminderIntervalMs ?? 60_000;
+
+    if (this.opts.runImmediately !== false) {
+      this.triggerSubscriptionTick();
+      this.triggerReminderTick();
+    }
+
+    this.subscriptionTimer = setInterval(() => {
+      this.triggerSubscriptionTick();
+    }, subInterval);
+
+    this.reminderTimer = setInterval(() => {
+      this.triggerReminderTick();
+    }, remInterval);
+
+    this.opts.logger.info(
+      { subInterval, remInterval },
+      "Background worker scheduler started",
+    );
+  }
+
+  public triggerSubscriptionTick(): Promise<unknown> {
+    if (!this.isRunning) return Promise.resolve();
+
+    const task = runSubscriptionWorker({
+      prisma: this.opts.prisma,
+      redis: this.opts.redis,
+      transport: this.opts.transport,
+      logger: this.opts.logger,
+    })
+      .catch((err) => {
+        this.opts.logger.error(
+          { err: (err as Error).message },
+          "Unhandled error in subscription worker tick",
+        );
+      })
+      .finally(() => {
+        this.inFlightTasks.delete(task);
+      });
+
+    this.inFlightTasks.add(task);
+    return task;
+  }
+
+  public triggerReminderTick(): Promise<unknown> {
+    if (!this.isRunning) return Promise.resolve();
+
+    const task = runBookingReminderWorker({
+      prisma: this.opts.prisma,
+      redis: this.opts.redis,
+      transport: this.opts.transport,
+      logger: this.opts.logger,
+    })
+      .catch((err) => {
+        this.opts.logger.error(
+          { err: (err as Error).message },
+          "Unhandled error in reminder worker tick",
+        );
+      })
+      .finally(() => {
+        this.inFlightTasks.delete(task);
+      });
+
+    this.inFlightTasks.add(task);
+    return task;
+  }
+
+  public async stop(): Promise<void> {
+    if (!this.isRunning) return;
+    this.isRunning = false;
+
+    if (this.subscriptionTimer) {
+      clearInterval(this.subscriptionTimer);
+      this.subscriptionTimer = null;
+    }
+    if (this.reminderTimer) {
+      clearInterval(this.reminderTimer);
+      this.reminderTimer = null;
+    }
+
+    if (this.inFlightTasks.size > 0) {
+      this.opts.logger.info(
+        { count: this.inFlightTasks.size },
+        "Waiting for in-flight worker tasks to finish...",
+      );
+      await Promise.all(Array.from(this.inFlightTasks));
+      this.inFlightTasks.clear();
+    }
+
+    this.opts.logger.info("Background worker scheduler stopped cleanly");
+  }
+}
