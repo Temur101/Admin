@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { Bot, session } from "grammy";
 import { RedisAdapter } from "@grammyjs/storage-redis";
 import type { Redis } from "ioredis";
@@ -11,6 +12,23 @@ import { registerQuickBookBot, startQuickBookFlow } from "../bots/quickbook/inde
 import type { PrismaClient } from "@prisma/client";
 import { registerSharedBotHandlers } from "../bots/shared/handlers.js";
 import { env } from "../core/env.js";
+import type { TenantResolver } from "./tenant-resolver.js";
+
+export function extractTelegramBotId(token: string): number | null {
+  const parts = token.split(":");
+  if (parts.length >= 2) {
+    const id = parseInt(parts[0], 10);
+    if (Number.isSafeInteger(id) && id > 0) {
+      return id;
+    }
+  }
+  return null;
+}
+
+export function normalizeBotUsername(username: string | null | undefined, fallback: string): string {
+  if (!username) return fallback.replace(/^@/, "");
+  return username.trim().replace(/^@/, "");
+}
 
 export interface BotPoolOptions {
   capacity: number;
@@ -20,16 +38,21 @@ export interface BotPoolOptions {
   sessionTtlSec: number;
   logger: Logger;
   prisma: PrismaClient;
+  tenantResolver?: TenantResolver;
 }
 
 export class BotPool {
   private readonly cache: LruCache<string, Bot<PlatformBotContext>>;
+  private readonly cachedTokens = new Map<string, string>();
+  private readonly latestMeta = new Map<string, ResolvedBot>();
+  private readonly metaStorage = new AsyncLocalStorage<ResolvedBot>();
   private readonly encryptionKey: string;
   private readonly transport: TelegramTransport;
   private readonly redis: Redis;
   private readonly sessionTtlSec: number;
   private readonly logger: Logger;
   private readonly prisma: PrismaClient;
+  private readonly tenantResolver?: TenantResolver;
 
   constructor(opts: BotPoolOptions) {
     this.cache = new LruCache<string, Bot<PlatformBotContext>>(opts.capacity);
@@ -39,23 +62,35 @@ export class BotPool {
     this.sessionTtlSec = opts.sessionTtlSec;
     this.logger = opts.logger;
     this.prisma = opts.prisma;
+    this.tenantResolver = opts.tenantResolver;
   }
 
   getOrCreateBot(resolved: ResolvedBot): Bot<PlatformBotContext> {
+    const cleanUsername = normalizeBotUsername(resolved.botUsername, `bot_${resolved.id.slice(0, 8)}`);
     const existing = this.cache.get(resolved.id);
     if (existing) {
-      return existing;
+      if (this.cachedTokens.get(resolved.id) !== resolved.botTokenEnc) {
+        this.cache.delete(resolved.id);
+        this.cachedTokens.delete(resolved.id);
+        this.latestMeta.delete(resolved.id);
+      } else {
+        this.latestMeta.set(resolved.id, resolved);
+        existing.botInfo.username = cleanUsername;
+        existing.botInfo.first_name = cleanUsername;
+        return existing;
+      }
     }
 
     const token = decryptSecret(resolved.botTokenEnc, this.encryptionKey);
-    const botIdNum = deriveBotId(resolved.id);
-    const botUsername = resolved.botUsername ?? `bot_${resolved.id.slice(0, 8)}`;
+    const realBotId = extractTelegramBotId(token);
+    const botIdNum = realBotId ?? deriveBotId(resolved.id);
+
     const bot = new Bot<PlatformBotContext>(token, {
       botInfo: {
         id: botIdNum,
         is_bot: true,
-        first_name: resolved.botUsername ?? "Platform Bot",
-        username: botUsername,
+        first_name: cleanUsername,
+        username: cleanUsername,
         can_join_groups: false,
         can_read_all_group_messages: false,
         supports_inline_queries: false,
@@ -68,15 +103,35 @@ export class BotPool {
       },
     });
 
+    // Wrap handleUpdate to always scope execution within AsyncLocalStorage
+    const originalHandleUpdate = bot.handleUpdate.bind(bot);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    bot.handleUpdate = async (update: any, webhookReplyEnvelope?: any) => {
+      const activeMeta = this.metaStorage.getStore();
+      if (activeMeta) {
+        return originalHandleUpdate(update, webhookReplyEnvelope);
+      }
+      let meta = this.latestMeta.get(resolved.id);
+      if (this.tenantResolver) {
+        const fresh = await this.tenantResolver.resolveById(resolved.id);
+        if (fresh) {
+          meta = fresh;
+          this.latestMeta.set(resolved.id, fresh);
+        }
+      }
+      const effectiveMeta = meta ?? resolved;
+      return this.metaStorage.run(effectiveMeta, () => originalHandleUpdate(update, webhookReplyEnvelope));
+    };
+
     // Telegram transport transformer
     const transformer = this.transport.transformerFor(resolved.id);
     if (transformer) {
       bot.api.config.use(transformer);
     }
 
-    // Attach bot metadata to context
+    // Dynamic per-update metadata resolution
     bot.use((ctx, next) => {
-      ctx.botMeta = resolved;
+      ctx.botMeta = this.metaStorage.getStore() ?? this.latestMeta.get(resolved.id) ?? resolved;
       return next();
     });
 
@@ -101,9 +156,9 @@ export class BotPool {
       transport: this.transport,
       uploadDir: env.UPLOAD_DIR,
       onClientStart: async (ctx) => {
-        if (resolved.botType === "LEADCATCH") {
+        if (ctx.botMeta.botType === "LEADCATCH") {
           await startLeadCatchQuiz(ctx, this.prisma);
-        } else if (resolved.botType === "QUICKBOOK") {
+        } else if (ctx.botMeta.botType === "QUICKBOOK") {
           await startQuickBookFlow(ctx, this.prisma);
         }
       },
@@ -127,12 +182,42 @@ export class BotPool {
 
     // Cache the bot instance
     this.cache.set(resolved.id, bot);
+    this.cachedTokens.set(resolved.id, resolved.botTokenEnc);
+    this.latestMeta.set(resolved.id, resolved);
     this.logger.debug({ botId: resolved.id, botType: resolved.botType }, "Bot instance initialized in pool");
 
     return bot;
   }
 
+  async handleUpdate(
+    resolved: ResolvedBot,
+    update: Parameters<Bot<PlatformBotContext>["handleUpdate"]>[0],
+  ): Promise<void> {
+    this.latestMeta.set(resolved.id, resolved);
+    const bot = this.getOrCreateBot(resolved);
+    return this.metaStorage.run(resolved, () => bot.handleUpdate(update));
+  }
+
+  invalidateMeta(botTokenHash?: string, botId?: string): void {
+    if (botId) {
+      this.latestMeta.delete(botId);
+    }
+    if (botTokenHash) {
+      for (const [id, meta] of this.latestMeta.entries()) {
+        if (meta.botTokenHash === botTokenHash) {
+          this.latestMeta.delete(id);
+        }
+      }
+    }
+  }
+
+  getLatestMeta(botId: string): ResolvedBot | undefined {
+    return this.latestMeta.get(botId);
+  }
+
   evict(botId: string): boolean {
+    this.cachedTokens.delete(botId);
+    this.latestMeta.delete(botId);
     return this.cache.delete(botId);
   }
 

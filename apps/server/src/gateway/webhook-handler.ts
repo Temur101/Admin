@@ -90,8 +90,7 @@ export function registerWebhookGateway(
       setImmediate(async () => {
         let handlingError: Error | undefined;
         try {
-          const botInstance = botPool.getOrCreateBot(bot);
-          await botInstance.handleUpdate(body as unknown as TelegramUpdatePayload);
+          await botPool.handleUpdate(bot, body as unknown as TelegramUpdatePayload);
         } catch (err) {
           handlingError = err as Error;
           logger.error(

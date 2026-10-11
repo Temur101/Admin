@@ -103,6 +103,11 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
     sessionTtlSec: env.SESSION_TTL_SEC,
     logger,
     prisma: appPrisma,
+    tenantResolver,
+  });
+
+  tenantResolver.setOnInvalidate((botTokenHash, botId) => {
+    botPool.invalidateMeta(botTokenHash, botId);
   });
 
   registerWebhookGateway(app, {

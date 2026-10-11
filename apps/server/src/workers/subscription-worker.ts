@@ -78,7 +78,7 @@ export async function runSubscriptionWorker(
       });
 
       // 4. Invalidate Redis cache for bot metadata
-      await redis.del(`bot:hash:${sub.bot.botTokenHash}`).catch(() => {});
+      await redis.del(`bot:hash:${sub.bot.botTokenHash}`, `bot:id:${sub.bot.id}`).catch(() => {});
 
       // 5. Notify bot admins
       if (sub.bot.users.length > 0) {

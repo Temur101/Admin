@@ -120,11 +120,13 @@ export async function submitPaymentReceipt(
       },
     });
 
-    // 3. Invalidate Redis cache
-    await redis.del(`bot:hash:${bot.botTokenHash}`).catch(() => {});
-
-    return { receipt, newPaidUntil, newStatus };
+    return { receipt, newPaidUntil, newStatus, botTokenHash: bot.botTokenHash, botId: bot.id };
   });
+
+  // 3. Invalidate Redis cache AFTER transaction commit
+  await redis.del(`bot:hash:${result.botTokenHash}`, `bot:id:${result.botId}`).catch(() => {});
+
+  return { receipt: result.receipt, newPaidUntil: result.newPaidUntil, newStatus: result.newStatus };
 }
 
 /**
@@ -177,15 +179,15 @@ export async function approveReceipt(
       });
     }
 
-    // 3. Invalidate Redis cache
-    await redis.del(`bot:hash:${receipt.bot.botTokenHash}`).catch(() => {});
-
     return updatedReceipt;
   });
 
   if (!result || result.status !== "APPROVED") {
     return result;
   }
+
+  // 3. Invalidate Redis cache AFTER transaction commit
+  await redis.del(`bot:hash:${result.bot.botTokenHash}`, `bot:id:${result.bot.id}`).catch(() => {});
 
   // 4. Send Telegram push notification to admins if transport provided
   if (transport && result.bot.users.length > 0) {
@@ -274,9 +276,6 @@ export async function rejectReceipt(
       },
     });
 
-    // 3. Invalidate Redis cache
-    await redis.del(`bot:hash:${receipt.bot.botTokenHash}`).catch(() => {});
-
     return { updatedReceipt, newStatus, rolledBackPaidUntil };
   });
 
@@ -285,6 +284,9 @@ export async function rejectReceipt(
   }
 
   const { updatedReceipt, newStatus, rolledBackPaidUntil } = result;
+
+  // 3. Invalidate Redis cache AFTER transaction commit
+  await redis.del(`bot:hash:${updatedReceipt.bot.botTokenHash}`, `bot:id:${updatedReceipt.bot.id}`).catch(() => {});
 
   // 4. Send Telegram push notification to admins
   if (transport && updatedReceipt.bot.users.length > 0) {
