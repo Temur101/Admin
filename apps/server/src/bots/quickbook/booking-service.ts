@@ -401,7 +401,10 @@ export async function cancelBooking(
 
   const updated = await prisma.booking.update({
     where: { id: opts.bookingId },
-    data: { status: "CANCELLED" },
+    data: {
+      status: "CANCELLED",
+      reminderLockedUntil: null,
+    },
   });
 
   // Remove from reminders ZSET

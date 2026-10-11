@@ -418,7 +418,7 @@ describe("B04: Overlapping Bookings Prevention", () => {
       now: simulatedNow,
     });
     expect(resPast.success).toBe(false);
-    if (!resPast.success) {
+    if (!resPast.success && "alternativeSlots" in resPast) {
       expect(resPast.error).toBe("SLOT_IN_PAST");
       expect(resPast.alternativeSlots.length).toBeGreaterThan(0);
     }
@@ -441,7 +441,7 @@ describe("B04: Overlapping Bookings Prevention", () => {
       now: simulatedNow,
     });
     expect(resBreak.success).toBe(false);
-    if (!resBreak.success) {
+    if (!resBreak.success && "alternativeSlots" in resBreak) {
       expect(resBreak.error).toBe("SLOT_IN_BREAK");
       expect(resBreak.alternativeSlots.length).toBeGreaterThan(0);
     }

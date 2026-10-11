@@ -155,12 +155,16 @@ model Booking {
   slotTime      DateTime      @db.Timestamptz
   endTime       DateTime?     @db.Timestamptz
   status        BookingStatus @default(PENDING)
-  reminderSent  Boolean       @default(false)
-  isMasked      Boolean       @default(false)
-  createdAt     DateTime      @default(now()) @db.Timestamptz
+  reminderSent        Boolean       @default(false)
+  reminderAttempts    Int           @default(0)
+  reminderLockedUntil DateTime?     @db.Timestamptz
+  reminderLastError   String?
+  isMasked            Boolean       @default(false)
+  createdAt           DateTime      @default(now()) @db.Timestamptz
 
   @@index([botId, slotTime])
   @@index([botId, staffId, status, slotTime, endTime])
+  @@index([reminderSent, status, slotTime])
 }
 
 model Admin {
