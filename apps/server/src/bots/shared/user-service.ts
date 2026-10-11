@@ -93,3 +93,25 @@ export async function setUserLanguage(
     data: { lang },
   });
 }
+
+export async function isActualBotAdmin(
+  prisma: PrismaClient,
+  botId: string,
+  tgId: number | bigint,
+): Promise<boolean> {
+  try {
+    const user = await prisma.botUser.findUnique({
+      where: {
+        botId_tgId: {
+          botId,
+          tgId: BigInt(tgId),
+        },
+      },
+      select: { isAdmin: true },
+    });
+    return Boolean(user?.isAdmin);
+  } catch {
+    return false;
+  }
+}
+

@@ -178,24 +178,68 @@ export async function createBooking(
   }
 }
 
+export interface CancelBookingOptions {
+  bookingId: string;
+  botId?: string;
+  userId?: number | bigint;
+  isAdmin?: boolean;
+}
+
+export type CancelBookingResult =
+  | { success: true; booking: Booking; alreadyCancelled: boolean }
+  | { success: false; error: "NOT_FOUND" | "FORBIDDEN" };
+
 export async function cancelBooking(
   prisma: PrismaClient,
   redis: Redis,
-  bookingId: string,
-): Promise<Booking | null> {
+  bookingIdOrOpts: string | CancelBookingOptions,
+  botId?: string,
+  userId?: number | bigint,
+  isAdmin?: boolean,
+): Promise<CancelBookingResult> {
+  const opts: CancelBookingOptions =
+    typeof bookingIdOrOpts === "string"
+      ? {
+          bookingId: bookingIdOrOpts,
+          botId,
+          userId,
+          isAdmin,
+        }
+      : bookingIdOrOpts;
+
   const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
+    where: { id: opts.bookingId },
   });
 
-  if (!booking) return null;
+  if (!booking) {
+    return { success: false, error: "NOT_FOUND" };
+  }
+
+  // Must match current bot if botId specified
+  if (opts.botId && booking.botId !== opts.botId) {
+    return { success: false, error: "FORBIDDEN" };
+  }
+
+  // Must match booking owner or bot admin
+  if (opts.userId !== undefined && opts.userId !== null && opts.userId !== 0) {
+    const isOwner = booking.customerTgId === BigInt(opts.userId);
+    if (!isOwner && !opts.isAdmin) {
+      return { success: false, error: "FORBIDDEN" };
+    }
+  }
+
+  // Safe idempotent return if already cancelled
+  if (booking.status === "CANCELLED") {
+    return { success: true, booking, alreadyCancelled: true };
+  }
 
   const updated = await prisma.booking.update({
-    where: { id: bookingId },
+    where: { id: opts.bookingId },
     data: { status: "CANCELLED" },
   });
 
   // Remove from reminders ZSET
-  await redis.zrem(REMINDER_ZSET_KEY, bookingId).catch(() => {});
+  await redis.zrem(REMINDER_ZSET_KEY, opts.bookingId).catch(() => {});
 
-  return updated;
+  return { success: true, booking: updated, alreadyCancelled: false };
 }

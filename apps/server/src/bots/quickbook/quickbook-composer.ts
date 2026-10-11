@@ -6,6 +6,7 @@ import type { Logger } from "../../core/logger.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
 import { parseAndNormalizePhone } from "../shared/phone.js";
+import { isActualBotAdmin } from "../shared/user-service.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import { acquireSlotLock } from "./slot-lock.js";
 import {
@@ -311,18 +312,65 @@ export function registerQuickBookHandlers(
 
   // 7. Booking reminder actions: Confirm and Cancel
   bot.callbackQuery(/^book:confirm:(.+)$/, async (ctx) => {
+    const bookingId = ctx.match[1];
+    if (!bookingId || !ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
     const lang = ctx.session.lang ?? "RU";
+
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId },
+    });
+
+    if (!booking || booking.botId !== ctx.botMeta.id) {
+      await ctx.reply("Запись не найдена / Band topilmadi");
+      return;
+    }
+
+    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
+    const isOwner = booking.customerTgId === BigInt(ctx.from.id);
+    if (!isOwner && !isAdmin) {
+      await ctx.reply("Доступ запрещен / Ruxsat yo'q");
+      return;
+    }
+
+    if (booking.status === "CANCELLED") {
+      await ctx.reply(t(lang, "qb_cancelled_reply"));
+      return;
+    }
+
+    if (booking.status === "PENDING") {
+      await prisma.booking.update({
+        where: { id: bookingId },
+        data: { status: "CONFIRMED" },
+      });
+    }
+
     await ctx.reply(t(lang, "qb_confirmed_reply"));
   });
 
   bot.callbackQuery(/^book:cancel:(.+)$/, async (ctx) => {
     const bookingId = ctx.match[1];
+    if (!bookingId || !ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
-    if (bookingId) {
-      await cancelBooking(prisma, redis, bookingId);
-    }
     const lang = ctx.session.lang ?? "RU";
+
+    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
+    const result = await cancelBooking(prisma, redis, {
+      bookingId,
+      botId: ctx.botMeta.id,
+      userId: ctx.from.id,
+      isAdmin,
+    });
+
+    if (!result.success) {
+      if (result.error === "FORBIDDEN") {
+        await ctx.reply("Доступ запрещен / Ruxsat yo'q");
+      } else {
+        await ctx.reply("Запись не найдена / Band topilmadi");
+      }
+      return;
+    }
+
     await ctx.reply(t(lang, "qb_cancelled_reply"));
   });
 }

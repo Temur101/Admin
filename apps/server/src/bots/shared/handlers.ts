@@ -11,7 +11,7 @@ import {
 } from "./admin-menu.js";
 import { t } from "./i18n.js";
 import { registerReceiptHandlers } from "./receipt-handlers.js";
-import { setUserLanguage, upsertBotUser } from "./user-service.js";
+import { isActualBotAdmin, setUserLanguage, upsertBotUser } from "./user-service.js";
 
 async function sendReply(
   ctx: PlatformBotContext,
@@ -128,6 +128,11 @@ export function registerSharedBotHandlers(
   // 3. Admin menu callbacks
   bot.callbackQuery("admin:leads", async (ctx) => {
     if (!ctx.from) return;
+    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
+    if (!isAdmin) {
+      await ctx.answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true });
+      return;
+    }
     await ctx.answerCallbackQuery();
     const lang = (ctx.session.lang as Lang) ?? "RU";
     const text = await fetchRecentEntriesText(prisma, ctx.botMeta, lang);
@@ -136,6 +141,11 @@ export function registerSharedBotHandlers(
 
   bot.callbackQuery("admin:sub", async (ctx) => {
     if (!ctx.from) return;
+    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
+    if (!isAdmin) {
+      await ctx.answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true });
+      return;
+    }
     await ctx.answerCallbackQuery();
     const lang = (ctx.session.lang as Lang) ?? "RU";
     const { text, keyboard } = formatSubscriptionStatusText(ctx.botMeta, lang);
@@ -144,6 +154,11 @@ export function registerSharedBotHandlers(
 
   bot.callbackQuery("admin:lang", async (ctx) => {
     if (!ctx.from) return;
+    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
+    if (!isAdmin) {
+      await ctx.answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true });
+      return;
+    }
     await ctx.answerCallbackQuery();
     const lang = (ctx.session.lang as Lang) ?? "RU";
     await sendReply(ctx, t(lang, "choose_language"), {
