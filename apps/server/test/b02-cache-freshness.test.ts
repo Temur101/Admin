@@ -135,7 +135,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       message: {
         message_id: 1,
         date: Math.floor(Date.now() / 1000),
-        chat: { id: USER_A_ID, type: "private" },
+        chat: { id: USER_A_ID, type: "private", first_name: "UserA" },
         from: { id: USER_A_ID, is_bot: false, first_name: "UserA" },
         text: `${cmdText} adm_${INITIAL_INVITE_CODE}`,
         entities: [{ type: "bot_command", offset: 0, length: cmdText.length }],
@@ -155,7 +155,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       message: {
         message_id: 2,
         date: Math.floor(Date.now() / 1000),
-        chat: { id: USER_B_ID, type: "private" },
+        chat: { id: USER_B_ID, type: "private", first_name: "UserB" },
         from: { id: USER_B_ID, is_bot: false, first_name: "UserB" },
         text: `${otherCmd} adm_${INITIAL_INVITE_CODE}`,
         entities: [{ type: "bot_command", offset: 0, length: otherCmd.length }],
@@ -179,7 +179,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       message: {
         message_id: 10,
         date: Math.floor(Date.now() / 1000),
-        chat: { id: USER_A_ID, type: "private" },
+        chat: { id: USER_A_ID, type: "private", first_name: "UserA" },
         from: { id: USER_A_ID, is_bot: false, first_name: "UserA" },
         text: `/start adm_${INITIAL_INVITE_CODE}`,
       },
@@ -210,7 +210,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       message: {
         message_id: 11,
         date: Math.floor(Date.now() / 1000),
-        chat: { id: USER_B_ID, type: "private" },
+        chat: { id: USER_B_ID, type: "private", first_name: "UserB" },
         from: { id: USER_B_ID, is_bot: false, first_name: "UserB" },
         text: `/start adm_${INITIAL_INVITE_CODE}`,
       },
@@ -228,7 +228,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       message: {
         message_id: 12,
         date: Math.floor(Date.now() / 1000),
-        chat: { id: USER_B_ID, type: "private" },
+        chat: { id: USER_B_ID, type: "private", first_name: "UserB" },
         from: { id: USER_B_ID, is_bot: false, first_name: "UserB" },
         text: `/start adm_${NEW_INVITE_CODE}`,
       },
@@ -280,7 +280,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     // Under ACTIVE subscription, data is NOT masked
     let sentMessages = getSentMessages(transport, USER_A_ID);
     expect(sentMessages.length).toBeGreaterThan(0);
-    let leadsText = sentMessages[sentMessages.length - 1].text;
+    let leadsText = sentMessages[sentMessages.length - 1]!.text;
     expect(leadsText).toContain("Alexandr Petrov");
     expect(leadsText).toContain("+998901234567");
 
@@ -310,7 +310,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
 
     // Under EXPIRED subscription, data MUST be masked!
     sentMessages = getSentMessages(transport, USER_A_ID);
-    leadsText = sentMessages[sentMessages.length - 1].text;
+    leadsText = sentMessages[sentMessages.length - 1]!.text;
     expect(leadsText).not.toContain("Alexandr Petrov");
     expect(leadsText).not.toContain("+998901234567");
     expect(leadsText).toContain("***");
@@ -338,7 +338,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     });
 
     sentMessages = getSentMessages(transport, USER_A_ID);
-    leadsText = sentMessages[sentMessages.length - 1].text;
+    leadsText = sentMessages[sentMessages.length - 1]!.text;
     expect(leadsText).toContain("Alexandr Petrov");
     expect(leadsText).toContain("+998901234567");
   });
@@ -363,7 +363,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       message: {
         message_id: 50,
         date: Math.floor(Date.now() / 1000),
-        chat: { id: USER_A_ID, type: "private" },
+        chat: { id: USER_A_ID, type: "private", first_name: "UserA" },
         from: { id: USER_A_ID, is_bot: false, first_name: "QuizUser" },
         text: "/start",
       },
@@ -372,7 +372,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     let sent = getSentMessages(transport, USER_A_ID);
     expect(sent.length).toBeGreaterThan(0);
     // Default question contains "Какая услуга вас интересует?"
-    expect(sent[sent.length - 1].text).toContain("услуга вас интересует");
+    expect(sent[sent.length - 1]!.text).toContain("услуга вас интересует");
 
     // 2. Update bot settings with custom quiz in PostgreSQL matching QuizConfig DAG (min 3 steps)
     const customQuiz = {
@@ -453,7 +453,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       message: {
         message_id: 51,
         date: Math.floor(Date.now() / 1000),
-        chat: { id: USER_B_ID, type: "private" },
+        chat: { id: USER_B_ID, type: "private", first_name: "UserB" },
         from: { id: USER_B_ID, is_bot: false, first_name: "QuizUser2" },
         text: "/start",
       },
@@ -462,7 +462,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     sent = getSentMessages(transport, USER_B_ID);
     expect(sent.length).toBeGreaterThan(0);
     // MUST display the new custom question immediately!
-    expect(sent[sent.length - 1].text).toContain("Какой тип ремонта вам требуется?");
+    expect(sent[sent.length - 1]!.text).toContain("Какой тип ремонта вам требуется?");
   });
 
   it("6. should isolate concurrent updates using AsyncLocalStorage without race condition or state cross-talk", async () => {
@@ -490,7 +490,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
         message: {
           message_id: 100 + idx,
           date: Math.floor(Date.now() / 1000),
-          chat: { id: uid, type: "private" },
+          chat: { id: uid, type: "private", first_name: `User_${uid}` },
           from: { id: uid, is_bot: false, first_name: `Concurrent_${uid}` },
           text: "/start",
         },
@@ -503,7 +503,7 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     for (const uid of userIds) {
       const messages = getSentMessages(transport, uid);
       expect(messages.length).toBeGreaterThan(0);
-      expect(messages[0].chatId).toBe(uid);
+      expect(messages[0]!.chatId).toBe(uid);
     }
   });
 

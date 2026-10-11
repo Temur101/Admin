@@ -283,7 +283,9 @@ describe("B01: Bot Permissions & Action Security", () => {
       userId: CLIENT_A_ID,
     });
     expect(wrongBotRes.success).toBe(false);
-    expect(wrongBotRes.error).toBe("FORBIDDEN");
+    if (!wrongBotRes.success) {
+      expect(wrongBotRes.error).toBe("FORBIDDEN");
+    }
 
     // Direct service cancellation check with wrong user
     const wrongUserRes = await cancelBooking(prisma, redis, {
@@ -292,7 +294,9 @@ describe("B01: Bot Permissions & Action Security", () => {
       userId: CLIENT_B_ID,
     });
     expect(wrongUserRes.success).toBe(false);
-    expect(wrongUserRes.error).toBe("FORBIDDEN");
+    if (!wrongUserRes.success) {
+      expect(wrongUserRes.error).toBe("FORBIDDEN");
+    }
   });
 
   it("3. Owner can cancel own booking, and repeated cancellation is safe and idempotent", async () => {

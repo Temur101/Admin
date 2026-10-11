@@ -20,6 +20,7 @@ import {
 export { prisma };
 export { logger };
 export { env, type Env };
+export type { FastifyInstance };
 export * from "./core/crypto.js";
 export * from "./core/lru.js";
 export * from "./core/redis.js";

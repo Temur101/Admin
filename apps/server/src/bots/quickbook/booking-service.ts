@@ -1,12 +1,20 @@
 import type { Booking, PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
-import type { QuickBookConfig } from "@lcqb/contracts";
+import type { QuickBookConfig, QuickBookResource, QuickBookService } from "@lcqb/contracts";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
 import { notifyAdmins } from "../shared/notification.js";
 import { parseAndNormalizePhone } from "../shared/phone.js";
 import { releaseSlotLock } from "./slot-lock.js";
-import { getAlternativeSlots, type TimeSlot } from "./slot-generator.js";
+import {
+  getAlternativeSlots,
+  parseTimeToMinutes,
+  type TimeSlot,
+} from "./slot-generator.js";
+import { formatTashkentDateTime } from "../shared/payment-service.js";
+
+export const REMINDER_ZSET_KEY = "booking:reminders";
+export { formatTashkentDateTime };
 
 export interface CreateBookingParams {
   prisma: PrismaClient;
@@ -22,18 +30,115 @@ export interface CreateBookingParams {
   slotTime: Date | string;
   config: QuickBookConfig;
   lang?: "RU" | "UZ";
+  lockToken?: string;
+  now?: Date;
 }
+
+export type CreateBookingError =
+  | "INVALID_PHONE"
+  | "SERVICE_NOT_FOUND"
+  | "STAFF_NOT_FOUND"
+  | "SERVICE_NOT_SUPPORTED"
+  | "SLOT_IN_PAST"
+  | "OUTSIDE_HORIZON"
+  | "NOT_IN_SCHEDULE"
+  | "SLOT_IN_BREAK"
+  | "SLOT_TAKEN";
 
 export type CreateBookingResult =
   | { success: true; booking: Booking }
   | { success: false; error: "INVALID_PHONE" }
-  | { success: false; error: "SERVICE_NOT_FOUND" | "STAFF_NOT_FOUND" }
-  | { success: false; error: "SLOT_TAKEN"; alternativeSlots: TimeSlot[] };
+  | { success: false; error: "SERVICE_NOT_FOUND" | "STAFF_NOT_FOUND" | "SERVICE_NOT_SUPPORTED" }
+  | {
+      success: false;
+      error: "SLOT_TAKEN" | "SLOT_IN_PAST" | "OUTSIDE_HORIZON" | "NOT_IN_SCHEDULE" | "SLOT_IN_BREAK";
+      alternativeSlots: TimeSlot[];
+    };
 
-import { formatTashkentDateTime } from "../shared/payment-service.js";
+/**
+ * Extracts Tashkent local time components (UTC+5) for scheduling and break checks.
+ */
+export function getTashkentTimeParts(date: Date): {
+  year: number;
+  month: number;
+  day: number;
+  dayOfWeek: number;
+  minutesOfDay: number;
+  dateStr: string;
+} {
+  const tashkentMs = date.getTime() + 5 * 3600 * 1000;
+  const d = new Date(tashkentMs);
+  const year = d.getUTCFullYear();
+  const month = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+  const dayOfWeek = d.getUTCDay();
+  const minutesOfDay = d.getUTCHours() * 60 + d.getUTCMinutes();
+  const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  return { year, month, day, dayOfWeek, minutesOfDay, dateStr };
+}
 
-export const REMINDER_ZSET_KEY = "booking:reminders";
-export { formatTashkentDateTime };
+/**
+ * Validates slot eligibility: service-resource compatibility, past date,
+ * booking horizon, resource working days, working hours, and break intervals.
+ */
+export function validateBookingSlotEligibility(params: {
+  config: QuickBookConfig;
+  service: QuickBookService;
+  staff: QuickBookResource;
+  slotDate: Date;
+  now?: Date;
+}):
+  | { valid: true }
+  | {
+      valid: false;
+      error: "SERVICE_NOT_SUPPORTED" | "SLOT_IN_PAST" | "OUTSIDE_HORIZON" | "NOT_IN_SCHEDULE" | "SLOT_IN_BREAK";
+    } {
+  const { config, service, staff, slotDate } = params;
+  const now = params.now ?? new Date();
+
+  // 1. Service supported by resource
+  if (staff.serviceIds && staff.serviceIds.length > 0 && !staff.serviceIds.includes(service.id)) {
+    return { valid: false, error: "SERVICE_NOT_SUPPORTED" };
+  }
+
+  // 2. Past time (slot must be strictly in the future)
+  if (slotDate.getTime() <= now.getTime()) {
+    return { valid: false, error: "SLOT_IN_PAST" };
+  }
+
+  // 3. Booking horizon
+  const horizonDays = config.bookingHorizonDays ?? 14;
+  const maxTimeMs = now.getTime() + horizonDays * 24 * 3600 * 1000;
+  if (slotDate.getTime() > maxTimeMs) {
+    return { valid: false, error: "OUTSIDE_HORIZON" };
+  }
+
+  // 4. Schedule & breaks in Tashkent time
+  const { dayOfWeek, minutesOfDay } = getTashkentTimeParts(slotDate);
+
+  if (!staff.workDays.includes(dayOfWeek)) {
+    return { valid: false, error: "NOT_IN_SCHEDULE" };
+  }
+
+  const workStartMin = parseTimeToMinutes(staff.workHours.start);
+  const workEndMin = parseTimeToMinutes(staff.workHours.end);
+  const slotStartMin = minutesOfDay;
+  const slotEndMin = slotStartMin + service.durationMin;
+
+  if (slotStartMin < workStartMin || slotEndMin > workEndMin) {
+    return { valid: false, error: "NOT_IN_SCHEDULE" };
+  }
+
+  if (staff.breakHours) {
+    const breakStartMin = parseTimeToMinutes(staff.breakHours.start);
+    const breakEndMin = parseTimeToMinutes(staff.breakHours.end);
+    if (slotStartMin < breakEndMin && slotEndMin > breakStartMin) {
+      return { valid: false, error: "SLOT_IN_BREAK" };
+    }
+  }
+
+  return { valid: true };
+}
 
 export async function createBooking(
   params: CreateBookingParams,
@@ -75,59 +180,109 @@ export async function createBooking(
   const slotDate = typeof slotTime === "string" ? new Date(slotTime) : slotTime;
   const serviceName = lang === "UZ" ? service.name.uz : service.name.ru;
   const staffName = lang === "UZ" ? staff.name.uz : staff.name.ru;
+  const dateStr = slotDate.toISOString().slice(0, 10);
 
-  try {
-    // 3. Insert booking in Prisma interactive transaction
-    const booking = await prisma.$transaction(async (tx) => {
-      // Check active booking conflict inside transaction
-      const existing = await tx.booking.findFirst({
-        where: {
-          botId,
-          staffId,
-          slotTime: slotDate,
-          status: { in: ["PENDING", "CONFIRMED"] },
-        },
-      });
+  // 3. Check slot business eligibility (schedule, duration, break, past, horizon, compatibility)
+  const eligibility = validateBookingSlotEligibility({
+    config,
+    service,
+    staff,
+    slotDate,
+    now: params.now,
+  });
 
-      if (existing) {
-        if (existing.customerTgId === BigInt(customerTgId)) {
-          return existing;
-        }
-        throw new Error("SLOT_ALREADY_BOOKED");
-      }
+  if (!eligibility.valid) {
+    if (eligibility.error === "SERVICE_NOT_SUPPORTED") {
+      return { success: false, error: "SERVICE_NOT_SUPPORTED" };
+    }
 
-      return tx.booking.create({
-        data: {
-          botId,
-          customerTgId: BigInt(customerTgId),
-          customerName: customerName ?? null,
-          customerPhone: normalizedPhone,
-          serviceId,
-          serviceName,
-          staffId,
-          durationMin: service.durationMin,
-          slotTime: slotDate,
-          status: "CONFIRMED",
-        },
-      });
+    const alternativeSlots = await getAlternativeSlots({
+      botId,
+      config,
+      serviceId,
+      staffId,
+      dateStr,
+      prisma,
+      redis,
+      now: params.now,
+      lang,
     });
 
-    // 4. Release Redis lock for this slot safely
+    return {
+      success: false,
+      error: eligibility.error,
+      alternativeSlots,
+    };
+  }
+
+  const endTime = new Date(slotDate.getTime() + service.durationMin * 60000);
+
+  try {
+    // 4. Insert booking in Prisma interactive transaction with PostgreSQL resource advisory lock
+    const booking = await prisma.$transaction(
+      async (tx) => {
+        // Advisory transaction lock serializes concurrent bookings for this specific staff on this bot
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${staffId}`}));`;
+
+        // Check for ANY overlapping active booking: [slotDate, endTime) overlaps [b.slotTime, b.endTime)
+        const existing = await tx.booking.findFirst({
+          where: {
+            botId,
+            staffId,
+            status: { in: ["PENDING", "CONFIRMED"] },
+            slotTime: { lt: endTime },
+            endTime: { gt: slotDate },
+          },
+        });
+
+        if (existing) {
+          // Idempotent retry: if same customerTgId and exact same slotTime
+          if (
+            existing.customerTgId === BigInt(customerTgId) &&
+            existing.slotTime.getTime() === slotDate.getTime()
+          ) {
+            return existing;
+          }
+          throw new Error("SLOT_ALREADY_BOOKED");
+        }
+
+        return tx.booking.create({
+          data: {
+            botId,
+            customerTgId: BigInt(customerTgId),
+            customerName: customerName ?? null,
+            customerPhone: normalizedPhone,
+            serviceId,
+            serviceName,
+            staffId,
+            durationMin: service.durationMin,
+            slotTime: slotDate,
+            endTime,
+            status: "CONFIRMED",
+          },
+        });
+      },
+      { maxWait: 15000, timeout: 20000 },
+    );
+
+    // 5. Release Redis lock for this slot safely
     await releaseSlotLock(redis, {
       botId,
       staffId,
       slotTime: slotDate,
       userId: customerTgId,
+      lockToken: params.lockToken,
+      durationMin: service.durationMin,
+      slotIntervalMin: config.slotIntervalMin,
     }).catch(() => {});
 
-    // 5. Schedule 2-hour reminder in Redis ZSET
-    // score = slotTime - 2 hours (ms)
+    // 6. Schedule 2-hour reminder in Redis ZSET
     const reminderScore = slotDate.getTime() - 2 * 3600 * 1000;
     await redis.zadd(REMINDER_ZSET_KEY, reminderScore, booking.id).catch((err) => {
       logger.warn({ err: (err as Error).message }, "Could not schedule reminder in Redis");
     });
 
-    // 6. Notify admins
+    // 7. Notify admins
     const timeFormatted = formatTashkentDateTime(slotDate);
     await notifyAdmins(
       botId,
@@ -146,11 +301,19 @@ export async function createBooking(
 
     return { success: true, booking };
   } catch (err: unknown) {
-    const errorMsg = (err as Error).message;
-    // P2002 is Prisma unique constraint violation code (our booking_slot_active_uq partial index!)
+    const errorMsg = (err as Error).message ?? "";
+    const errObj = typeof err === "object" && err !== null ? (err as Record<string, unknown>) : {};
+    const errCode = (errObj.code as string | undefined) ?? (errObj.meta as { code?: string } | undefined)?.code;
+
     const isConflict =
       errorMsg.includes("SLOT_ALREADY_BOOKED") ||
-      (typeof err === "object" && err !== null && "code" in err && err.code === "P2002");
+      errorMsg.includes("booking_no_overlap_excl") ||
+      errorMsg.includes("conflicts with existing key") ||
+      errorMsg.includes("Unable to start a transaction in the given time") ||
+      errCode === "P2002" ||
+      errCode === "23P01" ||
+      errCode === "P2010" ||
+      errCode === "P2028";
 
     if (isConflict) {
       logger.warn(
@@ -158,7 +321,6 @@ export async function createBooking(
         "Booking slot conflict detected, fetching alternative slots",
       );
 
-      const dateStr = slotDate.toISOString().slice(0, 10);
       const alternativeSlots = await getAlternativeSlots({
         botId,
         config,
@@ -167,6 +329,7 @@ export async function createBooking(
         dateStr,
         prisma,
         redis,
+        now: params.now,
         lang,
       });
 

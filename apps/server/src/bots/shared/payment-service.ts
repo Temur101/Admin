@@ -70,7 +70,7 @@ export async function submitPaymentReceipt(
   } = params;
   const now = params.now ?? new Date();
 
-  return prisma.$transaction(async (tx) => {
+  const result = await prisma.$transaction(async (tx) => {
     const bot = await tx.bot.findUnique({
       where: { id: botId },
       include: { subscription: true },

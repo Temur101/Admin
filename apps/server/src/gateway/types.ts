@@ -35,6 +35,7 @@ export interface QuickBookSessionState {
   dateStr?: string;
   slotTimeIso?: string;
   lockedUntil?: number;
+  lockToken?: string;
 }
 
 export interface PaymentSessionState {

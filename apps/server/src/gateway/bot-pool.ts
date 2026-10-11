@@ -17,7 +17,7 @@ import type { TenantResolver } from "./tenant-resolver.js";
 export function extractTelegramBotId(token: string): number | null {
   const parts = token.split(":");
   if (parts.length >= 2) {
-    const id = parseInt(parts[0], 10);
+    const id = parseInt(parts[0] ?? "", 10);
     if (Number.isSafeInteger(id) && id > 0) {
       return id;
     }

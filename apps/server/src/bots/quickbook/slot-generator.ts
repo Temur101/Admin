@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import type { QuickBookConfig } from "@lcqb/contracts";
-import { formatSlotLockKey } from "./slot-lock.js";
+import { formatSlotLockKey, isSlotLocked } from "./slot-lock.js";
 
 export interface TimeSlot {
   slotTime: Date;
@@ -61,7 +61,7 @@ export function minutesToUtcDate(year: number, month: number, day: number, minut
   return new Date(Date.UTC(year, month - 1, day, hours - 5, mins, 0, 0));
 }
 
-function parseTimeToMinutes(timeStr: string): number {
+export function parseTimeToMinutes(timeStr: string): number {
   const [h, m] = timeStr.split(":").map(Number);
   return (h ?? 0) * 60 + (m ?? 0);
 }
@@ -112,6 +112,7 @@ export async function generateAvailableSlots(
     select: {
       staffId: true,
       slotTime: true,
+      endTime: true,
       durationMin: true,
     },
   });
@@ -161,7 +162,7 @@ export async function generateAvailableSlots(
       const hasBookingConflict = existingBookings.some((b) => {
         if (b.staffId !== res.id) return false;
         const bStartMs = b.slotTime.getTime();
-        const bEndMs = bStartMs + b.durationMin * 60 * 1000;
+        const bEndMs = b.endTime ? b.endTime.getTime() : bStartMs + b.durationMin * 60 * 1000;
         return slotStartMs < bEndMs && slotEndMs > bStartMs;
       });
 
@@ -171,9 +172,15 @@ export async function generateAvailableSlots(
 
       // Check Redis lock if redis client is provided
       if (redis) {
-        const lockKey = formatSlotLockKey(botId, res.id, slotStartUtc);
-        const locked = await redis.exists(lockKey);
-        if (locked === 1) {
+        const locked = await isSlotLocked(
+          redis,
+          botId,
+          res.id,
+          slotStartUtc,
+          service.durationMin,
+          intervalMin,
+        );
+        if (locked) {
           continue;
         }
       }

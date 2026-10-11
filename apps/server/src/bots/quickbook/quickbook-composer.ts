@@ -78,6 +78,7 @@ export async function handleQuickBookContact(
     serviceId: session.serviceId,
     staffId: session.resourceId,
     slotTime: session.slotTimeIso,
+    lockToken: session.lockToken,
     config,
     lang,
   });
@@ -102,7 +103,7 @@ export async function handleQuickBookContact(
     await ctx.reply(successMsg, {
       reply_markup: { remove_keyboard: true },
     });
-  } else if (bookingRes.error === "SLOT_TAKEN") {
+  } else if ("alternativeSlots" in bookingRes) {
     await renderAlternativeSlots(ctx, bookingRes.alternativeSlots, session.serviceId, session.resourceId);
   } else {
     await ctx.reply(t(lang, "quiz_invalid_phone"));
@@ -243,6 +244,7 @@ export function registerQuickBookHandlers(
 
     const lang = ctx.session.lang ?? "RU";
     const config = getQuickBookConfig(ctx.botMeta.settings);
+    const srv = config.services.find((s) => s.id === serviceId);
 
     // Acquire distributed lock for 60 seconds
     const lockRes = await acquireSlotLock(redis, {
@@ -251,6 +253,8 @@ export function registerQuickBookHandlers(
       slotTime: slotTimeIso,
       userId: ctx.from.id,
       ttlSec: 60,
+      durationMin: srv?.durationMin,
+      slotIntervalMin: config.slotIntervalMin,
     });
 
     if (!lockRes.acquired) {
@@ -274,6 +278,7 @@ export function registerQuickBookHandlers(
       resourceId: staffId,
       slotTimeIso,
       lockedUntil: Date.now() + 60000,
+      lockToken: lockRes.lockToken,
     };
 
     const phoneKeyboard = new Keyboard()
