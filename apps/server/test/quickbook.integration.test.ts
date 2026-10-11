@@ -1,25 +1,23 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
 import {
-  createRedisClient,
   connectRedis,
   encryptSecret,
   sha256Hex,
   MockTelegramTransport,
   BotPool,
-  logger,
   type Redis,
   type ResolvedBot,
 } from "../src/index.js";
 import { env } from "../src/core/env.js";
+import { logger } from "../src/core/logger.js";
+import {
+  getTestPrismaClient,
+  createTestRedisClient,
+  safeCleanTestDb,
+  safeCleanTestRedis,
+} from "./helpers/test-env.js";
 
-const testDbUrl =
-  env.TEST_DATABASE_URL ||
-  "postgresql://lcqb_app:5I70xaPikIy89TkEf8EADtcqpKusnnl4@127.0.0.1:5433/leadcatch_quickbook_test?schema=public";
-
-const prisma = new PrismaClient({
-  datasources: { db: { url: testDbUrl } },
-});
+const prisma = getTestPrismaClient();
 
 let redis: Redis;
 
@@ -34,11 +32,7 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
 
   beforeAll(async () => {
     await prisma.$connect();
-    redis = createRedisClient({
-      url: env.TEST_REDIS_URL || env.REDIS_URL,
-      logger,
-      name: "test-quickbook-e2e",
-    });
+    redis = createTestRedisClient("test-quickbook-e2e");
     await connectRedis(redis);
     transport = new MockTelegramTransport();
   });
@@ -52,15 +46,8 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
 
   beforeEach(async () => {
     transport.clear();
-    await redis.flushdb();
-
-    await prisma.booking.deleteMany();
-    await prisma.lead.deleteMany();
-    await prisma.paymentReceipt.deleteMany();
-    await prisma.botUser.deleteMany();
-    await prisma.subscription.deleteMany();
-    await prisma.bot.deleteMany();
-    await prisma.tenant.deleteMany();
+    await safeCleanTestRedis(redis);
+    await safeCleanTestDb(prisma);
 
     const tenant = await prisma.tenant.create({
       data: { clientName: "QuickBook Barbershop", contactPhone: "+998901234567" },

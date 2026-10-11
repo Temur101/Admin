@@ -20,6 +20,13 @@ export interface RedisClientOptions {
  * - connection must be established explicitly via `connectRedis()`.
  */
 export function createRedisClient(opts: RedisClientOptions): Redis {
+  if (process.env.NODE_ENV === "test") {
+    const devRedis = process.env.REDIS_URL;
+    if (devRedis && opts.url === devRedis) {
+      throw new Error("Safety check failed: Redis client cannot use dev/prod REDIS_URL in test environment.");
+    }
+  }
+
   const maxDelay = opts.maxReconnectDelayMs ?? 5000;
   const name = opts.name ?? "main";
 

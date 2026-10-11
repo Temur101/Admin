@@ -4,10 +4,17 @@ import { MockTelegramTransport } from "../src/adapters/telegram/mock-transport.j
 import { encryptSecret, sha256Hex } from "../src/core/crypto.js";
 import { env } from "../src/core/env.js";
 import { logger } from "../src/core/logger.js";
-import { prisma } from "../src/core/prisma.js";
-import { connectRedis, createRedisClient } from "../src/core/redis.js";
+import { connectRedis } from "../src/core/redis.js";
 import { BotPool } from "../src/gateway/bot-pool.js";
 import type { ResolvedBot } from "../src/gateway/types.js";
+import {
+  getTestPrismaClient,
+  createTestRedisClient,
+  safeCleanTestDb,
+  safeCleanTestRedis,
+} from "./helpers/test-env.js";
+
+const prisma = getTestPrismaClient();
 
 let redis: Redis;
 
@@ -39,11 +46,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
 
   beforeAll(async () => {
     await prisma.$connect();
-    redis = createRedisClient({
-      url: env.TEST_REDIS_URL || env.REDIS_URL,
-      logger,
-      name: "test-leadcatch",
-    });
+    redis = createTestRedisClient("test-leadcatch");
     await connectRedis(redis);
     transport = new MockTelegramTransport();
   });
@@ -57,13 +60,8 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
 
   beforeEach(async () => {
     transport.clear();
-    await redis.flushdb();
-
-    await prisma.lead.deleteMany();
-    await prisma.botUser.deleteMany();
-    await prisma.subscription.deleteMany();
-    await prisma.bot.deleteMany();
-    await prisma.tenant.deleteMany();
+    await safeCleanTestRedis(redis);
+    await safeCleanTestDb(prisma);
 
     const tenant = await prisma.tenant.create({
       data: { clientName: "LeadCatch Test Tenant", contactPhone: "+998901234567" },

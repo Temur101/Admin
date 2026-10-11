@@ -1,18 +1,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
-import { env } from "../src/core/env.js";
+import { getTestPrismaClient, safeCleanTestDb } from "./helpers/test-env.js";
 
-const testDbUrl =
-  env.TEST_DATABASE_URL ||
-  "postgresql://lcqb_app:5I70xaPikIy89TkEf8EADtcqpKusnnl4@127.0.0.1:5433/leadcatch_quickbook_test?schema=public";
-
-const prisma = new PrismaClient({
-  datasources: {
-    db: {
-      url: testDbUrl,
-    },
-  },
-});
+const prisma = getTestPrismaClient();
 
 describe("Database Integration & Schema Constraints", () => {
   beforeAll(async () => {
@@ -24,14 +13,7 @@ describe("Database Integration & Schema Constraints", () => {
   });
 
   beforeEach(async () => {
-    // Clean all tables in test database before each test
-    await prisma.booking.deleteMany();
-    await prisma.lead.deleteMany();
-    await prisma.paymentReceipt.deleteMany();
-    await prisma.botUser.deleteMany();
-    await prisma.subscription.deleteMany();
-    await prisma.bot.deleteMany();
-    await prisma.tenant.deleteMany();
+    await safeCleanTestDb(prisma);
   });
 
   it("1. should enforce unique constraint on botTokenHash", async () => {

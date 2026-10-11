@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
-import { connectRedis, createRedisClient, type Redis } from "../src/core/redis.js";
+import { connectRedis, type Redis } from "../src/core/redis.js";
 import { env } from "../src/core/env.js";
 import { logger } from "../src/core/logger.js";
 import { MockTelegramTransport } from "../src/adapters/telegram/mock-transport.js";
@@ -15,14 +14,14 @@ import {
 import { addMonths } from "../src/bots/shared/subscription.js";
 import { validateImageBuffer } from "../src/bots/shared/receipt-storage.js";
 import { t } from "../src/bots/shared/i18n.js";
+import {
+  getTestPrismaClient,
+  createTestRedisClient,
+  safeCleanTestDb,
+  safeCleanTestRedis,
+} from "./helpers/test-env.js";
 
-const testDbUrl =
-  env.TEST_DATABASE_URL ||
-  "postgresql://lcqb_app:5I70xaPikIy89TkEf8EADtcqpKusnnl4@127.0.0.1:5433/leadcatch_quickbook_test?schema=public";
-
-const prisma = new PrismaClient({
-  datasources: { db: { url: testDbUrl } },
-});
+const prisma = getTestPrismaClient();
 
 let redis: Redis;
 let transport: MockTelegramTransport;
@@ -38,11 +37,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
   beforeAll(async () => {
     await prisma.$connect();
-    redis = createRedisClient({
-      url: env.TEST_REDIS_URL || env.REDIS_URL,
-      logger,
-      name: "test-payment",
-    });
+    redis = createTestRedisClient("test-payment");
     await connectRedis(redis);
     transport = new MockTelegramTransport();
   });
@@ -56,15 +51,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
   beforeEach(async () => {
     transport.clear();
-    await redis.flushdb();
-
-    await prisma.booking.deleteMany();
-    await prisma.lead.deleteMany();
-    await prisma.paymentReceipt.deleteMany();
-    await prisma.botUser.deleteMany();
-    await prisma.subscription.deleteMany();
-    await prisma.bot.deleteMany();
-    await prisma.tenant.deleteMany();
+    await safeCleanTestRedis(redis);
+    await safeCleanTestDb(prisma);
 
     const tenant = await prisma.tenant.create({
       data: { clientName: "Payment Tenant", contactPhone: "+998901234567" },

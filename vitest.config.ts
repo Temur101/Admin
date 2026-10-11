@@ -5,6 +5,8 @@ export default defineConfig({
     globals: true,
     environment: "node",
     testTimeout: 20000,
+    fileParallelism: false,
+    setupFiles: ["apps/server/test/helpers/test-setup.ts"],
     poolOptions: {
       forks: {
         execArgv: ["--expose-gc"],

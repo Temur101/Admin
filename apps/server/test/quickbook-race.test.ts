@@ -1,20 +1,19 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
-import { connectRedis, createRedisClient, type Redis } from "../src/core/redis.js";
+import { connectRedis, type Redis } from "../src/core/redis.js";
 import { env } from "../src/core/env.js";
 import { logger } from "../src/core/logger.js";
 import { MockTelegramTransport } from "../src/adapters/telegram/mock-transport.js";
 import { encryptSecret, sha256Hex } from "../src/core/crypto.js";
 import { DEFAULT_QUICKBOOK_CONFIG } from "../src/bots/quickbook/default-config.js";
 import { createBooking } from "../src/bots/quickbook/booking-service.js";
+import {
+  getTestPrismaClient,
+  createTestRedisClient,
+  safeCleanTestDb,
+  safeCleanTestRedis,
+} from "./helpers/test-env.js";
 
-const testDbUrl =
-  env.TEST_DATABASE_URL ||
-  "postgresql://lcqb_app:5I70xaPikIy89TkEf8EADtcqpKusnnl4@127.0.0.1:5433/leadcatch_quickbook_test?schema=public";
-
-const prisma = new PrismaClient({
-  datasources: { db: { url: testDbUrl } },
-});
+const prisma = getTestPrismaClient();
 
 let redis: Redis;
 let transport: MockTelegramTransport;
@@ -25,11 +24,7 @@ describe("QuickBook Race Condition Test (50 Parallel Bookings)", () => {
 
   beforeAll(async () => {
     await prisma.$connect();
-    redis = createRedisClient({
-      url: env.TEST_REDIS_URL || env.REDIS_URL,
-      logger,
-      name: "test-race",
-    });
+    redis = createTestRedisClient("test-race");
     await connectRedis(redis);
     transport = new MockTelegramTransport();
   });
@@ -43,15 +38,8 @@ describe("QuickBook Race Condition Test (50 Parallel Bookings)", () => {
 
   beforeEach(async () => {
     transport.clear();
-    await redis.flushdb();
-
-    await prisma.booking.deleteMany();
-    await prisma.lead.deleteMany();
-    await prisma.paymentReceipt.deleteMany();
-    await prisma.botUser.deleteMany();
-    await prisma.subscription.deleteMany();
-    await prisma.bot.deleteMany();
-    await prisma.tenant.deleteMany();
+    await safeCleanTestRedis(redis);
+    await safeCleanTestDb(prisma);
 
     const tenant = await prisma.tenant.create({
       data: { clientName: "Race Tenant", contactPhone: "+998901112233" },

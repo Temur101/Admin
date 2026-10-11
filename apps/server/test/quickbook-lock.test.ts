@@ -1,12 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { connectRedis, createRedisClient, type Redis } from "../src/core/redis.js";
-import { env } from "../src/core/env.js";
-import { logger } from "../src/core/logger.js";
+import { connectRedis, type Redis } from "../src/core/redis.js";
 import {
   acquireSlotLock,
   isSlotLocked,
   releaseSlotLock,
 } from "../src/bots/quickbook/slot-lock.js";
+import { createTestRedisClient, safeCleanTestRedis } from "./helpers/test-env.js";
 
 let redis: Redis;
 
@@ -16,11 +15,7 @@ describe("QuickBook Distributed Slot Lock Tests", () => {
   const slotTime = new Date("2026-10-15T10:00:00Z");
 
   beforeAll(async () => {
-    redis = createRedisClient({
-      url: env.TEST_REDIS_URL || env.REDIS_URL,
-      logger,
-      name: "test-lock",
-    });
+    redis = createTestRedisClient("test-lock");
     await connectRedis(redis);
   });
 
@@ -31,7 +26,7 @@ describe("QuickBook Distributed Slot Lock Tests", () => {
   });
 
   beforeEach(async () => {
-    await redis.flushdb();
+    await safeCleanTestRedis(redis);
   });
 
   it("1. should acquire slot lock successfully for first user", async () => {

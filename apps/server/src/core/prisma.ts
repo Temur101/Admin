@@ -6,11 +6,21 @@ declare global {
 }
 
 export function createPrismaClient(databaseUrl?: string): PrismaClient {
-  const defaultUrl =
-    process.env.NODE_ENV === "test" && env.TEST_DATABASE_URL
-      ? env.TEST_DATABASE_URL
-      : env.DATABASE_URL;
-  const url = databaseUrl ?? defaultUrl;
+  let url: string;
+  if (process.env.NODE_ENV === "test") {
+    url = databaseUrl ?? env.TEST_DATABASE_URL;
+    if (!url) {
+      throw new Error("TEST_DATABASE_URL is not configured in test environment. Refusing to connect.");
+    }
+    if (url === env.DATABASE_URL) {
+      throw new Error("Safety check failed: Test database URL matches production/dev DATABASE_URL. Refusing to connect.");
+    }
+    if (!url.toLowerCase().includes("test")) {
+      throw new Error("Safety check failed: Test database URL does not contain 'test'. Refusing to connect.");
+    }
+  } else {
+    url = databaseUrl ?? env.DATABASE_URL;
+  }
 
 
   // Append connection_limit=10 if not present to respect 2GB VPS memory limit

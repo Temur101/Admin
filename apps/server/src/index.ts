@@ -63,7 +63,11 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
   });
 
   const appPrisma = opts?.prisma ?? prisma;
-  const appRedis = opts?.redis ?? createRedisClient({ url: env.REDIS_URL, logger });
+  const defaultRedisUrl =
+    process.env.NODE_ENV === "test" && env.TEST_REDIS_URL
+      ? env.TEST_REDIS_URL
+      : env.REDIS_URL;
+  const appRedis = opts?.redis ?? createRedisClient({ url: defaultRedisUrl, logger });
   const ownsRedis = !opts?.redis;
   if (ownsRedis) {
     try {

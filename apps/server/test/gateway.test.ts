@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { PrismaClient } from "@prisma/client";
 import {
   buildApp,
-  createRedisClient,
   connectRedis,
   encryptSecret,
   sha256Hex,
@@ -10,21 +8,20 @@ import {
   BotPool,
   TenantResolver,
   UpdateDeduplicator,
+  createRedisClient,
   logger,
   type Redis,
   type ResolvedBot,
 } from "../src/index.js";
 import { env } from "../src/core/env.js";
+import {
+  getTestPrismaClient,
+  createTestRedisClient,
+  safeCleanTestDb,
+  safeCleanTestRedis,
+} from "./helpers/test-env.js";
 
-const testDbUrl =
-  env.TEST_DATABASE_URL ||
-  "postgresql://lcqb_app:5I70xaPikIy89TkEf8EADtcqpKusnnl4@127.0.0.1:5433/leadcatch_quickbook_test?schema=public";
-
-const prisma = new PrismaClient({
-  datasources: {
-    db: { url: testDbUrl },
-  },
-});
+const prisma = getTestPrismaClient();
 
 let redis: Redis;
 const TEST_TOKEN_PLAIN = "123456789:ABCdefGHIjklMNOpqrsTUVwxyz_1234567";
@@ -37,11 +34,7 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
 
   beforeAll(async () => {
     await prisma.$connect();
-    redis = createRedisClient({
-      url: env.TEST_REDIS_URL || env.REDIS_URL,
-      logger,
-      name: "test-gateway",
-    });
+    redis = createTestRedisClient("test-gateway");
     await connectRedis(redis);
   });
 
@@ -53,17 +46,8 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
   });
 
   beforeEach(async () => {
-    // Flush test keys in Redis
-    await redis.flushdb();
-
-    // Clean tables
-    await prisma.booking.deleteMany();
-    await prisma.lead.deleteMany();
-    await prisma.paymentReceipt.deleteMany();
-    await prisma.botUser.deleteMany();
-    await prisma.subscription.deleteMany();
-    await prisma.bot.deleteMany();
-    await prisma.tenant.deleteMany();
+    await safeCleanTestRedis(redis);
+    await safeCleanTestDb(prisma);
 
     // Create test tenant and bot
     const tenant = await prisma.tenant.create({
