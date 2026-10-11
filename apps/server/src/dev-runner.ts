@@ -1,65 +1,41 @@
-import { createRealTelegramTransport } from "./adapters/telegram/transport.js";
+import { createRealTelegramTransport, type TelegramTransport } from "./adapters/telegram/transport.js";
 import { encryptSecret, sha256Hex } from "./core/crypto.js";
 import { env } from "./core/env.js";
 import { logger } from "./core/logger.js";
 import { prisma } from "./core/prisma.js";
-import { connectRedis, createRedisClient } from "./core/redis.js";
+import { connectRedis, createRedisClient, type Redis } from "./core/redis.js";
 import { BotPool } from "./gateway/bot-pool.js";
 import type { ResolvedBot } from "./gateway/types.js";
+import type { BotType } from "@prisma/client";
 
-async function runDevBot() {
-  const token = env.DEV_LEADCATCH_TOKEN?.trim();
-  if (!token) {
-    logger.error("DEV_LEADCATCH_TOKEN is not set in .env. Please set it before running dev:bot.");
-    process.exit(1);
-  }
+interface LaunchOptions {
+  token: string;
+  botType: BotType;
+  defaultUsername: string;
+  adminInviteCode: string;
+  botPool: BotPool;
+  transport: TelegramTransport;
+  tenantId: string;
+}
 
-  logger.info("Initializing Dev LeadCatch Bot runner...");
+async function setupAndStartBot(opts: LaunchOptions): Promise<string> {
+  const { token, botType, defaultUsername, adminInviteCode, botPool, tenantId } = opts;
 
-  // 1. Connect Postgres and Redis
-  await prisma.$connect();
-  const redis = createRedisClient({
-    url: env.REDIS_URL,
-    logger,
-    name: "dev-leadcatch-runner",
-  });
-  await connectRedis(redis);
-
-  // 2. Fetch real bot details from Telegram API
-  const transport = createRealTelegramTransport();
-  let botUsername = "leadcatch_bot";
-
+  let botUsername = defaultUsername;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
     const data = (await res.json()) as { ok: boolean; result?: { username?: string; first_name?: string } };
     if (data.ok && data.result?.username) {
       botUsername = data.result.username;
-      logger.info({ username: botUsername, name: data.result.first_name }, "Telegram getMe succeeded");
-    } else {
-      logger.warn({ data }, "getMe returned non-ok, using fallback username");
+      logger.info({ username: botUsername, botType }, "Telegram getMe succeeded");
     }
   } catch (err) {
-    logger.warn({ err: (err as Error).message }, "Could not reach Telegram getMe, proceeding with fallback");
+    logger.warn({ err: (err as Error).message, botType }, "getMe failed, using fallback username");
   }
-
-  // 3. Upsert test tenant
-  const tenant = await prisma.tenant.upsert({
-    where: { id: "00000000-0000-0000-0000-000000000001" },
-    create: {
-      id: "00000000-0000-0000-0000-000000000001",
-      clientName: "Тестовый клиент (Dev)",
-      contactPhone: "+998901234567",
-    },
-    update: {
-      clientName: "Тестовый клиент (Dev)",
-    },
-  });
 
   const tokenHash = sha256Hex(token);
   const tokenEnc = encryptSecret(token, env.TOKEN_ENCRYPTION_KEY);
-  const adminInviteCode = "dev_secret_123";
 
-  // 4. Upsert bot in PostgreSQL
   let botRecord = await prisma.bot.findUnique({
     where: { botTokenHash: tokenHash },
     include: { subscription: true },
@@ -68,17 +44,17 @@ async function runDevBot() {
   if (!botRecord) {
     botRecord = await prisma.bot.create({
       data: {
-        tenantId: tenant.id,
-        botType: "LEADCATCH",
+        tenantId,
+        botType,
         botTokenEnc: tokenEnc,
         botTokenHash: tokenHash,
-        webhookSecret: "dev_secret",
+        webhookSecret: `secret_${botType.toLowerCase()}`,
         botUsername,
         adminInviteCode,
         subscription: {
           create: {
             status: "TRIAL",
-            trialEndsAt: new Date(Date.now() + 86400000 * 7), // 7 days trial
+            trialEndsAt: new Date(Date.now() + 86400000 * 7),
           },
         },
       },
@@ -88,6 +64,7 @@ async function runDevBot() {
     botRecord = await prisma.bot.update({
       where: { id: botRecord.id },
       data: {
+        botType,
         botUsername,
         botTokenEnc: tokenEnc,
         adminInviteCode,
@@ -111,7 +88,54 @@ async function runDevBot() {
     paidUntil: botRecord.subscription?.paidUntil?.toISOString() ?? null,
   };
 
-  // 5. Initialize BotPool and grammY instance
+  const bot = botPool.getOrCreateBot(resolved);
+
+  try {
+    await bot.api.deleteWebhook({ drop_pending_updates: true });
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "deleteWebhook failed or not needed");
+  }
+
+  void bot.start({
+    onStart: () => {
+      logger.info({ username: botUsername, botType }, "Long polling started successfully");
+    },
+  });
+
+  return botUsername;
+}
+
+async function runDevBots() {
+  const lcToken = env.DEV_LEADCATCH_TOKEN?.trim();
+  const qbToken = env.DEV_QUICKBOOK_TOKEN?.trim();
+
+  if (!lcToken && !qbToken) {
+    logger.error("Neither DEV_LEADCATCH_TOKEN nor DEV_QUICKBOOK_TOKEN is set in .env.");
+    process.exit(1);
+  }
+
+  await prisma.$connect();
+  const redis: Redis = createRedisClient({
+    url: env.REDIS_URL,
+    logger,
+    name: "dev-bots-runner",
+  });
+  await connectRedis(redis);
+
+  const transport = createRealTelegramTransport();
+
+  const tenant = await prisma.tenant.upsert({
+    where: { id: "00000000-0000-0000-0000-000000000001" },
+    create: {
+      id: "00000000-0000-0000-0000-000000000001",
+      clientName: "Тестовый клиент (Dev)",
+      contactPhone: "+998901234567",
+    },
+    update: {
+      clientName: "Тестовый клиент (Dev)",
+    },
+  });
+
   const botPool = new BotPool({
     capacity: 10,
     encryptionKey: env.TOKEN_ENCRYPTION_KEY,
@@ -122,33 +146,49 @@ async function runDevBot() {
     prisma,
   });
 
-  const bot = botPool.getOrCreateBot(resolved);
+  // eslint-disable-next-line no-console
+  console.log("\n===========================================================");
 
-  // 6. Delete any webhook to allow Long Polling
-  try {
-    await bot.api.deleteWebhook({ drop_pending_updates: true });
-    logger.info("Deleted pending webhook and dropped updates");
-  } catch (err) {
-    logger.warn({ err: (err as Error).message }, "deleteWebhook failed or not needed");
+  if (lcToken) {
+    const lcCode = "leadcatch_adm_123";
+    const lcUsername = await setupAndStartBot({
+      token: lcToken,
+      botType: "LEADCATCH",
+      defaultUsername: "leadcatch_bot",
+      adminInviteCode: lcCode,
+      botPool,
+      transport,
+      tenantId: tenant.id,
+    });
+    // eslint-disable-next-line no-console
+    console.log(`🤖 [LEADCATCH] бот запущен: @${lcUsername}`);
+    // eslint-disable-next-line no-console
+    console.log(`👉 Клиентский вход: https://t.me/${lcUsername}`);
+    // eslint-disable-next-line no-console
+    console.log(`🔑 Админский вход:  https://t.me/${lcUsername}?start=adm_${lcCode}\n`);
+  }
+
+  if (qbToken) {
+    const qbCode = "quickbook_adm_123";
+    const qbUsername = await setupAndStartBot({
+      token: qbToken,
+      botType: "QUICKBOOK",
+      defaultUsername: "quickbook_bot",
+      adminInviteCode: qbCode,
+      botPool,
+      transport,
+      tenantId: tenant.id,
+    });
+    // eslint-disable-next-line no-console
+    console.log(`📅 [QUICKBOOK] бот запущен: @${qbUsername}`);
+    // eslint-disable-next-line no-console
+    console.log(`👉 Клиентский вход (бронь): https://t.me/${qbUsername}`);
+    // eslint-disable-next-line no-console
+    console.log(`🔑 Админский вход:          https://t.me/${qbUsername}?start=adm_${qbCode}`);
   }
 
   // eslint-disable-next-line no-console
-  console.log("\n===========================================================");
-  // eslint-disable-next-line no-console
-  console.log(`🤖 LeadCatch бот успешно запущен: @${botUsername}`);
-  // eslint-disable-next-line no-console
-  console.log(`👉 Чтобы пройти квиз как клиент: https://t.me/${botUsername}`);
-  // eslint-disable-next-line no-console
-  console.log(`🔑 Чтобы войти как АДМИНИСТРАТОР: https://t.me/${botUsername}?start=adm_${adminInviteCode}`);
-  // eslint-disable-next-line no-console
   console.log("===========================================================\n");
-
-  // 7. Start Long Polling
-  void bot.start({
-    onStart: (info) => {
-      logger.info({ info }, "Long polling started successfully");
-    },
-  });
 }
 
-void runDevBot();
+void runDevBots();
