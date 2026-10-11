@@ -5,7 +5,7 @@ import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import { decryptSecret } from "../../core/crypto.js";
 import { env } from "../../core/env.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
-import { buildTariffInlineKeyboard } from "./admin-menu.js";
+import { buildTariffInlineKeyboard, resolveTariffPrices } from "./admin-menu.js";
 import { t } from "./i18n.js";
 import { formatTashkentDateTime, submitPaymentReceipt } from "./payment-service.js";
 import { saveReceiptImage, validateImageBuffer } from "./receipt-storage.js";
@@ -16,15 +16,16 @@ export interface ReceiptHandlersOptions {
   uploadDir?: string;
 }
 
+type SendMessageOptions = Parameters<PlatformBotContext["api"]["sendMessage"]>[2];
+
 async function sendReply(
   ctx: PlatformBotContext,
   text: string,
-  extra?: { reply_markup?: unknown },
+  extra?: SendMessageOptions,
 ): Promise<void> {
   const chatId = ctx.chat?.id ?? ctx.from?.id;
   if (!chatId) return;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await ctx.api.sendMessage(chatId, text, extra as any);
+  await ctx.api.sendMessage(chatId, text, extra);
 }
 
 export function registerReceiptHandlers(
@@ -57,8 +58,11 @@ export function registerReceiptHandlers(
       return;
     }
 
+    const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
+    const tariffs = resolveTariffPrices(settings);
+
     await sendReply(ctx, t(lang, "pay_select_tariff"), {
-      reply_markup: buildTariffInlineKeyboard(lang),
+      reply_markup: buildTariffInlineKeyboard(lang, tariffs),
     });
   });
 
@@ -91,8 +95,9 @@ export function registerReceiptHandlers(
     const months = Number(matchStr ?? 1);
 
     const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
+    const tariffs = resolveTariffPrices(settings);
     const amount =
-      months === 1 ? 100_000 : months === 6 ? 500_000 : 1_000_000;
+      months === 1 ? tariffs.tariff1m : months === 6 ? tariffs.tariff6m : tariffs.tariff12m;
     const details = settings?.paymentDetails || "8600 0000 0000 0000 (Platform)";
 
     ctx.session.payment = {

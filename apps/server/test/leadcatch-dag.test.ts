@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { QuizConfig } from "@lcqb/contracts";
-import { DEFAULT_LEADCATCH_QUIZ, validateQuizDag } from "../src/bots/leadcatch/index.js";
+import { validateQuizDag } from "../src/bots/leadcatch/dag-validator.js";
+import { DEFAULT_LEADCATCH_QUIZ } from "../src/bots/leadcatch/default-quiz.js";
 
 describe("Stage 4: LeadCatch DAG Quiz Validator", () => {
   it("1. should validate that the default LeadCatch quiz is a valid 3-step DAG", () => {

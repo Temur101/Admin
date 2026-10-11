@@ -21,14 +21,56 @@ export function buildLanguageInlineKeyboard(): InlineKeyboard {
     .text("🇺🇿 O'zbekcha", "set_lang:UZ");
 }
 
-export function buildTariffInlineKeyboard(lang: Lang | null | undefined): InlineKeyboard {
+import { env } from "../../core/env.js";
+
+export interface PlatformTariffs {
+  tariff1m: number;
+  tariff6m: number;
+  tariff12m: number;
+}
+
+export function resolveTariffPrices(settings?: { tariffs?: unknown } | null): PlatformTariffs {
+  const custom = settings?.tariffs as Record<string, unknown> | undefined;
+  const t1 =
+    typeof custom?.["1m"] === "number"
+      ? custom["1m"]
+      : typeof custom?.tariff1m === "number"
+        ? custom.tariff1m
+        : env.TARIFF_1M_UZS;
+  const t6 =
+    typeof custom?.["6m"] === "number"
+      ? custom["6m"]
+      : typeof custom?.tariff6m === "number"
+        ? custom.tariff6m
+        : env.TARIFF_6M_UZS;
+  const t12 =
+    typeof custom?.["12m"] === "number"
+      ? custom["12m"]
+      : typeof custom?.tariff12m === "number"
+        ? custom.tariff12m
+        : env.TARIFF_12M_UZS;
+
+  return {
+    tariff1m: t1,
+    tariff6m: t6,
+    tariff12m: t12,
+  };
+}
+
+export function buildTariffInlineKeyboard(
+  lang: Lang | null | undefined,
+  tariffs?: PlatformTariffs,
+): InlineKeyboard {
   const l = lang ?? "RU";
+  const resolved = tariffs ?? resolveTariffPrices(null);
+  const fmt = (n: number) => n.toLocaleString("ru-RU").replace(/\u00A0/g, " ");
+
   return new InlineKeyboard()
-    .text(t(l, "btn_pay_tariff_1m", { amount: "100 000" }), "pay:tariff:1")
+    .text(t(l, "btn_pay_tariff_1m", { amount: fmt(resolved.tariff1m) }), "pay:tariff:1")
     .row()
-    .text(t(l, "btn_pay_tariff_6m", { amount: "500 000" }), "pay:tariff:6")
+    .text(t(l, "btn_pay_tariff_6m", { amount: fmt(resolved.tariff6m) }), "pay:tariff:6")
     .row()
-    .text(t(l, "btn_pay_tariff_12m", { amount: "1 000 000" }), "pay:tariff:12");
+    .text(t(l, "btn_pay_tariff_12m", { amount: fmt(resolved.tariff12m) }), "pay:tariff:12");
 }
 
 export function formatSubscriptionStatusText(

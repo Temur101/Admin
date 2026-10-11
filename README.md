@@ -40,15 +40,37 @@ $env:PGPASSWORD = "<пароль_из_.env>"
 
 ---
 
-## Скрипты разработки
+## Скрипты разработки и сборки
 
+### Проверенные версии окружения
+- **Node.js:** `>= 20` (проверено на `v24.15.0`)
+- **pnpm:** `>= 9` (проверено на `v9.15.4`)
+- **PostgreSQL:** `>= 16` (проверено на `v18.0` с расширением `btree_gist`)
+- **Redis:** `>= 7.0` (проверено на Memurai `v4.1.4 / Redis 7.0`)
+
+### Порядок генерации, сборки и запуска
 ```bash
-# Установка зависимостей
+# 1. Установка зависимостей
 pnpm install
 
-# Единая проверка качества проекта (Quality Gate)
+# 2. Генерация Prisma Client
+pnpm --filter @lcqb/server exec prisma generate
+
+# 3. Применение миграций БД
+pnpm --filter @lcqb/server exec prisma migrate deploy
+
+# 4. Проверка качества всего репозитория
 pnpm verify
 
+# 5. Сборка всех пакетов (contracts, server, admin)
+pnpm build
+
+# 6. Запуск сервера в production режиме
+pnpm --filter @lcqb/server start
+```
+
+### Dev-режим
+```bash
 # Запуск бэкенда в dev-режиме
 pnpm dev:server
 

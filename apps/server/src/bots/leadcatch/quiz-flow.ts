@@ -10,15 +10,16 @@ import { validateQuizDag } from "./dag-validator.js";
 import { DEFAULT_LEADCATCH_QUIZ } from "./default-quiz.js";
 import { parseAndNormalizePhone } from "./phone.js";
 
+type SendMessageOptions = Parameters<PlatformBotContext["api"]["sendMessage"]>[2];
+
 async function sendReply(
   ctx: PlatformBotContext,
   text: string,
-  extra?: { reply_markup?: unknown },
+  extra?: SendMessageOptions,
 ): Promise<void> {
   const chatId = ctx.chat?.id ?? ctx.from?.id;
   if (!chatId) return;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await ctx.api.sendMessage(chatId, text, extra as any);
+  await ctx.api.sendMessage(chatId, text, extra);
 }
 
 export function getBotQuizConfig(settings: Record<string, unknown> | undefined): QuizConfig {
