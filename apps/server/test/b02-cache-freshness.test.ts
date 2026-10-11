@@ -4,7 +4,6 @@ import { env } from "../src/core/env.js";
 import { logger } from "../src/core/logger.js";
 import { BotPool, extractTelegramBotId, normalizeBotUsername } from "../src/gateway/bot-pool.js";
 import { TenantResolver } from "../src/gateway/tenant-resolver.js";
-import type { ResolvedBot } from "../src/gateway/types.js";
 import {
   getTestPrismaClient,
   createTestRedisClient,

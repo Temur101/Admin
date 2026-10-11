@@ -1,22 +1,15 @@
 import type { PaymentReceipt, PrismaClient, ReceiptKind, SubStatus } from "@prisma/client";
 import type { Redis } from "ioredis";
-import { createBotApi, type TelegramTransport } from "../../adapters/telegram/transport.js";
-import { decryptSecret } from "../../core/crypto.js";
-import { env } from "../../core/env.js";
+import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
-import { t } from "./i18n.js";
 import { addMonths } from "./subscription.js";
 
-export function formatTashkentDateTime(date: Date): string {
-  // Format as DD.MM.YYYY HH:mm in Tashkent time (UTC+5)
-  const d = new Date(date.getTime() + 5 * 3600 * 1000);
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const year = d.getUTCFullYear();
-  const hours = String(d.getUTCHours()).padStart(2, "0");
-  const mins = String(d.getUTCMinutes()).padStart(2, "0");
-  return `${day}.${month}.${year} ${hours}:${mins}`;
-}
+import {
+  formatTashkentDateTime,
+  sendReceiptApprovedNotification,
+  sendReceiptRejectedNotification,
+} from "./payment-notifications.js";
+export { formatTashkentDateTime };
 
 export interface SubmitPaymentReceiptParams {
   prisma: PrismaClient;
@@ -219,29 +212,12 @@ export async function approveReceipt(
   }
 
   // 5. Send Telegram push notification to admins with idempotency key
-  if (transport && receipt.bot.users.length > 0) {
-    let shouldSend = true;
-    if (redis) {
-      const notifKey = `notif:receipt:${receiptId}:APPROVED`;
-      const lockRes = await redis.set(notifKey, "1", "EX", 86400, "NX");
-      shouldSend = lockRes === "OK";
-    }
-
-    if (shouldSend) {
-      try {
-        const token = decryptSecret(receipt.bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
-        const api = createBotApi(token, receipt.bot.id, transport);
-
-        for (const admin of receipt.bot.users) {
-          const lang = admin.lang ?? "RU";
-          const text = t(lang, "receipt_approved_push");
-          await api.sendMessage(Number(admin.tgId), text).catch(() => {});
-        }
-      } catch (err) {
-        logger?.error({ err: (err as Error).message }, "Failed to send approve notification");
-      }
-    }
-  }
+  await sendReceiptApprovedNotification({
+    receipt,
+    redis,
+    transport,
+    logger,
+  });
 
   return receipt;
 }
@@ -359,44 +335,15 @@ export async function rejectReceipt(
   }
 
   // 5. Send Telegram push notification to admins with idempotency key
-  if (transport && receipt.bot.users.length > 0) {
-    let shouldSend = true;
-    if (redis) {
-      const notifKey = `notif:receipt:${receiptId}:REJECTED`;
-      const lockRes = await redis.set(notifKey, "1", "EX", 86400, "NX");
-      shouldSend = lockRes === "OK";
-    }
-
-    if (shouldSend) {
-      try {
-        const token = decryptSecret(receipt.bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
-        const api = createBotApi(token, receipt.bot.id, transport);
-
-        for (const admin of receipt.bot.users) {
-          const lang = admin.lang ?? "RU";
-          let text: string;
-
-          if (newStatus === "GRACE_PERIOD") {
-            text = t(lang, "receipt_rejected_grace_push", { reason });
-          } else if (newStatus === "BLOCKED") {
-            text = t(lang, "receipt_rejected_blocked_push", {
-              reason,
-              support: env.SUPPORT_CONTACT,
-            });
-          } else {
-            text = t(lang, "receipt_rejected_active_push", {
-              reason,
-              date: rolledBackPaidUntil ? formatTashkentDateTime(rolledBackPaidUntil) : "",
-            });
-          }
-
-          await api.sendMessage(Number(admin.tgId), text).catch(() => {});
-        }
-      } catch (err) {
-        logger?.error({ err: (err as Error).message }, "Failed to send reject notification");
-      }
-    }
-  }
+  await sendReceiptRejectedNotification({
+    receipt,
+    redis,
+    transport,
+    logger,
+    reason,
+    newStatus,
+    rolledBackPaidUntil,
+  });
 
   return receipt;
 }

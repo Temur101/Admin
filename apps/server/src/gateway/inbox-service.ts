@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
 import type { Prisma, PrismaClient } from "@prisma/client";
-import { PrismaClientKnownRequestError } from "@prisma/client/runtime/library";
 import type { Redis } from "ioredis";
 import type { Logger } from "../core/logger.js";
 import type { BotPool } from "./bot-pool.js";

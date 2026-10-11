@@ -6,7 +6,6 @@ import { MockTelegramTransport } from "../src/adapters/telegram/mock-transport.j
 import { encryptSecret, sha256Hex } from "../src/core/crypto.js";
 import { buildApp } from "../src/index.js";
 import { runSubscriptionWorker } from "../src/workers/subscription-worker.js";
-import { REMINDER_ZSET_KEY } from "../src/bots/quickbook/booking-service.js";
 import {
   getTestPrismaClient,
   createTestRedisClient,
@@ -192,7 +191,7 @@ describe("B07: Background Worker Lifecycle, Scheduler & Health Probes", () => {
     });
 
     // Run subscription worker (pretending it ran with a snapshot right before renewal)
-    const res = await runSubscriptionWorker({
+    await runSubscriptionWorker({
       prisma,
       redis,
       transport,

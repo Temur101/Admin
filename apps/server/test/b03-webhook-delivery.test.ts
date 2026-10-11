@@ -315,7 +315,7 @@ describe("B03: Webhook Reception Without Message Loss", () => {
   });
 
   it("3. should handle identical update_id across DIFFERENT bots without collision or cross-talk", async () => {
-    let handledBots: string[] = [];
+    const handledBots: string[] = [];
 
     const app = await buildApp({
       prisma,

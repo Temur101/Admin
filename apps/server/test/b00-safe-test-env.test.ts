@@ -39,7 +39,7 @@ describe("B00: Safe Test Environment Verification", () => {
     const fakeClient = {
       options: { url: env.REDIS_URL },
       flushdb: async () => "OK",
-    } as any;
+    } as unknown as Parameters<typeof safeCleanTestRedis>[0];
 
     await expect(safeCleanTestRedis(fakeClient)).rejects.toThrow(/Refusing to flush Redis/i);
   });

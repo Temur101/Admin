@@ -4,7 +4,6 @@ import { env } from "../src/core/env.js";
 import { logger } from "../src/core/logger.js";
 import { MockTelegramTransport } from "../src/adapters/telegram/mock-transport.js";
 import { encryptSecret, sha256Hex } from "../src/core/crypto.js";
-import { DEFAULT_QUICKBOOK_CONFIG } from "../src/bots/quickbook/default-config.js";
 import {
   createBooking,
   cancelBooking,

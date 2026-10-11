@@ -1,16 +1,12 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { connectRedis, type Redis } from "../src/core/redis.js";
 import { env } from "../src/core/env.js";
-import { logger } from "../src/core/logger.js";
 import { MockTelegramTransport } from "../src/adapters/telegram/mock-transport.js";
 import { encryptSecret, sha256Hex } from "../src/core/crypto.js";
 import {
   buildTariffInlineKeyboard,
   resolveTariffPrices,
 } from "../src/bots/shared/admin-menu.js";
-import { registerReceiptHandlers } from "../src/bots/shared/receipt-handlers.js";
-import { Bot } from "grammy";
-import type { PlatformBotContext } from "../src/gateway/types.js";
 import {
   getTestPrismaClient,
   createTestRedisClient,
@@ -94,6 +90,10 @@ describe("B08: Dynamic Tariffs, Typings & Production Build Conformance", () => {
     });
   });
 
+  afterEach(async () => {
+    await prisma.platformSettings.deleteMany();
+  });
+
   it("1. Dynamic Tariffs: PlatformSettings overrides default prices in keyboard buttons and session amount", async () => {
     const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
     const tariffs = resolveTariffPrices(settings);
@@ -105,36 +105,13 @@ describe("B08: Dynamic Tariffs, Typings & Production Build Conformance", () => {
     const keyboard = buildTariffInlineKeyboard("RU", tariffs);
     const buttons = keyboard.inline_keyboard.flat();
 
-    const text1m = buttons.find((b) => b.callback_data === "pay:tariff:1")?.text;
-    const text6m = buttons.find((b) => b.callback_data === "pay:tariff:6")?.text;
-    const text12m = buttons.find((b) => b.callback_data === "pay:tariff:12")?.text;
+    const text1m = buttons.find((b) => "callback_data" in b && b.callback_data === "pay:tariff:1")?.text;
+    const text6m = buttons.find((b) => "callback_data" in b && b.callback_data === "pay:tariff:6")?.text;
+    const text12m = buttons.find((b) => "callback_data" in b && b.callback_data === "pay:tariff:12")?.text;
 
     expect(text1m).toContain("175 000");
     expect(text6m).toContain("890 000");
     expect(text12m).toContain("1 650 000");
-
-    // Test through bot handler flow
-    const bot = new Bot<PlatformBotContext>("123456789:B08BotToken");
-    registerReceiptHandlers(bot, prisma);
-
-    const mockCtx = {
-      from: { id: adminTgId },
-      chat: { id: adminTgId },
-      match: ["pay:tariff:1", "1"],
-      botMeta: { id: botId, subscriptionStatus: "TRIAL" },
-      session: { lang: "RU" as const },
-      answerCallbackQuery: async () => {},
-      api: {
-        sendMessage: async (_chatId: number, text: string) => {
-          return { message_id: 1, text } as never;
-        },
-      },
-    } as unknown as PlatformBotContext;
-
-    // Simulate clicking pay:tariff:1
-    const handler = (bot as unknown as {
-      callbacks: Array<{ trigger: RegExp; handler: (ctx: PlatformBotContext) => Promise<void> }>;
-    });
 
     // Verify session receives dynamic 175_000 UZS amount
     const dynamicSettings = await prisma.platformSettings.findUnique({ where: { id: 1 } });

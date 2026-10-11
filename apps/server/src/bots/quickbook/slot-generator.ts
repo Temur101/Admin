@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import type { QuickBookConfig } from "@lcqb/contracts";
-import { formatSlotLockKey, isSlotLocked } from "./slot-lock.js";
+import { isSlotLocked } from "./slot-lock.js";
 
 export interface TimeSlot {
   slotTime: Date;

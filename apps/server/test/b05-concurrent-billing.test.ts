@@ -174,7 +174,7 @@ describe("B05: Concurrent Billing & Rollback", () => {
 
     transport.clear();
 
-    const [approveRes, rejectRes] = await Promise.all([
+    await Promise.all([
       approveReceipt({ prisma, redis, receiptId: receipt.id, transport, logger }),
       rejectReceipt({ prisma, redis, receiptId: receipt.id, reason: "Race reject", transport, logger, now: baseDate }),
     ]);

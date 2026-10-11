@@ -94,6 +94,7 @@ export async function safeCleanTestDb(prisma: PrismaClient): Promise<void> {
   await prisma.subscription.deleteMany();
   await prisma.bot.deleteMany();
   await prisma.tenant.deleteMany();
+  await prisma.platformSettings.deleteMany();
 }
 
 export async function safeCleanTestRedis(redis: Redis): Promise<void> {
