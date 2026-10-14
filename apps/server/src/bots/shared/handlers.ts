@@ -69,7 +69,7 @@ export function registerSharedBotHandlers(
         ? t(user.lang, "welcome_admin")
         : t(user.lang, "admin_menu_title");
       await sendReply(ctx, msg, {
-        reply_markup: buildAdminReplyKeyboard(user.lang),
+        reply_markup: buildAdminReplyKeyboard(user.lang, ctx.botMeta?.botType),
       });
       return;
     }
@@ -116,7 +116,7 @@ export function registerSharedBotHandlers(
 
     if (user?.isAdmin) {
       await sendReply(ctx, t(lang, "admin_menu_title"), {
-        reply_markup: buildAdminReplyKeyboard(lang),
+        reply_markup: buildAdminReplyKeyboard(lang, ctx.botMeta?.botType),
       });
     } else {
       await sendReply(ctx, t(lang, "welcome_client"));

@@ -15,11 +15,13 @@ import {
   UpdateDeduplicator,
   WebhookInboxService,
   registerWebhookGateway,
+  PollingManager,
 } from "./gateway/index.js";
 import {
   BackgroundWorkerScheduler,
   type SchedulerOptions,
 } from "./workers/scheduler.js";
+import { registerAdminApi } from "./admin-api/index.js";
 
 export { prisma };
 export { logger };
@@ -46,6 +48,7 @@ export * from "./bots/quickbook/index.js";
 export * from "./workers/subscription-worker.js";
 export * from "./workers/booking-reminder-worker.js";
 export * from "./workers/scheduler.js";
+export * from "./admin-api/index.js";
 
 import type { PrismaClient } from "@prisma/client";
 
@@ -54,6 +57,7 @@ export interface AppOptions {
   redis?: Redis;
   transport?: TelegramTransport;
   enableScheduler?: boolean;
+  enablePolling?: boolean;
   schedulerOptions?: Partial<SchedulerOptions>;
   onUpdateHandled?: (botId: string, updateId: number, err?: Error) => void;
 }
@@ -138,12 +142,38 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
     onUpdateHandled: opts?.onUpdateHandled,
   });
 
+  const pollingManager =
+    env.BOT_MODE === "polling"
+      ? new PollingManager({
+          prisma: appPrisma,
+          botPool,
+          logger,
+        })
+      : undefined;
+
+  await registerAdminApi(app, {
+    prisma: appPrisma,
+    redis: appRedis,
+    transport,
+    tenantResolver,
+    logger,
+    pollingManager,
+  });
+
+  if (opts?.enablePolling && pollingManager) {
+    await pollingManager.startAll();
+  }
+
+  app.decorate("pollingManager", pollingManager);
+
   // Background workers scheduler
   const scheduler = new BackgroundWorkerScheduler({
     prisma: appPrisma,
     redis: appRedis,
     transport,
     logger,
+    inboxService,
+    recoveryIntervalMs: opts?.schedulerOptions?.recoveryIntervalMs,
     subscriptionIntervalMs: opts?.schedulerOptions?.subscriptionIntervalMs,
     reminderIntervalMs: opts?.schedulerOptions?.reminderIntervalMs,
     runImmediately: opts?.schedulerOptions?.runImmediately,
@@ -155,6 +185,7 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
   }
 
   app.decorate("scheduler", scheduler);
+  app.decorate("inboxService", inboxService);
 
   // Health checks:
   // Liveness probe
@@ -245,6 +276,9 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
   });
 
   app.addHook("onClose", async () => {
+    if (pollingManager) {
+      await pollingManager.stopAll();
+    }
     await scheduler.stop();
     if (ownsRedis && appRedis.status !== "end") {
       await appRedis.quit().catch(() => {});
@@ -259,6 +293,25 @@ async function start() {
   try {
     await app.listen({ host: env.HOST, port: env.PORT });
     app.log.info(`🚀 Server running on http://${env.HOST}:${env.PORT}`);
+
+    if (env.BOT_MODE === "polling") {
+      const pm = (app as unknown as { pollingManager?: PollingManager }).pollingManager;
+      if (pm) {
+        await pm.startAll();
+      }
+    }
+
+    const inbox = (app as unknown as { inboxService?: WebhookInboxService }).inboxService;
+    if (inbox) {
+      try {
+        const recovered = await inbox.recoverPending(100);
+        if (recovered > 0) {
+          app.log.info({ count: recovered }, "Recovered pending webhook updates on startup");
+        }
+      } catch (err) {
+        app.log.warn({ err: (err as Error).message }, "Initial webhook inbox recovery failed");
+      }
+    }
 
     const shutdown = async (signal: string) => {
       app.log.info({ signal }, "Graceful shutdown signal received");

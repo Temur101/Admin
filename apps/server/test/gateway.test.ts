@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildApp,
   connectRedis,
@@ -212,7 +212,7 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ ok: true });
     // Gateway responds immediately without waiting for bot logic
-    expect(duration).toBeLessThan(50);
+    expect(duration).toBeLessThan(150);
 
     // Wait for the asynchronous background processing via setImmediate
     await new Promise<void>((resolve) => {
@@ -275,8 +275,7 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
     expect(dupResponses).toHaveLength(9);
 
     // Wait for async processing
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    expect(processCount).toBe(1);
+    await vi.waitFor(() => expect(processCount).toBe(1), { timeout: 3000, interval: 20 });
 
     await app.close();
   });

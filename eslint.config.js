@@ -61,6 +61,7 @@ export default tseslint.config(
       "**/tools/**",
       "**/uploads/**",
       "**/*.d.ts",
+      ".agents/**",
     ],
   },
 );

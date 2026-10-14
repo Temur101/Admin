@@ -13,6 +13,7 @@ tools/
 uploads/
 *.log
 *.rdb
+.agents/
 
 # Build outputs
 dist/

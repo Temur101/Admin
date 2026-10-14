@@ -129,3 +129,56 @@ export const QuickBookConfigSchema = z.object({
 });
 export type QuickBookConfig = z.infer<typeof QuickBookConfigSchema>;
 
+export const BookingSourceSchema = z.enum(["TELEGRAM", "MANUAL"]);
+export type BookingSource = z.infer<typeof BookingSourceSchema>;
+
+export const AdminLoginRequestSchema = z.object({
+  email: z.string().min(3),
+  password: z.string().min(6),
+});
+export type AdminLoginRequest = z.infer<typeof AdminLoginRequestSchema>;
+
+export const CreateTenantRequestSchema = z.object({
+  clientName: z.string().min(1).max(255),
+  contactPhone: z.string().min(5).max(50),
+});
+export type CreateTenantRequest = z.infer<typeof CreateTenantRequestSchema>;
+
+export const CreateBotRequestSchema = z.object({
+  tenantId: z.string().uuid(),
+  botType: BotTypeSchema,
+  botToken: z.string().min(10),
+});
+export type CreateBotRequest = z.infer<typeof CreateBotRequestSchema>;
+
+export const ManualBookingRequestSchema = z.object({
+  serviceId: z.string().min(1),
+  staffId: z.string().min(1),
+  slotTime: z.string(),
+  customerName: z.string().min(1),
+  customerPhone: z.string().min(5),
+});
+export type ManualBookingRequest = z.infer<typeof ManualBookingRequestSchema>;
+
+export const ExtendSubscriptionRequestSchema = z.object({
+  days: z.number().int().positive().default(30),
+});
+export type ExtendSubscriptionRequest = z.infer<typeof ExtendSubscriptionRequestSchema>;
+
+export const RejectReceiptRequestSchema = z.object({
+  reason: z.string().min(1).max(500),
+});
+export type RejectReceiptRequest = z.infer<typeof RejectReceiptRequestSchema>;
+
+export const UpdatePlatformSettingsRequestSchema = z.object({
+  paymentDetails: z.string().optional(),
+  tariffs: z.array(TariffOptionSchema).optional(),
+  supportContact: z.string().optional(),
+  alertBotToken: z.string().optional(),
+  alertChatId: z.union([z.number(), z.string()]).optional(),
+  alertBotUsername: z.string().optional(),
+  paymentInstructions: z.string().optional(),
+  maintenanceMode: z.boolean().optional(),
+});
+export type UpdatePlatformSettingsRequest = z.infer<typeof UpdatePlatformSettingsRequestSchema>;
+

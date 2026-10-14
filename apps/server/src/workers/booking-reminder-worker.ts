@@ -214,7 +214,23 @@ export async function runBookingReminderWorker(
         continue;
       }
 
-      // 5. Send reminder via Telegram API
+      // 5. Check if booking is manual / has no customerTgId
+      if (!booking.customerTgId || booking.source === "MANUAL") {
+        logger.info({ bookingId }, "Booking is manual or has no customerTgId; skipping Telegram push");
+        await prisma.booking.update({
+          where: { id: bookingId },
+          data: {
+            reminderSent: true,
+            reminderLockedUntil: null,
+            reminderLastError: null,
+          },
+        });
+        await redis.zrem(REMINDER_ZSET_KEY, bookingId).catch(() => {});
+        skippedCount++;
+        continue;
+      }
+
+      // 6. Send reminder via Telegram API
       try {
         const token = decryptSecret(booking.bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
         const api = createBotApi(token, booking.bot.id, transport);

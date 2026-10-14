@@ -11,3 +11,7 @@ export type {
   PlatformBotSession,
 } from "./types.js";
 export * from "./inbox-service.js";
+export {
+  PollingManager,
+  type PollingManagerOptions,
+} from "./polling-manager.js";

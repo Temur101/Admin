@@ -96,12 +96,6 @@ async function setupAndStartBot(opts: LaunchOptions): Promise<string> {
     logger.warn({ err: (err as Error).message }, "deleteWebhook failed or not needed");
   }
 
-  void bot.start({
-    onStart: () => {
-      logger.info({ username: botUsername, botType }, "Long polling started successfully");
-    },
-  });
-
   return botUsername;
 }
 
@@ -189,6 +183,10 @@ async function runDevBots() {
 
   // eslint-disable-next-line no-console
   console.log("===========================================================\n");
+  // eslint-disable-next-line no-console
+  console.log("ℹ️ Боты зарегистрированы в БД. Запустите основной сервер (pnpm dev:server) для polling.");
+  await redis.quit();
+  await prisma.$disconnect();
 }
 
 void runDevBots();

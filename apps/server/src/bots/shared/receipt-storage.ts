@@ -84,5 +84,5 @@ export async function saveReceiptImage(
   await mkdir(baseDir, { recursive: true });
   await writeFile(targetPath, buffer);
 
-  return targetPath;
+  return fileName;
 }

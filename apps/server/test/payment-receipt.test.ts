@@ -561,7 +561,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       expect(sub?.failedReceiptAttempts).toBe(0);
     });
 
-    it("should roll back sequential receipts correctly", async () => {
+    it("should prevent duplicate pending receipts and roll back sequential receipts correctly", async () => {
       const initialDate = new Date("2026-10-01T10:00:00.000Z");
       await prisma.subscription.update({
         where: { botId },
@@ -584,7 +584,34 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
         now: initialDate,
       });
 
-      // Receipt 2: +6 months (before r1 is reviewed)
+      // Clarification 2: Receipt 2 cannot be submitted while Receipt 1 is PENDING
+      await expect(
+        submitPaymentReceipt({
+          prisma,
+          redis,
+          botId,
+          submittedByTgId: ADMIN_TG_ID,
+          kind: "TEXT",
+          months: 6,
+          amountUzs: 500_000,
+          textNote: "Чек 2 на 6 месяцев (пока чек 1 в ожидании)",
+          now: initialDate,
+        }),
+      ).rejects.toThrow("PENDING_RECEIPT_EXISTS");
+
+      // Approve Receipt 1
+      await approveReceipt({
+        prisma,
+        redis,
+        receiptId: r1.id,
+      });
+
+      let sub = await prisma.subscription.findUnique({ where: { botId } });
+      const expected1m = addMonths(initialDate, 1);
+      expect(sub?.paidUntil?.toISOString()).toBe(expected1m.toISOString());
+      expect(sub?.status).toBe("ACTIVE");
+
+      // Now Receipt 2 can be submitted (+6 months)
       const { receipt: r2 } = await submitPaymentReceipt({
         prisma,
         redis,
@@ -597,9 +624,9 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
         now: initialDate,
       });
 
-      let sub = await prisma.subscription.findUnique({ where: { botId } });
+      sub = await prisma.subscription.findUnique({ where: { botId } });
       // Paid until should be initialDate + 1m + 6m = 7m
-      const expected7m = addMonths(addMonths(initialDate, 1), 6);
+      const expected7m = addMonths(expected1m, 6);
       expect(sub?.paidUntil?.toISOString()).toBe(expected7m.toISOString());
 
       // Reject Receipt 2 -> should roll back to after Receipt 1 (+1 month)
@@ -612,21 +639,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       });
 
       sub = await prisma.subscription.findUnique({ where: { botId } });
-      const expected1m = addMonths(initialDate, 1);
       expect(sub?.paidUntil?.toISOString()).toBe(expected1m.toISOString());
       expect(sub?.status).toBe("ACTIVE");
-
-      // Reject Receipt 1 -> should roll back to initialDate
-      await rejectReceipt({
-        prisma,
-        redis,
-        receiptId: r1.id,
-        reason: "Отклонен чек 1",
-        now: initialDate,
-      });
-
-      sub = await prisma.subscription.findUnique({ where: { botId } });
-      expect(sub?.paidUntil?.toISOString()).toBe(initialDate.toISOString());
     });
   });
 });

@@ -36,6 +36,9 @@ export class MockTelegramTransport implements TelegramTransport {
       const plainPayload = (payload ?? {}) as Record<string, unknown>;
       this.recorded.push({ botId, method, payload: plainPayload });
       if (this.recorded.length > MAX_RECORDED_CALLS) this.recorded.shift();
+      if (method === "getUpdates") {
+        await new Promise((r) => setTimeout(r, 20));
+      }
       const result: unknown = this.resultFor(botId, method, plainPayload);
       // The transformer contract is generic over every Bot API method; the synthetic
       // result is shaped per method in resultFor(), so we widen it here.

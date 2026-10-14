@@ -1,5 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/overview/config-schema.json",
+  "ignore": [".agents/**"],
   "workspaces": {
     "apps/server": {
       "entry": ["test/**/*.ts"],
@@ -13,15 +14,7 @@
     }
   },
   "ignoreDependencies": [
-    "@fastify/cookie",
-    "@fastify/jwt",
-    "@fastify/rate-limit",
-    "@lcqb/contracts",
     "pino-pretty",
-    "@tanstack/react-query",
-    "lucide-react",
-    "react-router-dom",
-    "tailwindcss",
     "@vitest/coverage-v8",
     "rimraf"
   ],

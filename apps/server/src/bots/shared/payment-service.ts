@@ -9,6 +9,7 @@ import {
   sendReceiptApprovedNotification,
   sendReceiptRejectedNotification,
 } from "./payment-notifications.js";
+import { notifyPlatformOwner } from "../../core/platform-notifier.js";
 export { formatTashkentDateTime };
 
 export interface SubmitPaymentReceiptParams {
@@ -80,6 +81,18 @@ export async function submitPaymentReceipt(
 
       if (bot.subscription.status === "BLOCKED") {
         throw new Error("SUBSCRIPTION_BLOCKED");
+      }
+
+      // Enforce single PENDING receipt constraint under advisory lock to prevent stacking / race conditions
+      const existingPending = await tx.paymentReceipt.findFirst({
+        where: {
+          botId,
+          status: "PENDING",
+        },
+      });
+
+      if (existingPending) {
+        throw new Error("PENDING_RECEIPT_EXISTS");
       }
 
       const currentSub = bot.subscription;
@@ -278,6 +291,17 @@ export async function rejectReceipt(
         newStatus = "ACTIVE";
       } else {
         newStatus = attempts === 1 ? "GRACE_PERIOD" : "BLOCKED";
+      }
+
+      if (newStatus === "BLOCKED") {
+        notifyPlatformOwner(
+          {
+            type: "BOT_BLOCKED",
+            botName: receipt.bot.botUsername ? `@${receipt.bot.botUsername}` : receipt.bot.id,
+            reason,
+          },
+          { prisma, transport, logger },
+        ).catch(() => {});
       }
 
       // 2. Rollback subscription

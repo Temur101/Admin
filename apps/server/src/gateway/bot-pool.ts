@@ -55,7 +55,10 @@ export class BotPool {
   private readonly tenantResolver?: TenantResolver;
 
   constructor(opts: BotPoolOptions) {
-    this.cache = new LruCache<string, Bot<PlatformBotContext>>(opts.capacity);
+    this.cache = new LruCache<string, Bot<PlatformBotContext>>(opts.capacity, (botId) => {
+      this.cachedTokens.delete(botId);
+      this.latestMeta.delete(botId);
+    });
     this.encryptionKey = opts.encryptionKey;
     this.transport = opts.transport;
     this.redis = opts.redis;

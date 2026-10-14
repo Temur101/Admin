@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import type { TelegramTransport } from "../adapters/telegram/transport.js";
 import type { Logger } from "../core/logger.js";
+import type { WebhookInboxService } from "../gateway/inbox-service.js";
 import { runSubscriptionWorker } from "./subscription-worker.js";
 import { runBookingReminderWorker } from "./booking-reminder-worker.js";
 
@@ -10,6 +11,8 @@ export interface SchedulerOptions {
   redis: Redis;
   transport: TelegramTransport;
   logger: Logger;
+  inboxService?: WebhookInboxService;
+  recoveryIntervalMs?: number;
   subscriptionIntervalMs?: number;
   reminderIntervalMs?: number;
   runImmediately?: boolean;
@@ -18,6 +21,7 @@ export interface SchedulerOptions {
 export class BackgroundWorkerScheduler {
   private subscriptionTimer: NodeJS.Timeout | null = null;
   private reminderTimer: NodeJS.Timeout | null = null;
+  private recoveryTimer: NodeJS.Timeout | null = null;
   private isRunning = false;
   private readonly inFlightTasks = new Set<Promise<unknown>>();
   private readonly opts: SchedulerOptions;
@@ -40,10 +44,14 @@ export class BackgroundWorkerScheduler {
 
     const subInterval = this.opts.subscriptionIntervalMs ?? 60_000;
     const remInterval = this.opts.reminderIntervalMs ?? 60_000;
+    const recInterval = this.opts.recoveryIntervalMs ?? 60_000;
 
     if (this.opts.runImmediately !== false) {
       this.triggerSubscriptionTick();
       this.triggerReminderTick();
+      if (this.opts.inboxService) {
+        this.triggerRecoveryTick();
+      }
     }
 
     this.subscriptionTimer = setInterval(() => {
@@ -54,8 +62,14 @@ export class BackgroundWorkerScheduler {
       this.triggerReminderTick();
     }, remInterval);
 
+    if (this.opts.inboxService) {
+      this.recoveryTimer = setInterval(() => {
+        this.triggerRecoveryTick();
+      }, recInterval);
+    }
+
     this.opts.logger.info(
-      { subInterval, remInterval },
+      { subInterval, remInterval, recInterval },
       "Background worker scheduler started",
     );
   }
@@ -106,6 +120,30 @@ export class BackgroundWorkerScheduler {
     return task;
   }
 
+  public triggerRecoveryTick(): Promise<unknown> {
+    if (!this.isRunning || !this.opts.inboxService) return Promise.resolve();
+
+    const task = this.opts.inboxService
+      .recoverPending(50)
+      .then((count) => {
+        if (count > 0) {
+          this.opts.logger.info({ count }, "Periodic webhook recovery processed items");
+        }
+      })
+      .catch((err) => {
+        this.opts.logger.error(
+          { err: (err as Error).message },
+          "Unhandled error in inbox recovery tick",
+        );
+      })
+      .finally(() => {
+        this.inFlightTasks.delete(task);
+      });
+
+    this.inFlightTasks.add(task);
+    return task;
+  }
+
   public async stop(): Promise<void> {
     if (!this.isRunning) return;
     this.isRunning = false;
@@ -117,6 +155,10 @@ export class BackgroundWorkerScheduler {
     if (this.reminderTimer) {
       clearInterval(this.reminderTimer);
       this.reminderTimer = null;
+    }
+    if (this.recoveryTimer) {
+      clearInterval(this.recoveryTimer);
+      this.recoveryTimer = null;
     }
 
     if (this.inFlightTasks.size > 0) {

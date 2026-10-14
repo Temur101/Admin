@@ -50,10 +50,16 @@ enum Lang {
   UZ
 }
 
+enum BookingSource {
+  TELEGRAM
+  MANUAL
+}
+
 model Tenant {
   id           String   @id @default(uuid()) @db.Uuid
   clientName   String   @db.VarChar(255)
   contactPhone String   @db.VarChar(50)
+  status       String   @default("ACTIVE") @db.VarChar(32)
   createdAt    DateTime @default(now()) @db.Timestamptz
   bots         Bot[]
 }
@@ -69,6 +75,7 @@ model Bot {
   botUsername     String?          @db.VarChar(100)
   adminInviteCode String           @unique @db.VarChar(32)
   settings        Json             @default("{}")
+  isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now()) @db.Timestamptz
   subscription    Subscription?
   users           BotUser[]
@@ -145,7 +152,7 @@ model Booking {
   id            String        @id @default(uuid()) @db.Uuid
   botId         String        @db.Uuid
   bot           Bot           @relation(fields: [botId], references: [id], onDelete: Cascade)
-  customerTgId  BigInt
+  customerTgId  BigInt?
   customerName  String?       @db.VarChar(255)
   customerPhone String        @db.VarChar(50)
   serviceId     String        @db.VarChar(64)
@@ -155,6 +162,7 @@ model Booking {
   slotTime      DateTime      @db.Timestamptz
   endTime       DateTime?     @db.Timestamptz
   status        BookingStatus @default(PENDING)
+  source        BookingSource @default(TELEGRAM)
   reminderSent        Boolean       @default(false)
   reminderAttempts    Int           @default(0)
   reminderLockedUntil DateTime?     @db.Timestamptz
@@ -175,11 +183,16 @@ model Admin {
 }
 
 model PlatformSettings {
-  id             Int      @id @default(1)
-  paymentDetails String
-  tariffs        Json
-  supportContact String
-  updatedAt      DateTime @updatedAt @db.Timestamptz
+  id                  Int      @id @default(1)
+  paymentDetails      String
+  tariffs             Json
+  supportContact      String
+  alertBotTokenEnc    String?
+  alertChatId         String?  @db.VarChar(100)
+  alertBotUsername    String?  @db.VarChar(100)
+  paymentInstructions String?  @db.Text
+  maintenanceMode     Boolean  @default(false)
+  updatedAt           DateTime @updatedAt @db.Timestamptz
 }
 
 model WebhookInbox {

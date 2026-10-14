@@ -1,6 +1,7 @@
 import type { Lang, Prisma, PrismaClient } from "@prisma/client";
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { QuizConfig, QuizNode } from "@lcqb/contracts";
+import { QuizConfigSchema } from "@lcqb/contracts";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
@@ -23,12 +24,13 @@ async function sendReply(
 }
 
 export function getBotQuizConfig(settings: Record<string, unknown> | undefined): QuizConfig {
-  if (settings && typeof settings === "object" && "quiz" in settings) {
-    const custom = settings.quiz as QuizConfig;
-    const validation = validateQuizDag(custom);
-    if (validation.valid) {
-      return custom;
-    }
+  if (!settings || typeof settings !== "object") {
+    return DEFAULT_LEADCATCH_QUIZ;
+  }
+  const raw = "quiz" in settings ? settings.quiz : settings;
+  const parsed = QuizConfigSchema.safeParse(raw);
+  if (parsed.success && validateQuizDag(parsed.data).valid) {
+    return parsed.data;
   }
   return DEFAULT_LEADCATCH_QUIZ;
 }

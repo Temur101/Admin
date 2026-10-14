@@ -163,7 +163,10 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
 
     // 3. Client selects slot date & time
     transport.clear();
-    const futureSlotIso = new Date(Date.now() + 86400000 * 2).toISOString();
+    const slotDate1 = new Date();
+    slotDate1.setDate(slotDate1.getDate() + 2);
+    slotDate1.setHours(12, 0, 0, 0);
+    const futureSlotIso = slotDate1.toISOString();
     await bot.handleUpdate({
       update_id: 3,
       callback_query: {
@@ -243,7 +246,10 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
     });
 
     // Select slot directly
-    const futureSlotIso = new Date(Date.now() + 86400000 * 3).toISOString();
+    const slotDate2 = new Date();
+    slotDate2.setDate(slotDate2.getDate() + 3);
+    slotDate2.setHours(12, 0, 0, 0);
+    const futureSlotIso = slotDate2.toISOString();
     await bot.handleUpdate({
       update_id: 10,
       callback_query: {

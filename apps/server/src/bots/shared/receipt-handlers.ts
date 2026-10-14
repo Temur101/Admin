@@ -9,11 +9,14 @@ import { buildTariffInlineKeyboard, resolveTariffPrices } from "./admin-menu.js"
 import { t } from "./i18n.js";
 import { formatTashkentDateTime, submitPaymentReceipt } from "./payment-service.js";
 import { saveReceiptImage, validateImageBuffer } from "./receipt-storage.js";
+import { notifyPlatformOwner } from "../../core/platform-notifier.js";
+import type { Logger } from "../../core/logger.js";
 
 export interface ReceiptHandlersOptions {
   redis?: Redis;
   transport?: TelegramTransport;
   uploadDir?: string;
+  logger?: Logger;
 }
 
 type SendMessageOptions = Parameters<PlatformBotContext["api"]["sendMessage"]>[2];
@@ -26,6 +29,107 @@ async function sendReply(
   const chatId = ctx.chat?.id ?? ctx.from?.id;
   if (!chatId) return;
   await ctx.api.sendMessage(chatId, text, extra);
+}
+
+async function processFileReceipt(
+  ctx: PlatformBotContext,
+  fileId: string,
+  fileSize: number | undefined,
+  prisma: PrismaClient,
+  opts?: ReceiptHandlersOptions,
+): Promise<void> {
+  if (!ctx.session.payment || !ctx.from) return;
+
+  const user = await prisma.botUser.findUnique({
+    where: {
+      botId_tgId: {
+        botId: ctx.botMeta.id,
+        tgId: BigInt(ctx.from.id),
+      },
+    },
+  });
+  if (!user?.isAdmin) return;
+  const lang = user.lang ?? (ctx.session.lang as Lang) ?? "RU";
+  ctx.session.isAdmin = true;
+  ctx.session.lang = lang;
+
+  if (fileSize && fileSize > 5 * 1024 * 1024) {
+    await sendReply(ctx, t(lang, "receipt_photo_too_large"));
+    return;
+  }
+
+  if (!opts?.transport || !opts?.redis) return;
+
+  try {
+    const file = await ctx.api.getFile(fileId);
+    if (file.file_size && file.file_size > 5 * 1024 * 1024) {
+      await sendReply(ctx, t(lang, "receipt_photo_too_large"));
+      return;
+    }
+    if (!file.file_path) {
+      await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
+      return;
+    }
+
+    const token = decryptSecret(ctx.botMeta.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
+    const buffer = await opts.transport.downloadFile(token, file.file_path);
+
+    const validation = validateImageBuffer(buffer);
+    if (!validation.valid || !validation.ext) {
+      await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
+      return;
+    }
+
+    const uploadDir = opts.uploadDir ?? env.UPLOAD_DIR;
+    const savedPath = await saveReceiptImage(buffer, uploadDir, validation.ext);
+
+    const res = await submitPaymentReceipt({
+      prisma,
+      redis: opts.redis,
+      botId: ctx.botMeta.id,
+      submittedByTgId: ctx.from.id,
+      kind: "PHOTO",
+      months: ctx.session.payment.months,
+      amountUzs: ctx.session.payment.amountUzs,
+      imagePath: savedPath,
+      telegramFileId: fileId,
+    });
+
+    ctx.botMeta.subscriptionStatus = res.newStatus;
+    ctx.botMeta.paidUntil = res.newPaidUntil.toISOString();
+    ctx.session.payment = undefined;
+
+    await sendReply(
+      ctx,
+      t(lang, "receipt_submitted_success", {
+        date: formatTashkentDateTime(res.newPaidUntil),
+      }),
+    );
+
+    notifyPlatformOwner(
+      {
+        type: "NEW_RECEIPT",
+        botName: ctx.botMeta.botUsername ? `@${ctx.botMeta.botUsername}` : ctx.botMeta.id,
+        clientName: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Admin",
+        phone: user.username ? `@${user.username}` : String(ctx.from.id),
+        tariffMonths: res.receipt.months,
+        amountUzs: res.receipt.amount,
+        receiptId: res.receipt.id,
+      },
+      { prisma, transport: opts?.transport, logger: opts?.logger },
+    ).catch(() => {});
+  } catch (err) {
+    if ((err as Error)?.message === "PENDING_RECEIPT_EXISTS") {
+      await sendReply(
+        ctx,
+        lang === "UZ"
+          ? "Sizning oldingi chekingiz tekshirilmoqda. Iltimos, administrator qarorini kuting."
+          : "Ваш предыдущий чек уже находится на проверке. Пожалуйста, дождитесь решения администратора.",
+      );
+    } else {
+      await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
+    }
+  }
 }
 
 export function registerReceiptHandlers(
@@ -113,174 +217,22 @@ export function registerReceiptHandlers(
   });
 
   bot.on("message:photo", async (ctx, next) => {
-    if (!ctx.session.payment || !ctx.from) {
-      return next();
-    }
-
-    const user = await prisma.botUser.findUnique({
-      where: {
-        botId_tgId: {
-          botId: ctx.botMeta.id,
-          tgId: BigInt(ctx.from.id),
-        },
-      },
-    });
-    if (!user?.isAdmin) {
-      return next();
-    }
-    const lang = user.lang ?? (ctx.session.lang as Lang) ?? "RU";
-    ctx.session.isAdmin = true;
-    ctx.session.lang = lang;
-
+    if (!ctx.session.payment || !ctx.from) return next();
     const photos = ctx.message.photo;
     const photo = photos[photos.length - 1];
     if (!photo) return;
-
-    if (photo.file_size && photo.file_size > 5 * 1024 * 1024) {
-      await sendReply(ctx, t(lang, "receipt_photo_too_large"));
-      return;
-    }
-
-    if (!opts?.transport || !opts?.redis) {
-      return;
-    }
-
-    try {
-      const file = await ctx.api.getFile(photo.file_id);
-      if (file.file_size && file.file_size > 5 * 1024 * 1024) {
-        await sendReply(ctx, t(lang, "receipt_photo_too_large"));
-        return;
-      }
-      if (!file.file_path) {
-        await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
-        return;
-      }
-
-      const token = decryptSecret(ctx.botMeta.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
-      const buffer = await opts.transport.downloadFile(token, file.file_path);
-
-      const validation = validateImageBuffer(buffer);
-      if (!validation.valid || !validation.ext) {
-        await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
-        return;
-      }
-
-      const uploadDir = opts.uploadDir ?? env.UPLOAD_DIR;
-      const savedPath = await saveReceiptImage(buffer, uploadDir, validation.ext);
-
-      const res = await submitPaymentReceipt({
-        prisma,
-        redis: opts.redis,
-        botId: ctx.botMeta.id,
-        submittedByTgId: ctx.from.id,
-        kind: "PHOTO",
-        months: ctx.session.payment.months,
-        amountUzs: ctx.session.payment.amountUzs,
-        imagePath: savedPath,
-        telegramFileId: photo.file_id,
-      });
-
-      ctx.botMeta.subscriptionStatus = res.newStatus;
-      ctx.botMeta.paidUntil = res.newPaidUntil.toISOString();
-      ctx.session.payment = undefined;
-
-      await sendReply(
-        ctx,
-        t(lang, "receipt_submitted_success", {
-          date: formatTashkentDateTime(res.newPaidUntil),
-        }),
-      );
-    } catch {
-      await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
-    }
+    await processFileReceipt(ctx, photo.file_id, photo.file_size, prisma, opts);
   });
 
   bot.on("message:document", async (ctx, next) => {
-    if (!ctx.session.payment || !ctx.from) {
-      return next();
-    }
-
-    const user = await prisma.botUser.findUnique({
-      where: {
-        botId_tgId: {
-          botId: ctx.botMeta.id,
-          tgId: BigInt(ctx.from.id),
-        },
-      },
-    });
-    if (!user?.isAdmin) {
-      return next();
-    }
-    const lang = user.lang ?? (ctx.session.lang as Lang) ?? "RU";
-    ctx.session.isAdmin = true;
-    ctx.session.lang = lang;
-
+    if (!ctx.session.payment || !ctx.from) return next();
     const doc = ctx.message.document;
     if (!doc) return;
-
-    if (doc.file_size && doc.file_size > 5 * 1024 * 1024) {
-      await sendReply(ctx, t(lang, "receipt_photo_too_large"));
-      return;
-    }
-
-    if (!opts?.transport || !opts?.redis) {
-      return;
-    }
-
-    try {
-      const file = await ctx.api.getFile(doc.file_id);
-      if (file.file_size && file.file_size > 5 * 1024 * 1024) {
-        await sendReply(ctx, t(lang, "receipt_photo_too_large"));
-        return;
-      }
-      if (!file.file_path) {
-        await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
-        return;
-      }
-
-      const token = decryptSecret(ctx.botMeta.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
-      const buffer = await opts.transport.downloadFile(token, file.file_path);
-
-      const validation = validateImageBuffer(buffer);
-      if (!validation.valid || !validation.ext) {
-        await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
-        return;
-      }
-
-      const uploadDir = opts.uploadDir ?? env.UPLOAD_DIR;
-      const savedPath = await saveReceiptImage(buffer, uploadDir, validation.ext);
-
-      const res = await submitPaymentReceipt({
-        prisma,
-        redis: opts.redis,
-        botId: ctx.botMeta.id,
-        submittedByTgId: ctx.from.id,
-        kind: "PHOTO",
-        months: ctx.session.payment.months,
-        amountUzs: ctx.session.payment.amountUzs,
-        imagePath: savedPath,
-        telegramFileId: doc.file_id,
-      });
-
-      ctx.botMeta.subscriptionStatus = res.newStatus;
-      ctx.botMeta.paidUntil = res.newPaidUntil.toISOString();
-      ctx.session.payment = undefined;
-
-      await sendReply(
-        ctx,
-        t(lang, "receipt_submitted_success", {
-          date: formatTashkentDateTime(res.newPaidUntil),
-        }),
-      );
-    } catch {
-      await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
-    }
+    await processFileReceipt(ctx, doc.file_id, doc.file_size, prisma, opts);
   });
 
   bot.on("message:text", async (ctx, next) => {
-    if (!ctx.session.payment || !ctx.from) {
-      return next();
-    }
+    if (!ctx.session.payment || !ctx.from) return next();
 
     const user = await prisma.botUser.findUnique({
       where: {
@@ -290,9 +242,7 @@ export function registerReceiptHandlers(
         },
       },
     });
-    if (!user?.isAdmin) {
-      return next();
-    }
+    if (!user?.isAdmin) return next();
     const lang = user.lang ?? (ctx.session.lang as Lang) ?? "RU";
     ctx.session.isAdmin = true;
     ctx.session.lang = lang;
@@ -312,30 +262,54 @@ export function registerReceiptHandlers(
       return;
     }
 
-    if (!opts?.redis) {
-      return;
+    if (!opts?.redis) return;
+
+    try {
+      const res = await submitPaymentReceipt({
+        prisma,
+        redis: opts.redis,
+        botId: ctx.botMeta.id,
+        submittedByTgId: ctx.from.id,
+        kind: "TEXT",
+        months: ctx.session.payment.months,
+        amountUzs: ctx.session.payment.amountUzs,
+        textNote: text,
+      });
+
+      ctx.botMeta.subscriptionStatus = res.newStatus;
+      ctx.botMeta.paidUntil = res.newPaidUntil.toISOString();
+      ctx.session.payment = undefined;
+
+      await sendReply(
+        ctx,
+        t(lang, "receipt_submitted_success", {
+          date: formatTashkentDateTime(res.newPaidUntil),
+        }),
+      );
+
+      notifyPlatformOwner(
+        {
+          type: "NEW_RECEIPT",
+          botName: ctx.botMeta.botUsername ? `@${ctx.botMeta.botUsername}` : ctx.botMeta.id,
+          clientName: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Admin",
+          phone: user.username ? `@${user.username}` : String(ctx.from.id),
+          tariffMonths: res.receipt.months,
+          amountUzs: res.receipt.amount,
+          receiptId: res.receipt.id,
+        },
+        { prisma, transport: opts?.transport, logger: opts?.logger },
+      ).catch(() => {});
+    } catch (err) {
+      if ((err as Error)?.message === "PENDING_RECEIPT_EXISTS") {
+        await sendReply(
+          ctx,
+          lang === "UZ"
+            ? "Sizning oldingi chekingiz tekshirilmoqda. Iltimos, administrator qarorini kuting."
+            : "Ваш предыдущий чек уже находится на проверке. Пожалуйста, дождитесь решения администратора.",
+        );
+      } else {
+        await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
+      }
     }
-
-    const res = await submitPaymentReceipt({
-      prisma,
-      redis: opts.redis,
-      botId: ctx.botMeta.id,
-      submittedByTgId: ctx.from.id,
-      kind: "TEXT",
-      months: ctx.session.payment.months,
-      amountUzs: ctx.session.payment.amountUzs,
-      textNote: text,
-    });
-
-    ctx.botMeta.subscriptionStatus = res.newStatus;
-    ctx.botMeta.paidUntil = res.newPaidUntil.toISOString();
-    ctx.session.payment = undefined;
-
-    await sendReply(
-      ctx,
-      t(lang, "receipt_submitted_success", {
-        date: formatTashkentDateTime(res.newPaidUntil),
-      }),
-    );
   });
 }

@@ -5,11 +5,20 @@ import { t, type TranslationKey } from "./i18n.js";
 import { maskName, maskPhone } from "./masking.js";
 import { isMaskedStatus } from "./subscription.js";
 
-export function buildAdminReplyKeyboard(lang: Lang | null | undefined): Keyboard {
+export function buildAdminReplyKeyboard(
+  lang: Lang | null | undefined,
+  botType?: "LEADCATCH" | "QUICKBOOK",
+): Keyboard {
   const l = lang ?? "RU";
-  return new Keyboard()
-    .text(t(l, "admin_menu_leads"))
-    .row()
+  const kb = new Keyboard();
+  if (botType === "QUICKBOOK") {
+    kb.text(l === "UZ" ? "📅 Buyurtmalar" : "📅 Записи")
+      .text(l === "UZ" ? "➕ Mijozni yozish" : "➕ Записать клиента")
+      .row();
+  } else {
+    kb.text(t(l, "admin_menu_leads")).row();
+  }
+  return kb
     .text(t(l, "admin_menu_sub"))
     .text(t(l, "admin_menu_lang"))
     .resized();
@@ -30,7 +39,26 @@ export interface PlatformTariffs {
 }
 
 export function resolveTariffPrices(settings?: { tariffs?: unknown } | null): PlatformTariffs {
-  const custom = settings?.tariffs as Record<string, unknown> | undefined;
+  const rawTariffs = settings?.tariffs;
+  if (Array.isArray(rawTariffs)) {
+    const t1 = rawTariffs.find(
+      (t) => t && typeof t === "object" && (t as { months?: number }).months === 1,
+    ) as { amountUzs?: number } | undefined;
+    const t6 = rawTariffs.find(
+      (t) => t && typeof t === "object" && (t as { months?: number }).months === 6,
+    ) as { amountUzs?: number } | undefined;
+    const t12 = rawTariffs.find(
+      (t) => t && typeof t === "object" && (t as { months?: number }).months === 12,
+    ) as { amountUzs?: number } | undefined;
+
+    return {
+      tariff1m: typeof t1?.amountUzs === "number" ? t1.amountUzs : env.TARIFF_1M_UZS,
+      tariff6m: typeof t6?.amountUzs === "number" ? t6.amountUzs : env.TARIFF_6M_UZS,
+      tariff12m: typeof t12?.amountUzs === "number" ? t12.amountUzs : env.TARIFF_12M_UZS,
+    };
+  }
+
+  const custom = rawTariffs as Record<string, unknown> | undefined;
   const t1 =
     typeof custom?.["1m"] === "number"
       ? custom["1m"]

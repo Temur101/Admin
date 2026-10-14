@@ -60,6 +60,9 @@ const EnvSchema = z.object({
 
   DEV_LEADCATCH_TOKEN: z.string().optional().default(""),
   DEV_QUICKBOOK_TOKEN: z.string().optional().default(""),
+
+  ALERT_BOT_TOKEN: z.string().optional().default(""),
+  ALERT_CHAT_ID: z.string().optional().default(""),
 });
 
 const parsed = EnvSchema.safeParse(process.env);

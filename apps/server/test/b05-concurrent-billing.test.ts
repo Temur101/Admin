@@ -187,14 +187,14 @@ describe("B05: Concurrent Billing & Rollback", () => {
     expect(pushCalls).toHaveLength(1);
   });
 
-  it("4. should chain two simultaneous receipt submissions correctly without race condition", async () => {
+  it("4. should enforce single pending receipt limit upon simultaneous submissions without race condition", async () => {
     await prisma.subscription.update({
       where: { botId },
       data: { status: "ACTIVE", paidUntil: baseDate },
     });
 
     // Two concurrent submissions: one for 1 month, one for 6 months
-    const [sub1, sub2] = await Promise.all([
+    const results = await Promise.allSettled([
       submitPaymentReceipt({
         prisma,
         redis,
@@ -219,14 +219,13 @@ describe("B05: Concurrent Billing & Rollback", () => {
       }),
     ]);
 
-    expect(sub1.receipt.id).toBeDefined();
-    expect(sub2.receipt.id).toBeDefined();
+    const fulfilled = results.filter((r) => r.status === "fulfilled");
+    const rejected = results.filter((r) => r.status === "rejected");
 
-    // Final paidUntil must be baseDate + 7 months regardless of concurrency
-    const expected7m = addMonths(baseDate, 7);
-    const sub = await prisma.subscription.findUnique({ where: { botId } });
-    expect(sub?.paidUntil?.toISOString()).toBe(expected7m.toISOString());
-    expect(sub?.status).toBe("ACTIVE");
+    // Exactly one must succeed, and duplicate is rejected
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect((rejected[0] as PromiseRejectedResult).reason?.message).toBe("PENDING_RECEIPT_EXISTS");
   });
 
   it("5. should preserve independent payments when rejected in REVERSE order (reject A then reject B)", async () => {
@@ -248,7 +247,19 @@ describe("B05: Concurrent Billing & Rollback", () => {
       now: baseDate,
     });
 
-    // Receipt B (+6m)
+    // 1. Reject A FIRST -> subtracting 1 month leaves baseDate
+    await rejectReceipt({
+      prisma,
+      redis,
+      receiptId: rA.id,
+      reason: "Отклонен чек A",
+      now: baseDate,
+    });
+
+    let sub = await prisma.subscription.findUnique({ where: { botId } });
+    expect(sub?.paidUntil?.toISOString()).toBe(baseDate.toISOString());
+
+    // Receipt B (+6m) submitted after A was rejected
     const { receipt: rB } = await submitPaymentReceipt({
       prisma,
       redis,
@@ -261,23 +272,10 @@ describe("B05: Concurrent Billing & Rollback", () => {
       now: baseDate,
     });
 
-    // Paid until is baseDate + 7 months
-    let sub = await prisma.subscription.findUnique({ where: { botId } });
-    expect(sub?.paidUntil?.toISOString()).toBe(addMonths(baseDate, 7).toISOString());
-
-    // 1. Reject A FIRST -> subtracting 1 month leaves baseDate + 6 months!
-    await rejectReceipt({
-      prisma,
-      redis,
-      receiptId: rA.id,
-      reason: "Отклонен чек A",
-      now: baseDate,
-    });
-
     sub = await prisma.subscription.findUnique({ where: { botId } });
     const expected6m = addMonths(baseDate, 6);
     expect(sub?.paidUntil?.toISOString()).toBe(expected6m.toISOString());
-    expect(sub?.status).toBe("ACTIVE"); // still has 6 months!
+    expect(sub?.status).toBe("ACTIVE");
 
     // 2. Reject B SECOND -> subtracting 6 months leaves baseDate
     await rejectReceipt({
@@ -313,7 +311,14 @@ describe("B05: Concurrent Billing & Rollback", () => {
       now: baseDate,
     });
 
-    // Receipt B (+6m)
+    // Approve A (+1m)
+    await approveReceipt({
+      prisma,
+      redis,
+      receiptId: rA.id,
+    });
+
+    // Receipt B (+6m) submitted after A is approved
     const { receipt: rB } = await submitPaymentReceipt({
       prisma,
       redis,
@@ -335,18 +340,11 @@ describe("B05: Concurrent Billing & Rollback", () => {
       now: baseDate,
     });
 
-    // Approve A (+1m)
-    await approveReceipt({
-      prisma,
-      redis,
-      receiptId: rA.id,
-    });
-
     const sub = await prisma.subscription.findUnique({ where: { botId } });
     const expected1m = addMonths(baseDate, 1);
     expect(sub?.paidUntil?.toISOString()).toBe(expected1m.toISOString());
     expect(sub?.status).toBe("ACTIVE");
-    expect(sub?.failedReceiptAttempts).toBe(0); // reset by approval
+    expect(sub?.failedReceiptAttempts).toBe(1);
   });
 
   it("7. should preserve independent manual extension made between submission and rejection", async () => {

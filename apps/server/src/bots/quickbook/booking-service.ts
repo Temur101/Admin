@@ -21,7 +21,7 @@ export interface CreateBookingParams {
   transport: TelegramTransport;
   logger: Logger;
   botId: string;
-  customerTgId: number | bigint;
+  customerTgId?: number | bigint | null;
   customerName?: string | null;
   customerPhone: string;
   serviceId: string;
@@ -31,6 +31,7 @@ export interface CreateBookingParams {
   lang?: "RU" | "UZ";
   lockToken?: string;
   now?: Date;
+  source?: "TELEGRAM" | "MANUAL";
 }
 
 export type CreateBookingError =
@@ -155,6 +156,7 @@ export async function createBooking(
         if (existing) {
           // Idempotent retry: if same customerTgId and exact same slotTime
           if (
+            customerTgId != null &&
             existing.customerTgId === BigInt(customerTgId) &&
             existing.slotTime.getTime() === slotDate.getTime()
           ) {
@@ -163,10 +165,12 @@ export async function createBooking(
           throw new Error("SLOT_ALREADY_BOOKED");
         }
 
+        const source = params.source ?? (customerTgId != null ? "TELEGRAM" : "MANUAL");
+
         return tx.booking.create({
           data: {
             botId,
-            customerTgId: BigInt(customerTgId),
+            customerTgId: customerTgId != null ? BigInt(customerTgId) : null,
             customerName: customerName ?? null,
             customerPhone: normalizedPhone,
             serviceId,
@@ -176,22 +180,25 @@ export async function createBooking(
             slotTime: slotDate,
             endTime,
             status: "CONFIRMED",
+            source,
           },
         });
       },
       { maxWait: 15000, timeout: 20000 },
     );
 
-    // 5. Release Redis lock for this slot safely
-    await releaseSlotLock(redis, {
-      botId,
-      staffId,
-      slotTime: slotDate,
-      userId: customerTgId,
-      lockToken: params.lockToken,
-      durationMin: service.durationMin,
-      slotIntervalMin: config.slotIntervalMin,
-    }).catch(() => {});
+    // 5. Release Redis lock for this slot safely (if user had lock)
+    if (customerTgId != null) {
+      await releaseSlotLock(redis, {
+        botId,
+        staffId,
+        slotTime: slotDate,
+        userId: customerTgId,
+        lockToken: params.lockToken,
+        durationMin: service.durationMin,
+        slotIntervalMin: config.slotIntervalMin,
+      }).catch(() => {});
+    }
 
     // 6. Schedule 2-hour reminder in Redis ZSET
     const reminderScore = slotDate.getTime() - 2 * 3600 * 1000;

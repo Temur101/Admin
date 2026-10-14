@@ -4,11 +4,15 @@
  */
 export class LruCache<K, V> {
   private readonly map = new Map<K, V>();
+  private readonly capacity: number;
+  private readonly onEvict?: (key: K, value: V) => void;
 
-  constructor(private readonly capacity: number) {
+  constructor(capacity: number, onEvict?: (key: K, value: V) => void) {
     if (!Number.isInteger(capacity) || capacity < 1) {
       throw new Error("LRU capacity must be a positive integer");
     }
+    this.capacity = capacity;
+    this.onEvict = onEvict;
   }
 
   get(key: K): V | undefined {
@@ -24,8 +28,12 @@ export class LruCache<K, V> {
     if (this.map.has(key)) this.map.delete(key);
     this.map.set(key, value);
     if (this.map.size > this.capacity) {
-      const oldest = this.map.keys().next();
-      if (!oldest.done) this.map.delete(oldest.value);
+      const oldest = this.map.entries().next();
+      if (!oldest.done) {
+        const [oldestKey, oldestVal] = oldest.value;
+        this.map.delete(oldestKey);
+        this.onEvict?.(oldestKey, oldestVal);
+      }
     }
   }
 
