@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { QuickBookConfigSchema, QuizConfigSchema } from "@lcqb/contracts";
+import { bookingSetupIssues } from "@lcqb/contracts/validation";
 import { authenticateAdmin } from "./auth.js";
 import { validateQuizDag } from "../bots/leadcatch/dag-validator.js";
 import type { TenantResolver } from "../gateway/tenant-resolver.js";
@@ -22,21 +23,17 @@ export function registerTemplatesRoutes(
   tenantResolver?: TenantResolver,
 ): void {
   // GET /api/v1/templates - Catalog of ready presets
-  app.get(
-    "/api/v1/templates",
-    { preHandler: [authenticateAdmin] },
-    async (_req, reply) => {
-      return reply.send({
-        ok: true,
-        templates: TEMPLATES_CATALOG.map((t) => ({
-          id: t.id,
-          name: t.name,
-          description: t.description,
-          botType: t.botType,
-        })),
-      });
-    },
-  );
+  app.get("/api/v1/templates", { preHandler: [authenticateAdmin] }, async (_req, reply) => {
+    return reply.send({
+      ok: true,
+      templates: TEMPLATES_CATALOG.map((t) => ({
+        id: t.id,
+        name: t.name,
+        description: t.description,
+        botType: t.botType,
+      })),
+    });
+  });
 
   // POST /api/v1/bots/:id/apply-template - Apply a ready preset
   app.post<{ Params: BotParams; Body: ApplyTemplateBody }>(
@@ -118,6 +115,12 @@ export function registerTemplatesRoutes(
       }
 
       if (bot.botType === "QUICKBOOK") {
+        const errors = bookingSetupIssues(req.body);
+        if (errors.length)
+          return reply
+            .code(400)
+            .send({ ok: false, error: "Проверьте услуги и расписание.", details: errors });
+
         const parsed = QuickBookConfigSchema.safeParse(req.body);
         if (!parsed.success) {
           return reply.code(400).send({

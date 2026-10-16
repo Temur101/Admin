@@ -27,18 +27,19 @@ export function WeekDaysPicker({ selectedDays, onChange }: WeekDaysPickerProps) 
   };
 
   return (
-    <div className="flex items-center gap-1">
+    <div className="flex flex-wrap items-center gap-1">
       {DAYS.map((d) => {
         const isSelected = selectedDays.includes(d.id);
         return (
           <button
             key={d.id}
             type="button"
+            aria-pressed={isSelected}
             onClick={() => toggleDay(d.id)}
-            className={`w-7 h-7 text-[11px] rounded-lg font-medium transition-colors cursor-pointer flex items-center justify-center ${
+            className={`w-7 h-7 text-sm rounded-lg font-medium transition-colors cursor-pointer flex items-center justify-center ${
               isSelected
-                ? "bg-indigo-600 text-white shadow-xs"
-                : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700"
+                ? "bg-ui-accent text-ui-on-accent shadow-xs"
+                : "bg-ui-surface border border-ui-border text-ui-muted hover:text-ui-text hover:border-ui-border"
             }`}
           >
             {d.label}

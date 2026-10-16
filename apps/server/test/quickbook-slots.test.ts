@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { PrismaClient } from "@prisma/client";
-import { DEFAULT_QUICKBOOK_CONFIG } from "../src/bots/quickbook/default-config.js";
+import { QUICKBOOK_TEST_CONFIG } from "./helpers/quickbook-fixture.js";
 import {
   generateAvailableSlots,
   getAlternativeSlots,
@@ -29,7 +29,7 @@ describe("QuickBook Slot Generator Unit Tests", () => {
     // 2026-10-11 is Sunday
     const slots = await generateAvailableSlots({
       botId: "bot_test",
-      config: DEFAULT_QUICKBOOK_CONFIG,
+      config: QUICKBOOK_TEST_CONFIG,
       serviceId: "srv_haircut",
       staffId: "staff_alisher",
       dateStr: "2026-10-11",
@@ -45,7 +45,7 @@ describe("QuickBook Slot Generator Unit Tests", () => {
     // Haircut duration = 45 min, interval = 30 min.
     const slots = await generateAvailableSlots({
       botId: "bot_test",
-      config: DEFAULT_QUICKBOOK_CONFIG,
+      config: QUICKBOOK_TEST_CONFIG,
       serviceId: "srv_haircut",
       staffId: "staff_alisher",
       dateStr: "2026-10-12",
@@ -74,7 +74,7 @@ describe("QuickBook Slot Generator Unit Tests", () => {
     // 19:30 slot + 45 min duration ends at 20:15 > 20:00 -> must be excluded!
     const slots = await generateAvailableSlots({
       botId: "bot_test",
-      config: DEFAULT_QUICKBOOK_CONFIG,
+      config: QUICKBOOK_TEST_CONFIG,
       serviceId: "srv_haircut", // 45 min
       staffId: "staff_alisher",
       dateStr: "2026-10-12",
@@ -93,7 +93,7 @@ describe("QuickBook Slot Generator Unit Tests", () => {
 
     const slots = await generateAvailableSlots({
       botId: "bot_test",
-      config: DEFAULT_QUICKBOOK_CONFIG,
+      config: QUICKBOOK_TEST_CONFIG,
       serviceId: "srv_haircut",
       staffId: "staff_alisher",
       dateStr: "2026-10-12",
@@ -128,7 +128,7 @@ describe("QuickBook Slot Generator Unit Tests", () => {
 
     const slots = await generateAvailableSlots({
       botId: "bot_test",
-      config: DEFAULT_QUICKBOOK_CONFIG,
+      config: QUICKBOOK_TEST_CONFIG,
       serviceId: "srv_haircut",
       staffId: "staff_alisher",
       dateStr: "2026-10-12",
@@ -149,7 +149,7 @@ describe("QuickBook Slot Generator Unit Tests", () => {
     const alternatives = await getAlternativeSlots(
       {
         botId: "bot_test",
-        config: DEFAULT_QUICKBOOK_CONFIG,
+        config: QUICKBOOK_TEST_CONFIG,
         serviceId: "srv_haircut",
         staffId: "staff_alisher",
         dateStr: "2026-10-12",

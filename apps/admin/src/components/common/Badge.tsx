@@ -8,16 +8,16 @@ interface BadgeProps {
 
 export function Badge({ children, variant = "neutral", size = "sm" }: BadgeProps) {
   const variantStyles = {
-    success: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30",
-    warning: "bg-amber-500/15 text-amber-400 border-amber-500/30",
-    danger: "bg-rose-500/15 text-rose-400 border-rose-500/30",
-    info: "bg-sky-500/15 text-sky-400 border-sky-500/30",
-    purple: "bg-purple-500/15 text-purple-400 border-purple-500/30",
-    neutral: "bg-slate-700/50 text-slate-300 border-slate-600",
+    success: "bg-ui-success-soft text-ui-success border-ui-success-border",
+    warning: "bg-ui-warning-soft text-ui-warning border-ui-warning-border",
+    danger: "bg-ui-danger-soft text-ui-danger border-ui-danger-border",
+    info: "bg-ui-info-soft text-ui-info border-ui-info-border",
+    purple: "bg-ui-accent-soft text-ui-accent border-ui-accent-border",
+    neutral: "bg-ui-hover text-ui-secondary border-ui-border",
   };
 
   const sizeStyles = {
-    sm: "px-2 py-0.5 text-xs",
+    sm: "px-2 py-0.5 text-sm",
     md: "px-2.5 py-1 text-sm",
   };
 
@@ -32,6 +32,8 @@ export function Badge({ children, variant = "neutral", size = "sm" }: BadgeProps
 
 export function StatusBadge({ status }: { status: string }) {
   switch (status.toUpperCase()) {
+    case "UNKNOWN":
+      return <Badge variant="neutral">Неизвестен</Badge>;
     case "ACTIVE":
       return <Badge variant="success">Активна</Badge>;
     case "TRIAL":

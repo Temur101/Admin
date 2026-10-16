@@ -49,6 +49,12 @@ export interface BotHealth {
   isActive: boolean;
   subscriptionStatus: string;
   failedInboxCount: number;
+  connection?: {
+    mode: "polling" | "webhook";
+    status: "READY" | "PAUSED" | "STOPPED" | "NOT_CONFIGURED" | "ERROR" | "UNKNOWN";
+    message: string;
+    checkedAt: string;
+  };
 }
 
 export async function getBots(): Promise<BotListItem[]> {
@@ -67,6 +73,7 @@ export interface CreateBotResult {
   inviteLink: string | null;
   adminInviteCode?: string;
   warning?: string;
+  trialEndsAt: string;
 }
 
 export async function createBot(payload: CreateBotRequest): Promise<CreateBotResult> {
@@ -89,11 +96,16 @@ export async function deleteBot(id: string, purge = false): Promise<void> {
   await apiRequest(`/api/v1/bots/${id}?purge=${purge}`, { method: "DELETE" });
 }
 
-export async function reissueBotInvite(id: string): Promise<{ adminInviteCode: string; inviteLink: string | null }> {
+export async function reissueBotInvite(
+  id: string,
+): Promise<{ adminInviteCode: string; inviteLink: string | null }> {
   return apiRequest(`/api/v1/bots/${id}/reissue-invite`, { method: "POST" });
 }
 
-export async function extendBotSubscription(id: string, payload: ExtendSubscriptionRequest): Promise<void> {
+export async function extendBotSubscription(
+  id: string,
+  payload: ExtendSubscriptionRequest,
+): Promise<void> {
   await apiRequest(`/api/v1/bots/${id}/extend`, {
     method: "POST",
     body: JSON.stringify(payload),
@@ -114,7 +126,9 @@ export async function revokeBotAdmin(botId: string, tgId: string): Promise<void>
 }
 
 export async function getBotWebhookInfo(id: string): Promise<WebhookInfo> {
-  const data = await apiRequest<{ ok: true; webhookInfo: WebhookInfo }>(`/api/v1/bots/${id}/webhook-info`);
+  const data = await apiRequest<{ ok: true; webhookInfo: WebhookInfo }>(
+    `/api/v1/bots/${id}/webhook-info`,
+  );
   return data.webhookInfo;
 }
 
@@ -125,4 +139,21 @@ export async function syncBotWebhook(id: string): Promise<{ webhookSecret: strin
 export async function getBotHealth(id: string): Promise<BotHealth> {
   const data = await apiRequest<{ ok: true; health: BotHealth }>(`/api/v1/bots/${id}/health`);
   return data.health;
+}
+
+export interface BotSetupCheck {
+  configurationReady: boolean;
+  telegramReady: boolean;
+  canLaunch: boolean;
+  errors: string[];
+  checkedAt: string;
+}
+export async function checkBotSetup(id: string): Promise<BotSetupCheck> {
+  const data = await apiRequest<{ ok: true; check: BotSetupCheck }>(
+    `/api/v1/bots/${id}/setup-check`,
+  );
+  return data.check;
+}
+export async function launchBot(id: string): Promise<void> {
+  await apiRequest(`/api/v1/bots/${id}/launch`, { method: "POST" });
 }

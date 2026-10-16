@@ -4,7 +4,7 @@ import { env } from "../src/core/env.js";
 import { logger } from "../src/core/logger.js";
 import { MockTelegramTransport } from "../src/adapters/telegram/mock-transport.js";
 import { encryptSecret, sha256Hex } from "../src/core/crypto.js";
-import { DEFAULT_QUICKBOOK_CONFIG } from "../src/bots/quickbook/default-config.js";
+import { QUICKBOOK_TEST_CONFIG } from "./helpers/quickbook-fixture.js";
 import { createBooking } from "../src/bots/quickbook/booking-service.js";
 import {
   getTestPrismaClient,
@@ -84,7 +84,7 @@ describe("QuickBook Race Condition Test (50 Parallel Bookings)", () => {
         serviceId: "srv_haircut",
         staffId: "staff_alisher",
         slotTime,
-        config: DEFAULT_QUICKBOOK_CONFIG,
+        config: QUICKBOOK_TEST_CONFIG,
       });
     });
 

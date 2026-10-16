@@ -1,87 +1,68 @@
-import React from "react";
-import { Trash2 } from "lucide-react";
 import type { QuizOption, QuizNode } from "@lcqb/contracts";
-
+import { Input } from "../../common/Input.js";
+import { Button } from "../../common/Button.js";
 interface OptionRowProps {
   option: QuizOption;
   nodes: QuizNode[];
   currentNodeId: string;
-  onChange: (updated: QuizOption) => void;
+  index: number;
+  onChange: (value: QuizOption) => void;
   onDelete: () => void;
   canDelete: boolean;
 }
-
 export function OptionRow({
   option,
   nodes,
   currentNodeId,
+  index,
   onChange,
   onDelete,
   canDelete,
 }: OptionRowProps) {
+  const question = nodes.findIndex((n) => n.id === currentNodeId) + 1;
+  const label = `Вопрос ${question}, ответ ${index + 1}`;
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl">
-      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
-        <input
-          type="text"
-          value={option.text.ru}
-          onChange={(e) =>
-            onChange({
-              ...option,
-              text: { ...option.text, ru: e.target.value },
-            })
-          }
+    <div className="p-3 rounded-xl border border-ui-border bg-ui-subtle space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <Input
+          label={`${label} (RU)`}
           placeholder="Текст ответа (RU)"
-          className="px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+          value={option.text.ru}
+          onChange={(e) => onChange({ ...option, text: { ...option.text, ru: e.target.value } })}
         />
-        <input
-          type="text"
-          value={option.text.uz}
-          onChange={(e) =>
-            onChange({
-              ...option,
-              text: { ...option.text, uz: e.target.value },
-            })
-          }
+        <Input
+          label={`${label} (UZ)`}
           placeholder="Текст ответа (UZ)"
-          className="px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-500"
+          value={option.text.uz}
+          onChange={(e) => onChange({ ...option, text: { ...option.text, uz: e.target.value } })}
         />
       </div>
-
-      <div className="flex items-center gap-2">
-        <select
-          value={option.nextNodeId ?? ""}
-          onChange={(e) =>
-            onChange({
-              ...option,
-              nextNodeId: e.target.value ? e.target.value : null,
-            })
-          }
-          className="px-2.5 py-1.5 bg-slate-900 border border-slate-700/80 rounded-lg text-xs text-slate-200 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 min-w-[150px]"
-        >
-          <option value="">🏁 Завершить (Контакт)</option>
-          {nodes
-            .filter((n) => n.id !== currentNodeId)
-            .map((n, idx) => (
-              <option key={n.id} value={n.id}>
-                → Шаг {idx + 1}: {n.title.ru || n.id}
-              </option>
-            ))}
-        </select>
-
-        <button
-          type="button"
-          onClick={onDelete}
-          disabled={!canDelete}
-          title={canDelete ? "Удалить вариант" : "Нужен хотя бы один вариант"}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            canDelete
-              ? "border-slate-800 text-slate-400 hover:text-rose-400 hover:border-rose-900/50 cursor-pointer"
-              : "border-slate-800 text-slate-600 cursor-not-allowed opacity-50"
-          }`}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+        <label className="flex-1 min-w-0 space-y-1 text-sm text-ui-secondary">
+          После этого ответа
+          <select
+            aria-label={`${label}: следующий шаг`}
+            value={option.nextNodeId ?? ""}
+            onChange={(e) => onChange({ ...option, nextNodeId: e.target.value || null })}
+            className="w-full min-w-0 min-h-11 rounded-xl border border-ui-border bg-ui-surface px-3"
+          >
+            <option value="">Завершить опрос и запросить контакт</option>
+            {option.nextNodeId && !nodes.some((n) => n.id === option.nextNodeId) && (
+              <option value={option.nextNodeId}>Удалённый вопрос — выберите другой</option>
+            )}
+            {nodes.map(
+              (node, i) =>
+                node.id !== currentNodeId && (
+                  <option key={node.id} value={node.id}>
+                    Вопрос {i + 1}: {node.title.ru || "Без названия"}
+                  </option>
+                ),
+            )}
+          </select>
+        </label>
+        <Button variant="outline" size="sm" disabled={!canDelete} onClick={onDelete}>
+          Удалить ответ {index + 1}
+        </Button>
       </div>
     </div>
   );

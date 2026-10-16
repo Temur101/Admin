@@ -11,7 +11,7 @@ export interface QuickBookTemplateMeta {
 export const QUICKBOOK_TEMPLATES: QuickBookTemplateMeta[] = [
   {
     id: "barbershop_2masters",
-    name: "Барбершоп (Пилот Б - 2 мастера)",
+    name: "Барбершоп — 2 мастера",
     description: "Онлайн-запись к 2 топ-мастерам на стрижки и уход за бородой",
     botType: "QUICKBOOK",
     config: {

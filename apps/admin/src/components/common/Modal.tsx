@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useId } from "react";
 import { X } from "lucide-react";
 
 interface ModalProps {
@@ -18,6 +18,7 @@ export function Modal({
   children,
   maxWidth = "lg",
 }: ModalProps) {
+  const titleId = useId();
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
@@ -44,19 +45,25 @@ export function Modal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-ui-overlay backdrop-blur-xs animate-in fade-in duration-200">
       <div
-        className={`w-full ${maxWidthStyles[maxWidth]} bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className={`w-full ${maxWidthStyles[maxWidth]} bg-ui-surface border border-ui-border rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-ui-border shrink-0">
           <div>
-            <h3 className="text-lg font-semibold text-white">{title}</h3>
-            {description && <p className="text-xs text-slate-400 mt-0.5">{description}</p>}
+            <h3 id={titleId} className="text-lg font-semibold text-ui-text">
+              {title}
+            </h3>
+            {description && <p className="text-sm text-ui-muted mt-0.5">{description}</p>}
           </div>
           <button
+            aria-label="Закрыть окно"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+            className="min-h-9 min-w-9 flex items-center justify-center p-1.5 rounded-lg text-ui-muted hover:text-ui-text hover:bg-ui-hover transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>

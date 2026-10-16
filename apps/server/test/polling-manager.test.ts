@@ -1,3 +1,4 @@
+import { createEmptyQuizConfig } from "@lcqb/contracts";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   buildApp,
@@ -320,7 +321,7 @@ describe("Stage 8.5 Wave 1: PollingManager, Settings Parsing & Admin Links", () 
   });
 
   describe("MAJ-01 & MAJ-11 & MAJ-17: Admin API Invite Links & Defaults", () => {
-    it("should create LeadCatch bot with DEFAULT_LEADCATCH_QUIZ, TRIAL_DAYS_DEFAULT and adm_ invite link", async () => {
+    it("should create LeadCatch bot with an empty quiz, TRIAL_DAYS_DEFAULT and adm_ invite link", async () => {
       const token = await getAdminToken();
 
       const tenantRes = await app.inject({
@@ -361,11 +362,11 @@ describe("Stage 8.5 Wave 1: PollingManager, Settings Parsing & Admin Links", () 
       // Link must have adm_ prefix
       expect(createBody.bot.inviteLink).toMatch(/\?start=adm_[a-f0-9]{32}$/);
 
-      // Check DB settings were saved with DEFAULT_LEADCATCH_QUIZ
+      // A bot created without a template starts with an empty quiz draft.
       const dbBot = await prisma.bot.findUnique({
         where: { id: createBody.bot.id },
       });
-      expect(dbBot?.settings).toEqual(DEFAULT_LEADCATCH_QUIZ);
+      expect(dbBot?.settings).toEqual(createEmptyQuizConfig());
 
       // Verify MAJ-17 warning when BOT_MODE=webhook and PUBLIC_BASE_URL is empty
       const origMode = env.BOT_MODE;

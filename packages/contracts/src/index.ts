@@ -21,12 +21,7 @@ export type ReceiptKind = z.infer<typeof ReceiptKindSchema>;
 export const ReceiptStatusSchema = z.enum(["PENDING", "APPROVED", "REJECTED"]);
 export type ReceiptStatus = z.infer<typeof ReceiptStatusSchema>;
 
-export const BookingStatusSchema = z.enum([
-  "PENDING",
-  "CONFIRMED",
-  "CANCELLED",
-  "COMPLETED",
-]);
+export const BookingStatusSchema = z.enum(["PENDING", "CONFIRMED", "CANCELLED", "COMPLETED"]);
 export type BookingStatus = z.infer<typeof BookingStatusSchema>;
 
 export const TariffOptionSchema = z.object({
@@ -81,6 +76,10 @@ export const QuizConfigSchema = z.object({
   nodes: z.array(QuizNodeSchema).min(1),
 });
 export type QuizConfig = z.infer<typeof QuizConfigSchema>;
+export const QuizDraftConfigSchema = QuizConfigSchema.extend({
+  startNodeId: z.string(),
+  nodes: z.array(QuizNodeSchema),
+});
 
 export const QuizAnswerSchema = z.object({
   question: z.string(),
@@ -128,6 +127,11 @@ export const QuickBookConfigSchema = z.object({
   customTexts: z.record(LocalizedTextSchema).optional(),
 });
 export type QuickBookConfig = z.infer<typeof QuickBookConfigSchema>;
+const DraftLocalizedTextSchema = z.object({ ru: z.string(), uz: z.string() });
+export const QuickBookDraftConfigSchema = QuickBookConfigSchema.extend({
+  services: z.array(QuickBookServiceSchema.extend({ name: DraftLocalizedTextSchema })),
+  resources: z.array(QuickBookResourceSchema.extend({ name: DraftLocalizedTextSchema })),
+});
 
 export const BookingSourceSchema = z.enum(["TELEGRAM", "MANUAL"]);
 export type BookingSource = z.infer<typeof BookingSourceSchema>;
@@ -148,6 +152,9 @@ export const CreateBotRequestSchema = z.object({
   tenantId: z.string().uuid(),
   botType: BotTypeSchema,
   botToken: z.string().min(10),
+  templateId: z.string().min(1).optional(),
+  startPaused: z.boolean().optional(),
+  resourceType: ResourceTypeSchema.optional(),
 });
 export type CreateBotRequest = z.infer<typeof CreateBotRequestSchema>;
 
@@ -182,3 +189,25 @@ export const UpdatePlatformSettingsRequestSchema = z.object({
 });
 export type UpdatePlatformSettingsRequest = z.infer<typeof UpdatePlatformSettingsRequestSchema>;
 
+export const RESOURCE_LABELS: Record<ResourceType, LocalizedText> = {
+  STAFF: { ru: "Сотрудник", uz: "Xodim" },
+  TABLE: { ru: "Стол", uz: "Stol" },
+  ROOM: { ru: "Помещение", uz: "Xona" },
+};
+
+// Empty configurations are onboarding drafts, not publishable booking/quiz settings.
+export function createEmptyQuickBookConfig(resourceType: ResourceType = "STAFF"): QuickBookConfig {
+  return {
+    resourceType,
+    resourceLabel: { ...RESOURCE_LABELS[resourceType] },
+    services: [],
+    resources: [],
+    slotIntervalMin: 30,
+    bookingHorizonDays: 14,
+    timezone: "Asia/Tashkent",
+  };
+}
+
+export function createEmptyQuizConfig(): QuizConfig {
+  return { startNodeId: "", nodes: [] };
+}

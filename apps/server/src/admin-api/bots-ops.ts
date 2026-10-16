@@ -6,6 +6,8 @@ import { ExtendSubscriptionRequestSchema } from "@lcqb/contracts";
 import { authenticateAdmin } from "./auth.js";
 import { decryptSecret } from "../core/crypto.js";
 import { env } from "../core/env.js";
+import { checkBotConnection } from "./bot-connection.js";
+import type { PollingManager } from "../gateway/polling-manager.js";
 import type { TenantResolver } from "../gateway/tenant-resolver.js";
 
 interface BotParams {
@@ -22,6 +24,7 @@ export function registerBotsOpsRoutes(
   prisma: PrismaClient,
   tenantResolver?: TenantResolver,
   getBotInstance?: (token: string, botId?: string) => Bot,
+  pollingManager?: PollingManager,
 ): void {
   // GET /api/v1/bots/:id/admins - List bot administrators
   app.get<{ Params: BotParams }>(
@@ -225,6 +228,14 @@ export function registerBotsOpsRoutes(
         where: { botId: id, status: "FAILED" },
       });
 
+      const connection = await checkBotConnection(bot, {
+        mode: env.BOT_MODE,
+        publicBaseUrl: env.PUBLIC_BASE_URL,
+        pollingManager,
+        getTelegramBot: getBotInstance
+          ? () => getBotInstance(decryptSecret(bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY), id)
+          : undefined,
+      });
       return reply.send({
         ok: true,
         health: {
@@ -232,6 +243,7 @@ export function registerBotsOpsRoutes(
           isActive: bot.isActive,
           subscriptionStatus: bot.subscription?.status ?? "UNKNOWN",
           failedInboxCount,
+          connection,
         },
       });
     },

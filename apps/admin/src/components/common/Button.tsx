@@ -19,17 +19,20 @@ export function Button({
   ...props
 }: ButtonProps) {
   const variantStyles = {
-    primary: "bg-indigo-600 hover:bg-indigo-500 text-white shadow-sm border border-indigo-500/20",
-    secondary: "bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700",
-    danger: "bg-rose-600 hover:bg-rose-500 text-white shadow-sm border border-rose-500/20",
-    outline: "bg-transparent hover:bg-slate-800 text-slate-300 border border-slate-700",
-    ghost: "bg-transparent hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-transparent",
+    primary:
+      "bg-ui-accent hover:bg-ui-accent-hover text-ui-on-accent shadow-sm border border-ui-accent-border",
+    secondary: "bg-ui-subtle hover:bg-ui-hover text-ui-text border border-ui-border",
+    danger:
+      "bg-ui-danger hover:brightness-95 text-ui-on-accent shadow-sm border border-ui-danger-border",
+    outline: "bg-transparent hover:bg-ui-hover text-ui-secondary border border-ui-border",
+    ghost:
+      "bg-transparent hover:bg-ui-hover text-ui-muted hover:text-ui-text border border-transparent",
   };
 
   const sizeStyles = {
-    sm: "px-2.5 py-1.5 text-xs rounded-lg gap-1.5",
-    md: "px-4 py-2 text-sm rounded-xl gap-2",
-    lg: "px-5 py-2.5 text-base rounded-xl gap-2.5",
+    sm: "min-h-9 px-3 py-2 text-sm rounded-lg gap-1.5",
+    md: "min-h-11 px-4 py-2.5 text-sm rounded-xl gap-2",
+    lg: "min-h-12 px-5 py-3 text-base rounded-xl gap-2.5",
   };
 
   return (

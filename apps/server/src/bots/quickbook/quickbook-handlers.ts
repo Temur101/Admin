@@ -1,3 +1,4 @@
+import { RESOURCE_LABELS } from "@lcqb/contracts";
 import type { PrismaClient } from "@prisma/client";
 import { InlineKeyboard } from "grammy";
 import type { Redis } from "ioredis";
@@ -25,6 +26,10 @@ export async function startQuickBookFlow(
   const config = getQuickBookConfig(ctx.botMeta.settings);
 
   ctx.session.quickbook = {};
+  if (config.services.length === 0 || config.resources.length === 0) {
+    await ctx.reply(t(lang, "bot_not_configured"));
+    return;
+  }
 
   const keyboard = new InlineKeyboard();
   for (const srv of config.services) {
@@ -95,15 +100,21 @@ export async function handleQuickBookContact(
 
     const srv = config.services.find((s) => s.id === bookingRes.booking.serviceId);
     const staff = config.resources.find((r) => r.id === bookingRes.booking.staffId);
-    const srvName = srv ? (lang === "UZ" ? srv.name.uz : srv.name.ru) : bookingRes.booking.serviceName;
-    const staffName = staff ? (lang === "UZ" ? staff.name.uz : staff.name.ru) : bookingRes.booking.staffId;
+    const srvName = srv
+      ? lang === "UZ"
+        ? srv.name.uz
+        : srv.name.ru
+      : bookingRes.booking.serviceName;
+    const staffName = staff
+      ? lang === "UZ"
+        ? staff.name.uz
+        : staff.name.ru
+      : bookingRes.booking.staffId;
     const label = config.resourceLabel
       ? lang === "UZ"
         ? config.resourceLabel.uz
         : config.resourceLabel.ru
-      : lang === "UZ"
-        ? "Mutaxassis"
-        : "Специалист";
+      : RESOURCE_LABELS[config.resourceType][lang === "UZ" ? "uz" : "ru"];
 
     const timeStr = formatTashkentDateTime(bookingRes.booking.slotTime);
     const successMsg = t(lang, "qb_booking_success", {
@@ -117,7 +128,12 @@ export async function handleQuickBookContact(
       reply_markup: { remove_keyboard: true },
     });
   } else if ("alternativeSlots" in bookingRes) {
-    await renderAlternativeSlots(ctx, bookingRes.alternativeSlots, session.serviceId, session.resourceId);
+    await renderAlternativeSlots(
+      ctx,
+      bookingRes.alternativeSlots,
+      session.serviceId,
+      session.resourceId,
+    );
   } else {
     await ctx.reply(t(lang, "quiz_invalid_phone"));
   }

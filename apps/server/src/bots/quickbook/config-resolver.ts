@@ -3,7 +3,7 @@ import { DEFAULT_QUICKBOOK_CONFIG } from "./default-config.js";
 
 export function getQuickBookConfig(settings?: Record<string, unknown> | null): QuickBookConfig {
   if (!settings) {
-    return DEFAULT_QUICKBOOK_CONFIG;
+    return structuredClone(DEFAULT_QUICKBOOK_CONFIG);
   }
 
   const rawConfig = settings.quickbook ?? settings;
@@ -12,5 +12,5 @@ export function getQuickBookConfig(settings?: Record<string, unknown> | null): Q
     return parsed.data;
   }
 
-  return DEFAULT_QUICKBOOK_CONFIG;
+  return structuredClone(DEFAULT_QUICKBOOK_CONFIG);
 }

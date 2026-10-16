@@ -1,3 +1,4 @@
+import { activateBot } from "./bot-activation.js";
 import type { FastifyInstance } from "fastify";
 import { randomBytes } from "node:crypto";
 import type { Bot } from "grammy";
@@ -76,40 +77,21 @@ export function registerBotsLifecycleRoutes(
         return reply.code(404).send({ ok: false, error: "Bot not found" });
       }
 
-      let webhookWarning: string | null = null;
-      if (env.BOT_MODE === "polling") {
-        if (pollingManager) {
-          await pollingManager.start(id);
-        }
-      } else if (getBotInstance) {
-        if (!env.PUBLIC_BASE_URL) {
-          webhookWarning = "PUBLIC_BASE_URL is empty; Telegram webhook registration skipped";
-          logger?.warn({ botId: id }, webhookWarning);
-        } else {
-          try {
-            const token = decryptSecret(bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
-            const tgBot = getBotInstance(token, id);
-            const webhookUrl = `${env.PUBLIC_BASE_URL}/api/v1/tg/webhook/${bot.botTokenHash}`;
-            await tgBot.api.setWebhook(webhookUrl, {
-              secret_token: bot.webhookSecret,
-              drop_pending_updates: false,
-            });
-          } catch (err) {
-            return reply.code(502).send({
-              ok: false,
-              error: "Failed to reactivate webhook in Telegram",
-              details: err instanceof Error ? err.message : String(err),
-            });
-          }
-        }
+      let webhookWarning: string | null;
+      if (!getBotInstance)
+        return reply.code(503).send({ ok: false, error: "Проверка Telegram недоступна." });
+      try {
+        webhookWarning = await activateBot(prisma, bot, {
+          mode: env.BOT_MODE,
+          publicBaseUrl: env.PUBLIC_BASE_URL,
+          pollingManager,
+          getTelegramBot: (record) =>
+            getBotInstance(decryptSecret(record.botTokenEnc, env.TOKEN_ENCRYPTION_KEY), record.id),
+          invalidate: (record) => tenantResolver?.invalidate(record.botTokenHash, record.id),
+        });
+      } catch {
+        return reply.code(502).send({ ok: false, error: "Не удалось возобновить работу бота." });
       }
-
-      await prisma.bot.update({
-        where: { id },
-        data: { isActive: true },
-      });
-
-      tenantResolver?.invalidate(bot.botTokenHash, bot.id);
 
       return reply.send({
         ok: true,
@@ -131,7 +113,8 @@ export function registerBotsLifecycleRoutes(
       if (purge !== "true") {
         return reply.code(400).send({
           ok: false,
-          error: "Bot deactivation does not delete data. Use /suspend to deactivate safely, or pass ?purge=true to permanently delete all data.",
+          error:
+            "Bot deactivation does not delete data. Use /suspend to deactivate safely, or pass ?purge=true to permanently delete all data.",
         });
       }
 

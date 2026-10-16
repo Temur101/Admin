@@ -15,7 +15,11 @@ export function TenantsPage() {
   const [contactPhone, setContactPhone] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
 
-  const { data: tenants = [], isLoading, error } = useQuery({
+  const {
+    data: tenants = [],
+    isLoading,
+    error,
+  } = useQuery({
     queryKey: ["tenants"],
     queryFn: getTenants,
   });
@@ -58,17 +62,17 @@ export function TenantsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Арендаторы платформы</h1>
-          <p className="text-xs text-slate-400 mt-1">Клиенты, владельцы ботов и их подписки</p>
+          <h1 className="text-2xl font-bold text-ui-text tracking-tight">Клиенты платформы</h1>
+          <p className="text-sm text-ui-muted mt-1">Клиенты, владельцы ботов и их подписки</p>
         </div>
         <Button
           onClick={() => setIsCreateOpen(true)}
           variant="primary"
           icon={<Plus className="h-4 w-4" />}
         >
-          Новый арендатор
+          Новый клиент
         </Button>
       </div>
 
@@ -78,10 +82,10 @@ export function TenantsPage() {
         </Alert>
       )}
 
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-ui-surface border border-ui-border rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/40 text-slate-400 border-b border-slate-800 font-medium">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-ui-subtle text-ui-muted border-b border-ui-border font-medium">
               <tr>
                 <th className="px-5 py-3">Имя клиента / Компания</th>
                 <th className="px-5 py-3">Телефон</th>
@@ -91,42 +95,43 @@ export function TenantsPage() {
                 <th className="px-5 py-3 text-right">Действия</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className="divide-y divide-ui-border text-ui-secondary">
               {isLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                    Загрузка списка арендаторов...
+                  <td colSpan={6} className="px-5 py-10 text-center text-ui-muted">
+                    Загрузка списка клиентов...
                   </td>
                 </tr>
               ) : tenants.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-slate-500">
-                    Арендаторов пока нет. Нажмите «Новый арендатор», чтобы зарегистрировать первого клиента.
+                  <td colSpan={6} className="px-5 py-10 text-center text-ui-muted">
+                    Клиентов пока нет. Нажмите «Новый клиент», чтобы зарегистрировать первого
+                    клиента.
                   </td>
                 </tr>
               ) : (
                 tenants.map((t) => (
-                  <tr key={t.id} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={t.id} className="hover:bg-ui-hover transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-lg bg-indigo-600/10 text-indigo-400 flex items-center justify-center font-semibold">
+                        <div className="h-8 w-8 rounded-lg bg-ui-accent-soft text-ui-accent flex items-center justify-center font-semibold">
                           {t.clientName.slice(0, 1).toUpperCase()}
                         </div>
                         <div>
-                          <p className="font-semibold text-white">{t.clientName}</p>
-                          <p className="text-[10px] text-slate-500 font-mono">{t.id.slice(0, 8)}</p>
+                          <p className="font-semibold text-ui-text">{t.clientName}</p>
+                          <p className="text-xs text-ui-muted font-mono">{t.id.slice(0, 8)}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 text-slate-300">
+                    <td className="px-5 py-3.5 text-ui-secondary">
                       <div className="flex items-center gap-1.5">
-                        <Phone className="h-3 w-3 text-slate-500" />
+                        <Phone className="h-3 w-3 text-ui-muted" />
                         <span>{t.contactPhone}</span>
                       </div>
                     </td>
                     <td className="px-5 py-3.5">
-                      <span className="inline-flex items-center gap-1 text-slate-300">
-                        <Bot className="h-3.5 w-3.5 text-indigo-400" />
+                      <span className="inline-flex items-center gap-1 text-ui-secondary">
+                        <Bot className="h-3.5 w-3.5 text-ui-accent" />
                         {t.botsCount}
                       </span>
                     </td>
@@ -137,7 +142,7 @@ export function TenantsPage() {
                         <Badge variant="success">Активен</Badge>
                       )}
                     </td>
-                    <td className="px-5 py-3.5 text-slate-500">
+                    <td className="px-5 py-3.5 text-ui-muted">
                       {new Date(t.createdAt).toLocaleDateString("ru-RU")}
                     </td>
                     <td className="px-5 py-3.5 text-right">
@@ -146,7 +151,7 @@ export function TenantsPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => handleSuspend(t)}
-                          className="text-slate-400 hover:text-rose-400"
+                          className="text-ui-muted hover:text-ui-danger"
                           title="Приостановить"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -164,7 +169,7 @@ export function TenantsPage() {
       <Modal
         isOpen={isCreateOpen}
         onClose={() => setIsCreateOpen(false)}
-        title="Новый арендатор"
+        title="Новый клиент"
         description="Регистрация нового бизнес-клиента в платформе"
       >
         <form onSubmit={handleCreate} className="space-y-4">

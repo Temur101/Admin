@@ -44,10 +44,10 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold text-white">Администраторы Telegram-бота</h3>
-          <p className="text-xs text-slate-400 mt-1">
+          <h3 className="text-sm font-semibold text-ui-text">Администраторы Telegram-бота</h3>
+          <p className="text-sm text-ui-muted mt-1">
             Пользователи, имеющие доступ к просмотру лидов/записей и биллингу внутри Telegram
           </p>
         </div>
@@ -70,21 +70,27 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
 
       {/* Инвайт ссылка */}
       {bot.inviteLink && (
-        <div className="p-4 bg-slate-900 border border-slate-800 rounded-xl space-y-2">
-          <label className="text-xs font-medium text-slate-300">
+        <div className="p-4 bg-ui-surface border border-ui-border rounded-xl space-y-2">
+          <label className="text-sm font-medium text-ui-secondary">
             Актуальная ссылка для приглашения новых администраторов:
           </label>
           <div className="flex gap-2">
             <input
               readOnly
               value={bot.inviteLink}
-              className="flex-1 px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs font-mono text-slate-300"
+              className="flex-1 px-3 py-1.5 bg-ui-subtle border border-ui-border rounded-lg text-sm font-mono text-ui-secondary"
             />
             <Button
               variant="secondary"
               size="sm"
               onClick={() => handleCopy(bot.inviteLink!)}
-              icon={copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+              icon={
+                copied ? (
+                  <Check className="h-3.5 w-3.5 text-ui-success" />
+                ) : (
+                  <Copy className="h-3.5 w-3.5" />
+                )
+              }
             >
               {copied ? "Скопировано" : "Копировать"}
             </Button>
@@ -93,10 +99,10 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
       )}
 
       {/* Список админов */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-ui-surface border border-ui-border rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/40 text-slate-400 border-b border-slate-800 font-medium">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-ui-subtle text-ui-muted border-b border-ui-border font-medium">
               <tr>
                 <th className="px-5 py-3">Имя / Telegram</th>
                 <th className="px-5 py-3">Telegram ID</th>
@@ -104,42 +110,40 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
                 <th className="px-5 py-3 text-right">Действия</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className="divide-y divide-ui-border text-ui-secondary">
               {isLoading ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={4} className="px-5 py-8 text-center text-ui-muted">
                     Загрузка администраторов...
                   </td>
                 </tr>
               ) : admins.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-slate-500">
+                  <td colSpan={4} className="px-5 py-8 text-center text-ui-muted">
                     Администраторы пока не подключились. Отправьте клиенту ссылку-приглашение выше.
                   </td>
                 </tr>
               ) : (
                 admins.map((a) => (
-                  <tr key={a.tgId} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={a.tgId} className="hover:bg-ui-hover transition-colors">
                     <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2">
-                        <Shield className="h-3.5 w-3.5 text-indigo-400" />
-                        <span className="font-semibold text-white">
+                        <Shield className="h-3.5 w-3.5 text-ui-accent" />
+                        <span className="font-semibold text-ui-text">
                           {a.firstName || "(Без имени)"}
                         </span>
-                        {a.username && (
-                          <span className="text-slate-400">@{a.username}</span>
-                        )}
+                        {a.username && <span className="text-ui-muted">@{a.username}</span>}
                       </div>
                     </td>
-                    <td className="px-5 py-3.5 font-mono text-slate-400">{a.tgId}</td>
-                    <td className="px-5 py-3.5 text-slate-500">
+                    <td className="px-5 py-3.5 font-mono text-ui-muted">{a.tgId}</td>
+                    <td className="px-5 py-3.5 text-ui-muted">
                       {new Date(a.createdAt).toLocaleDateString("ru-RU")}
                     </td>
                     <td className="px-5 py-3.5 text-right">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-slate-400 hover:text-rose-400"
+                        className="text-ui-muted hover:text-ui-danger"
                         title="Отозвать права администратора"
                         onClick={() => {
                           if (confirm(`Отозвать роль администратора у ${a.firstName || a.tgId}?`)) {

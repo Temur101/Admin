@@ -1,16 +1,12 @@
+import { RESOURCE_LABELS } from "@lcqb/contracts";
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
 import { isActualBotAdmin } from "../shared/user-service.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import { acquireSlotLock } from "./slot-lock.js";
-import {
-  generateAvailableSlots,
-  getAlternativeSlots,
-} from "./slot-generator.js";
-import {
-  cancelBooking,
-} from "./booking-service.js";
+import { generateAvailableSlots, getAlternativeSlots } from "./slot-generator.js";
+import { cancelBooking } from "./booking-service.js";
 
 export {
   type QuickBookComposerOptions,
@@ -46,8 +42,10 @@ export function registerQuickBookHandlers(
     );
 
     const label = config.resourceLabel
-      ? (lang === "UZ" ? config.resourceLabel.uz : config.resourceLabel.ru)
-      : (lang === "UZ" ? "Mutaxassis" : "Специалиста");
+      ? lang === "UZ"
+        ? config.resourceLabel.uz
+        : config.resourceLabel.ru
+      : RESOURCE_LABELS[config.resourceType][lang === "UZ" ? "uz" : "ru"];
 
     const keyboard = new InlineKeyboard();
     keyboard.text(t(lang, "qb_any_resource"), `qb:res:${serviceId}:any`).row();
@@ -325,9 +323,8 @@ export function registerQuickBookHandlers(
       return `${i + 1}. ${timeStr} — ${customer} (${b.customerPhone})\n   Услуга: ${b.serviceName} (${b.staffId})${src}`;
     });
 
-    await ctx.reply(
-      `📅 <b>Предстоящие записи:</b>\n\n${lines.join("\n\n")}`,
-      { parse_mode: "HTML" },
-    );
+    await ctx.reply(`📅 <b>Предстоящие записи:</b>\n\n${lines.join("\n\n")}`, {
+      parse_mode: "HTML",
+    });
   });
 }

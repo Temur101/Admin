@@ -69,3 +69,7 @@ export function useAuth(): AuthContextValue {
   }
   return context;
 }
+
+export function useAuthUserId(): string | undefined {
+  return useContext(AuthContext)?.user?.id;
+}

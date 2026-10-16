@@ -13,16 +13,19 @@
     "depcruise": "depcruise --config .dependency-cruiser.cjs apps packages",
     "knip": "knip",
     "check-mocks": "tsx scripts/check-mocks.ts",
-    "verify": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm knip && pnpm check-mocks && pnpm test && pnpm build",
+    "verify": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm knip && pnpm check-mocks && pnpm test && pnpm test:admin && pnpm build",
     "dev:server": "pnpm --filter @lcqb/server dev",
     "dev:admin": "pnpm --filter @lcqb/admin dev",
-    "dev:bot": "pnpm --filter @lcqb/server dev:bot"
+    "dev:bot": "pnpm --filter @lcqb/server dev:bot",
+    "test:admin": "vitest run --config vitest.admin.config.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@testing-library/react": "^16.3.3",
     "@types/node": "^22.13.9",
     "dependency-cruiser": "^16.10.0",
     "eslint": "^9.21.0",
+    "jsdom": "^26.1.0",
     "knip": "^5.45.0",
     "prettier": "^3.5.3",
     "rimraf": "^6.0.1",

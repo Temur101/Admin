@@ -11,7 +11,7 @@ export interface LeadCatchTemplateMeta {
 export const LEADCATCH_TEMPLATES: LeadCatchTemplateMeta[] = [
   {
     id: "education_center",
-    name: "Учебный центр (Пилот А)",
+    name: "Учебный центр",
     description: "Сбор заявок на курсы (языки, программирование), определение уровня и контактов",
     botType: "LEADCATCH",
     config: {

@@ -42,8 +42,7 @@ export function ReceiptsPage() {
   });
 
   const rejectMut = useMutation({
-    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
-      rejectReceipt(id, { reason }),
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => rejectReceipt(id, { reason }),
     onSuccess: () => {
       invalidate();
       setRejectItem(null);
@@ -67,9 +66,12 @@ export function ReceiptsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-white tracking-tight">Модерация платежных чеков</h1>
-        <p className="text-xs text-slate-400 mt-1">
-          Проверка чеков оплаты от арендаторов, подтверждение или отказ с автоматическим уведомлением в Telegram
+        <h1 className="text-2xl font-bold text-ui-text tracking-tight">
+          Модерация платежных чеков
+        </h1>
+        <p className="text-sm text-ui-muted mt-1">
+          Проверка чеков оплаты от клиентов, подтверждение или отказ с автоматическим уведомлением в
+          Telegram
         </p>
       </div>
 
@@ -85,24 +87,28 @@ export function ReceiptsPage() {
           <button
             key={st}
             onClick={() => setActiveStatus(st)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all cursor-pointer ${
+            className={`px-3.5 py-1.5 rounded-xl text-sm font-medium transition-all cursor-pointer ${
               activeStatus === st
-                ? "bg-indigo-600 text-white shadow-sm"
-                : "bg-slate-900 border border-slate-800 text-slate-400 hover:text-white"
+                ? "bg-ui-accent text-ui-on-accent shadow-sm"
+                : "bg-ui-surface border border-ui-border text-ui-muted hover:text-ui-text"
             }`}
           >
-            {st === "PENDING" ? "Ожидают проверки" : st === "APPROVED" ? "Одобренные" : "Отклоненные"}
+            {st === "PENDING"
+              ? "Ожидают проверки"
+              : st === "APPROVED"
+                ? "Одобренные"
+                : "Отклоненные"}
           </button>
         ))}
       </div>
 
       {/* Список чеков */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+      <div className="bg-ui-surface border border-ui-border rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-950/40 text-slate-400 border-b border-slate-800 font-medium">
+          <table className="w-full text-left text-sm">
+            <thead className="bg-ui-subtle text-ui-muted border-b border-ui-border font-medium">
               <tr>
-                <th className="px-5 py-3">Арендатор / Бот</th>
+                <th className="px-5 py-3">Клиент / Бот</th>
                 <th className="px-5 py-3">Тип чека</th>
                 <th className="px-5 py-3">Тариф / Срок</th>
                 <th className="px-5 py-3">Сумма</th>
@@ -111,25 +117,25 @@ export function ReceiptsPage() {
                 <th className="px-5 py-3 text-right">Модерация</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-800/60 text-slate-300">
+            <tbody className="divide-y divide-ui-border text-ui-secondary">
               {isLoading ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={7} className="px-5 py-10 text-center text-ui-muted">
                     Загрузка чеков...
                   </td>
                 </tr>
               ) : receipts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                  <td colSpan={7} className="px-5 py-10 text-center text-ui-muted">
                     Чеки с выбранным статусом отсутствуют.
                   </td>
                 </tr>
               ) : (
                 receipts.map((r) => (
-                  <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
+                  <tr key={r.id} className="hover:bg-ui-hover transition-colors">
                     <td className="px-5 py-3.5">
-                      <p className="font-semibold text-white">{r.tenantName}</p>
-                      <p className="text-[11px] text-slate-400">
+                      <p className="font-semibold text-ui-text">{r.tenantName}</p>
+                      <p className="text-sm text-ui-muted">
                         {r.botUsername ? `@${r.botUsername}` : r.botId.slice(0, 8)} ({r.botType})
                       </p>
                     </td>
@@ -137,28 +143,28 @@ export function ReceiptsPage() {
                       {r.kind === "PHOTO" ? (
                         <button
                           onClick={() => setSelectedImage(getReceiptImageUrl(r.id))}
-                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 transition-colors cursor-pointer"
+                          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-ui-info-soft text-ui-info border border-ui-info-border hover:bg-ui-info-soft transition-colors cursor-pointer"
                         >
                           <Image className="h-3.5 w-3.5" />
                           <span>Скриншот</span>
                         </button>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-slate-400 font-mono">
+                        <span className="inline-flex items-center gap-1 text-ui-muted font-mono">
                           <FileText className="h-3.5 w-3.5" />
                           <span>Текст</span>
                         </span>
                       )}
                     </td>
-                    <td className="px-5 py-3.5 font-medium text-slate-300">
+                    <td className="px-5 py-3.5 font-medium text-ui-secondary">
                       {r.months} {r.months === 1 ? "месяц" : "месяцев"}
                     </td>
-                    <td className="px-5 py-3.5 font-semibold text-white font-mono">
+                    <td className="px-5 py-3.5 font-semibold text-ui-text font-mono">
                       {r.amount.toLocaleString("ru-RU")} UZS
                     </td>
                     <td className="px-5 py-3.5">
                       <StatusBadge status={r.status} />
                     </td>
-                    <td className="px-5 py-3.5 text-slate-500">
+                    <td className="px-5 py-3.5 text-ui-muted">
                       {new Date(r.createdAt).toLocaleString("ru-RU")}
                     </td>
                     <td className="px-5 py-3.5 text-right">
@@ -167,7 +173,7 @@ export function ReceiptsPage() {
                           <Button
                             variant="primary"
                             size="sm"
-                            className="bg-emerald-600 hover:bg-emerald-500 border-emerald-500/30"
+                            className="bg-ui-success hover:bg-ui-success border-ui-success-border"
                             onClick={() => handleApprove(r)}
                             isLoading={approveMut.isPending}
                             icon={<Check className="h-3.5 w-3.5" />}
@@ -184,7 +190,7 @@ export function ReceiptsPage() {
                           </Button>
                         </div>
                       ) : (
-                        <span className="text-[11px] text-slate-500">Обработан</span>
+                        <span className="text-sm text-ui-muted">Обработан</span>
                       )}
                     </td>
                   </tr>
@@ -203,7 +209,7 @@ export function ReceiptsPage() {
         maxWidth="2xl"
       >
         {selectedImage && (
-          <div className="flex justify-center bg-slate-950 p-4 rounded-xl">
+          <div className="flex justify-center bg-ui-subtle p-4 rounded-xl">
             <img
               src={selectedImage}
               alt="Чек оплаты"

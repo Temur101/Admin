@@ -1,130 +1,112 @@
-import React, { useState } from "react";
-import { RotateCcw, Bot as BotIcon, CheckCircle2 } from "lucide-react";
+import { useState } from "react";
 import type { QuizNode } from "@lcqb/contracts";
-
-interface QuizFlowPreviewProps {
+import { Button } from "../../common/Button.js";
+export function QuizFlowPreview({
+  nodes,
+  startNodeId,
+}: {
   nodes: QuizNode[];
   startNodeId: string;
-}
-
-export function QuizFlowPreview({ nodes, startNodeId }: QuizFlowPreviewProps) {
-  const [activeNodeId, setActiveNodeId] = useState<string | null>(startNodeId);
-  const [isFinished, setIsFinished] = useState(false);
+}) {
+  const [activeId, setActiveId] = useState(startNodeId);
+  const [path, setPath] = useState<string[]>([startNodeId]);
+  const [finished, setFinished] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<"ru" | "uz">("ru");
-
-  const currentNode = nodes.find((n) => n.id === (activeNodeId ?? startNodeId));
-
-  const handleOptionClick = (nextNodeId?: string | null) => {
-    if (nextNodeId && nodes.some((n) => n.id === nextNodeId)) {
-      setActiveNodeId(nextNodeId);
-      setIsFinished(false);
-    } else {
-      setIsFinished(true);
+  const current = nodes.find((node) => node.id === activeId);
+  const reset = () => {
+    setActiveId(startNodeId);
+    setPath([startNodeId]);
+    setFinished(false);
+    setError(null);
+  };
+  const answer = (nextId?: string | null) => {
+    if (!nextId) {
+      setFinished(true);
+      return;
     }
+    if (!nodes.some((node) => node.id === nextId)) {
+      setError("Этот ответ ведёт на удалённый вопрос. Исправьте переход.");
+      return;
+    }
+    if (path.includes(nextId)) {
+      setError("Найден круговой переход. Клиент уже отвечал на этот вопрос — исправьте переход.");
+      return;
+    }
+    setPath([...path, nextId]);
+    setActiveId(nextId);
   };
-
-  const handleReset = () => {
-    setActiveNodeId(startNodeId);
-    setIsFinished(false);
-  };
-
   return (
-    <div className="bg-slate-950/80 border border-slate-800 rounded-2xl p-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="h-6 w-6 rounded-full bg-sky-500/20 text-sky-400 flex items-center justify-center">
-            <BotIcon className="h-3.5 w-3.5" />
-          </div>
-          <div>
-            <p className="text-xs font-semibold text-white">Превью диалога Telegram</p>
-            <p className="text-[10px] text-slate-500">Симуляция взаимодействия с пользователем</p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <div className="inline-flex rounded-lg bg-slate-900 border border-slate-800 p-0.5 text-[11px]">
-            <button
-              type="button"
-              onClick={() => setLang("ru")}
-              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                lang === "ru" ? "bg-indigo-600 text-white font-medium" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              RU
-            </button>
-            <button
-              type="button"
-              onClick={() => setLang("uz")}
-              className={`px-2 py-0.5 rounded-md transition-colors cursor-pointer ${
-                lang === "uz" ? "bg-indigo-600 text-white font-medium" : "text-slate-400 hover:text-white"
-              }`}
-            >
-              UZ
-            </button>
-          </div>
-
+    <section
+      aria-label="Предпросмотр диалога"
+      className="rounded-2xl border border-ui-border bg-ui-subtle p-4 space-y-4"
+    >
+      <h4 className="font-semibold">Предпросмотр диалога</h4>
+      <p className="text-sm text-ui-muted">
+        Нажимайте ответы, как клиент. Контакт не отправляется, заявка не создаётся. После изменения
+        вопросов предпросмотр начинается заново.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        {(["ru", "uz"] as const).map((value) => (
           <button
+            key={value}
             type="button"
-            onClick={handleReset}
-            title="Перезапустить превью"
-            className="p-1.5 rounded-lg border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-900 transition-colors cursor-pointer"
+            aria-pressed={lang === value}
+            onClick={() => setLang(value)}
+            className={`rounded-lg border px-3 py-2 text-sm ${lang === value ? "bg-ui-accent text-ui-on-accent border-ui-accent" : "bg-ui-surface border-ui-border"}`}
           >
-            <RotateCcw className="h-3.5 w-3.5" />
+            {value.toUpperCase()}
           </button>
-        </div>
+        ))}
+        <Button size="sm" variant="outline" onClick={reset}>
+          Начать заново
+        </Button>
       </div>
-
-      {/* Окно диалога Telegram */}
-      <div className="bg-slate-900/90 rounded-xl p-3 border border-slate-800/80 space-y-3 min-h-[140px] flex flex-col justify-center">
-        {isFinished ? (
-          <div className="text-center py-4 space-y-2">
-            <div className="h-10 w-10 mx-auto rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-            <p className="text-xs font-semibold text-emerald-400">
-              {lang === "ru" ? "Опрос успешно завершен!" : "So'rovnoma yakunlandi!"}
+      <div
+        className="p-4 rounded-xl border border-ui-border bg-ui-surface space-y-3"
+        aria-live="polite"
+      >
+        {error ? (
+          <p className="text-sm text-ui-danger">{error}</p>
+        ) : finished ? (
+          <>
+            <p className="font-medium text-ui-success">
+              {lang === "ru" ? "Следующий шаг — контакт клиента" : "Keyingi qadam — mijoz telefoni"}
             </p>
-            <p className="text-[11px] text-slate-400 max-w-[260px] mx-auto">
+            <p className="text-sm text-ui-secondary">
               {lang === "ru"
-                ? "Бот запросит контакт пользователя (номер телефона) и создаст заявку в CRM."
-                : "Bot foydalanuvchining telefon raqamini so'raydi va tizimda arizani yaratadi."}
+                ? "Бот попросит поделиться номером телефона и сохранит заявку."
+                : "Bot telefon raqamini so‘raydi va arizani saqlaydi."}
             </p>
-            <button
-              type="button"
-              onClick={handleReset}
-              className="mt-2 text-xs text-indigo-400 hover:text-indigo-300 font-medium cursor-pointer"
+            <p
+              className={`text-sm ${path.length >= 3 && path.length <= 5 ? "text-ui-muted" : "text-ui-warning"}`}
             >
-              Пройти снова
-            </button>
-          </div>
-        ) : currentNode ? (
-          <div className="space-y-2.5 max-w-[340px]">
-            <div className="p-3 bg-slate-800/90 rounded-2xl rounded-tl-xs text-xs text-slate-100 shadow-sm border border-slate-700/50">
-              {currentNode.title[lang] || "(Текст вопроса отсутствует)"}
-            </div>
-
-            <div className="space-y-1.5">
-              {currentNode.options.map((opt) => (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => handleOptionClick(opt.nextNodeId)}
-                  className="w-full text-left px-3 py-2 bg-slate-800/60 hover:bg-indigo-600/30 hover:border-indigo-500/50 border border-slate-700/60 rounded-xl text-xs text-slate-200 transition-colors cursor-pointer flex items-center justify-between"
-                >
-                  <span className="truncate">{opt.text[lang] || opt.id}</span>
-                  <span className="text-[10px] text-slate-500 font-mono ml-2 shrink-0">
-                    {opt.nextNodeId ? "→" : "🏁"}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
+              Пройдено вопросов: {path.length}. Для запуска нужно 3–5.
+            </p>
+          </>
+        ) : current ? (
+          <>
+            <p className="text-xs text-ui-muted">Вопрос {path.length} в этом диалоге</p>
+            <p className="rounded-xl bg-ui-subtle p-3 break-words">
+              {current.title[lang] || "Заполните текст вопроса"}
+            </p>
+            {current.options.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => answer(option.nextNodeId)}
+                className="block w-full text-left rounded-xl border border-ui-border bg-ui-subtle hover:bg-ui-accent-soft p-3 text-sm break-words"
+              >
+                {option.text[lang] || "Заполните ответ"}
+              </button>
+            ))}
+          </>
         ) : (
-          <p className="text-xs text-center text-slate-500">
-            Вопрос не найден. Выберите стартовый узел.
+          <p className="text-sm text-ui-muted">
+            Добавьте вопросы и выберите первый вопрос кнопкой «Сделать стартом».
           </p>
         )}
       </div>
-    </div>
+    </section>
   );
 }

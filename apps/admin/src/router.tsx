@@ -13,18 +13,18 @@ import { Loader2, AlertCircle } from "lucide-react";
 function RootErrorBoundary() {
   const error = useRouteError() as Error | undefined;
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
-      <div className="bg-slate-900 border border-slate-800 rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-4">
-        <div className="inline-flex h-12 w-12 rounded-2xl bg-rose-500/10 text-rose-400 items-center justify-center mx-auto">
+    <div className="min-h-screen bg-ui-subtle flex flex-col items-center justify-center p-6 text-center">
+      <div className="bg-ui-surface border border-ui-border rounded-3xl p-8 max-w-md w-full shadow-2xl space-y-4">
+        <div className="inline-flex h-12 w-12 rounded-2xl bg-ui-danger-soft text-ui-danger items-center justify-center mx-auto">
           <AlertCircle className="h-6 w-6" />
         </div>
-        <h2 className="text-lg font-bold text-white">Ошибка отображения</h2>
-        <p className="text-xs text-slate-400">
+        <h2 className="text-lg font-bold text-ui-text">Ошибка отображения</h2>
+        <p className="text-sm text-ui-muted">
           {error?.message || "Произошла непредвиденная ошибка в интерфейсе."}
         </p>
         <button
           onClick={() => (window.location.href = "/dashboard")}
-          className="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-xl text-xs transition-colors cursor-pointer"
+          className="w-full py-2.5 px-4 bg-ui-accent hover:bg-ui-accent-hover text-ui-on-accent font-medium rounded-xl text-sm transition-colors cursor-pointer"
         >
           Вернуться на дашборд
         </button>
@@ -38,8 +38,8 @@ function ProtectedRoute() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      <div className="min-h-screen bg-ui-page flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-ui-accent" />
       </div>
     );
   }
@@ -56,8 +56,8 @@ function PublicRoute() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+      <div className="min-h-screen bg-ui-page flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-ui-accent" />
       </div>
     );
   }

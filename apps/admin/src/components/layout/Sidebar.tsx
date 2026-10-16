@@ -1,16 +1,18 @@
+import { useEffect } from "react";
 import { NavLink } from "react-router-dom";
-import {
-  LayoutDashboard,
-  Users,
-  Bot,
-  Receipt,
-  Settings,
-  Sparkles,
-} from "lucide-react";
+import { LayoutDashboard, Users, Bot, Receipt, Settings, Sparkles, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { getReceipts } from "../../api/receipts.js";
 
-export function Sidebar() {
+export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [isOpen, onClose]);
   const { data: pendingReceipts } = useQuery({
     queryKey: ["pending-receipts-count"],
     queryFn: () => getReceipts("PENDING"),
@@ -22,12 +24,12 @@ export function Sidebar() {
   const links = [
     {
       to: "/dashboard",
-      label: "Дашборд",
+      label: "Обзор",
       icon: LayoutDashboard,
     },
     {
       to: "/tenants",
-      label: "Арендаторы",
+      label: "Клиенты",
       icon: Users,
     },
     {
@@ -37,71 +39,77 @@ export function Sidebar() {
     },
     {
       to: "/receipts",
-      label: "Чеки",
+      label: "Оплаты",
       icon: Receipt,
       badge: pendingCount > 0 ? pendingCount : null,
     },
     {
       to: "/settings",
-      label: "Настройки",
+      label: "Настройки платформы",
       icon: Settings,
     },
   ];
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col shrink-0 min-h-screen">
-      <div className="h-16 flex items-center gap-3 px-6 border-b border-slate-800">
-        <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-md shadow-indigo-500/20">
-          <Sparkles className="h-5 w-5" />
-        </div>
-        <div>
-          <h1 className="font-bold text-sm tracking-tight text-white">LCQB Platform</h1>
-          <p className="text-[10px] font-medium text-slate-400">Telegram SaaS Engine</p>
-        </div>
-      </div>
-
-      <nav className="flex-1 p-3 space-y-1">
-        {links.map((link) => {
-          const Icon = link.icon;
-          return (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              className={({ isActive }) =>
-                `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all ${
-                  isActive
-                    ? "bg-indigo-600 text-white shadow-sm shadow-indigo-600/30"
-                    : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
-                }`
-              }
-            >
-              <div className="flex items-center gap-3">
-                <Icon className="h-4 w-4 shrink-0" />
-                <span>{link.label}</span>
-              </div>
-              {link.badge && (
-                <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-rose-500 text-white rounded-full">
-                  {link.badge}
-                </span>
-              )}
-            </NavLink>
-          );
-        })}
-      </nav>
-
-      <div className="p-4 border-t border-slate-800/80">
-        <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800/60 text-center">
-          <p className="text-[11px] font-medium text-slate-300">Пилотные шаблоны</p>
-          <div className="flex justify-center gap-2 mt-2">
-            <span className="px-2 py-0.5 rounded-md bg-sky-500/10 text-sky-400 border border-sky-500/20 text-[10px]">
-              Пилот A (Курсы)
-            </span>
-            <span className="px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-400 border border-purple-500/20 text-[10px]">
-              Пилот B (Барбер)
-            </span>
+    <>
+      {isOpen && (
+        <button
+          aria-label="Закрыть навигацию"
+          onClick={onClose}
+          className="fixed inset-0 z-30 bg-ui-overlay lg:hidden"
+        />
+      )}
+      <aside
+        aria-label="Основная навигация"
+        className={`fixed inset-y-0 left-0 z-40 w-64 bg-ui-surface border-r border-ui-border flex flex-col shrink-0 min-h-screen transition-transform lg:static lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
+      >
+        <div className="h-16 flex items-center gap-3 px-6 border-b border-ui-border">
+          <div className="h-9 w-9 rounded-xl bg-ui-accent flex items-center justify-center text-ui-on-accent shadow-sm">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="font-bold text-sm tracking-tight text-ui-text">LCQB Platform</p>
+            <p className="text-xs font-medium text-ui-muted">Telegram-боты</p>
           </div>
         </div>
-      </div>
-    </aside>
+
+        <button
+          aria-label="Закрыть меню"
+          onClick={onClose}
+          className="absolute right-2 top-4 p-2 text-ui-muted lg:hidden"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        <nav className="flex-1 p-3 space-y-1">
+          {links.map((link) => {
+            const Icon = link.icon;
+            return (
+              <NavLink
+                key={link.to}
+                to={link.to}
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-all border ${
+                    isActive
+                      ? "bg-ui-accent-soft text-ui-accent border-ui-accent-border"
+                      : "border-transparent text-ui-secondary hover:text-ui-text hover:bg-ui-hover"
+                  }`
+                }
+              >
+                <div className="flex items-center gap-3">
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span>{link.label}</span>
+                </div>
+                {link.badge && (
+                  <span className="px-1.5 py-0.5 text-xs font-semibold bg-ui-danger text-ui-on-accent rounded-full">
+                    {link.badge}
+                  </span>
+                )}
+              </NavLink>
+            );
+          })}
+        </nav>
+      </aside>
+    </>
   );
 }

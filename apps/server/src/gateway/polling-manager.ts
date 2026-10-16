@@ -30,6 +30,10 @@ export class PollingManager {
     return this.activePollers.has(botId);
   }
 
+  isConnected(botId: string): boolean {
+    return this.activePollers.get(botId)?.isRunning() ?? false;
+  }
+
   get runningCount(): number {
     return this.activePollers.size;
   }
@@ -40,10 +44,7 @@ export class PollingManager {
       include: { subscription: true },
     });
 
-    this.logger.info(
-      { count: activeBots.length },
-      "Initializing long polling for active bots",
-    );
+    this.logger.info({ count: activeBots.length }, "Initializing long polling for active bots");
 
     for (const botRecord of activeBots) {
       try {
@@ -91,10 +92,7 @@ export class PollingManager {
       this.logger.info({ botId }, "Stopped long polling for bot");
       return true;
     } catch (err) {
-      this.logger.warn(
-        { botId, err: (err as Error).message },
-        "Error while stopping bot polling",
-      );
+      this.logger.warn({ botId, err: (err as Error).message }, "Error while stopping bot polling");
       return false;
     }
   }
@@ -121,8 +119,7 @@ export class PollingManager {
       adminInviteCode: botRecord.adminInviteCode,
       settings: (botRecord.settings ?? {}) as Record<string, unknown>,
       subscriptionStatus: botRecord.subscription?.status ?? "TRIAL",
-      trialEndsAt:
-        botRecord.subscription?.trialEndsAt.toISOString() ?? new Date().toISOString(),
+      trialEndsAt: botRecord.subscription?.trialEndsAt.toISOString() ?? new Date().toISOString(),
       paidUntil: botRecord.subscription?.paidUntil?.toISOString() ?? null,
     };
 

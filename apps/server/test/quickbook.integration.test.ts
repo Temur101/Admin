@@ -1,3 +1,4 @@
+import { QUICKBOOK_TEST_CONFIG } from "./helpers/quickbook-fixture.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   connectRedis,
@@ -57,6 +58,7 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       data: {
         tenantId: tenant.id,
         botType: "QUICKBOOK",
+        settings: QUICKBOOK_TEST_CONFIG,
         botTokenEnc: encryptSecret(BOT_TOKEN, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(BOT_TOKEN),
         webhookSecret: "secret_qb_e2e",
@@ -92,7 +94,7 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       webhookSecret: bot.webhookSecret,
       botUsername: "qb_test_bot",
       adminInviteCode: bot.adminInviteCode,
-      settings: {},
+      settings: QUICKBOOK_TEST_CONFIG,
       subscriptionStatus: "TRIAL",
       trialEndsAt: bot.subscription?.trialEndsAt.toISOString() ?? new Date().toISOString(),
       paidUntil: null,
@@ -296,7 +298,9 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
     expect(adminText).toContain("Оплатите подписку");
 
     // Admin message has payment button
-    const replyMarkup = adminMsg?.payload.reply_markup as { inline_keyboard?: Array<Array<{ text: string }>> };
+    const replyMarkup = adminMsg?.payload.reply_markup as {
+      inline_keyboard?: Array<Array<{ text: string }>>;
+    };
     expect(replyMarkup.inline_keyboard?.[0]?.[0]?.text).toContain("Оплатить");
   });
 

@@ -1,17 +1,18 @@
+import { registerBotSetupRoutes } from "./bots-setup.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { randomBytes } from "node:crypto";
 import { Bot } from "grammy";
 import type { PrismaClient } from "@prisma/client";
 import { CreateBotRequestSchema } from "@lcqb/contracts";
 import { authenticateAdmin } from "./auth.js";
-import { encryptSecret, sha256Hex } from "../core/crypto.js";
+import { decryptSecret, encryptSecret, sha256Hex } from "../core/crypto.js";
 import { env } from "../core/env.js";
 import { notifyPlatformOwner } from "../core/platform-notifier.js";
 import type { TenantResolver } from "../gateway/tenant-resolver.js";
 import type { Logger } from "../core/logger.js";
 import type { TelegramTransport } from "../adapters/telegram/transport.js";
 import type { PollingManager } from "../gateway/polling-manager.js";
-import { DEFAULT_LEADCATCH_QUIZ } from "../bots/leadcatch/default-quiz.js";
+import { InitialBotSettingsError, resolveInitialBotSettings } from "./initial-bot-settings.js";
 import { registerBotsOpsRoutes } from "./bots-ops.js";
 import { registerBotsLifecycleRoutes } from "./bots-lifecycle.js";
 
@@ -28,7 +29,7 @@ export function registerBotsRoutes(
   pollingManager?: PollingManager,
 ): void {
   function getBotInstance(token: string, botId = "api-bot"): Bot {
-    const b = new Bot(token);
+    const b = new Bot(token, { client: { timeoutSeconds: 5 } });
     const transformer = transport?.transformerFor(botId);
     if (transformer) b.api.config.use(transformer);
     return b;
@@ -112,6 +113,7 @@ export function registerBotsRoutes(
           id: bot.id,
           tenantId: bot.tenantId,
           tenant: bot.tenant,
+          tenantName: bot.tenant.clientName,
           botType: bot.botType,
           botUsername: bot.botUsername,
           isActive: bot.isActive,
@@ -152,10 +154,20 @@ export function registerBotsRoutes(
     async (req: FastifyRequest, reply: FastifyReply) => {
       const parsed = CreateBotRequestSchema.safeParse(req.body);
       if (!parsed.success) {
-        return reply.code(400).send({ ok: false, error: "Invalid bot data", issues: parsed.error.issues });
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Invalid bot data", issues: parsed.error.issues });
       }
 
-      const { tenantId, botType, botToken } = parsed.data;
+      const { tenantId, botType, botToken, startPaused } = parsed.data;
+      let initialSettings;
+      try {
+        initialSettings = resolveInitialBotSettings(parsed.data);
+      } catch (error) {
+        if (error instanceof InitialBotSettingsError)
+          return reply.code(error.statusCode).send({ ok: false, error: error.message });
+        throw error;
+      }
 
       const tenant = await prisma.tenant.findUnique({ where: { id: tenantId } });
       if (!tenant) {
@@ -167,11 +179,10 @@ export function registerBotsRoutes(
         const tgBot = getBotInstance(botToken, "token-verify");
         const me = await tgBot.api.getMe();
         botUsername = me.username ?? null;
-      } catch (err) {
+      } catch {
         return reply.code(400).send({
           ok: false,
           error: "Invalid Telegram bot token or Telegram unreachable",
-          details: err instanceof Error ? err.message : String(err),
         });
       }
 
@@ -184,22 +195,6 @@ export function registerBotsRoutes(
       const botTokenEnc = encryptSecret(botToken, env.TOKEN_ENCRYPTION_KEY);
       const webhookSecret = randomBytes(32).toString("hex");
       const adminInviteCode = randomBytes(16).toString("hex");
-
-      const defaultSettings =
-        botType === "QUICKBOOK"
-          ? {
-              resourceType: "STAFF",
-              services: [
-                { id: "haircut", name: { ru: "Стрижка мужская", uz: "Erkaklar soch turmagi" }, durationMin: 45, priceUzs: 80000 },
-              ],
-              resources: [
-                { id: "master_1", name: { ru: "Азиз (Топ-мастер)", uz: "Aziz (Top usta)" }, workDays: [1, 2, 3, 4, 5, 6], workHours: { start: "10:00", end: "20:00" } },
-              ],
-              slotIntervalMin: 30,
-              bookingHorizonDays: 14,
-              timezone: "Asia/Tashkent",
-            }
-          : DEFAULT_LEADCATCH_QUIZ;
 
       const trialDays = env.TRIAL_DAYS_DEFAULT;
       const trialEndsAt = new Date(Date.now() + trialDays * 86400 * 1000);
@@ -214,8 +209,8 @@ export function registerBotsRoutes(
             webhookSecret,
             botUsername,
             adminInviteCode,
-            settings: defaultSettings,
-            isActive: true,
+            settings: initialSettings,
+            isActive: !startPaused,
           },
         });
 
@@ -231,11 +226,11 @@ export function registerBotsRoutes(
       });
 
       let webhookWarning: string | null = null;
-      if (env.BOT_MODE === "polling") {
+      if (bot.isActive && env.BOT_MODE === "polling") {
         if (pollingManager) {
           await pollingManager.start(bot.id);
         }
-      } else {
+      } else if (bot.isActive) {
         if (!env.PUBLIC_BASE_URL) {
           webhookWarning = "PUBLIC_BASE_URL is empty; Telegram webhook registration skipped";
           logger?.warn({ botId: bot.id }, webhookWarning);
@@ -248,7 +243,10 @@ export function registerBotsRoutes(
               drop_pending_updates: false,
             });
           } catch (err) {
-            logger?.error({ err, botId: bot.id }, "Failed to set webhook in Telegram during bot creation");
+            logger?.error(
+              { err, botId: bot.id },
+              "Failed to set webhook in Telegram during bot creation",
+            );
             webhookWarning = err instanceof Error ? err.message : String(err);
           }
         }
@@ -274,7 +272,9 @@ export function registerBotsRoutes(
           botUsername: bot.botUsername,
           isActive: bot.isActive,
           adminInviteCode: bot.adminInviteCode,
-          inviteLink: botUsername ? `https://t.me/${botUsername}?start=adm_${adminInviteCode}` : null,
+          inviteLink: botUsername
+            ? `https://t.me/${botUsername}?start=adm_${adminInviteCode}`
+            : null,
           trialEndsAt: trialEndsAt.toISOString(),
           ...(webhookWarning ? { warning: webhookWarning } : {}),
         },
@@ -286,5 +286,13 @@ export function registerBotsRoutes(
   registerBotsLifecycleRoutes(app, prisma, tenantResolver, logger, getBotInstance, pollingManager);
 
   // Register operations and diagnostic routes (admins, extend, unblock, health, webhooks)
-  registerBotsOpsRoutes(app, prisma, tenantResolver, getBotInstance);
+  registerBotsOpsRoutes(app, prisma, tenantResolver, getBotInstance, pollingManager);
+  registerBotSetupRoutes(app, prisma, {
+    mode: env.BOT_MODE,
+    publicBaseUrl: env.PUBLIC_BASE_URL,
+    pollingManager,
+    getTelegramBot: (bot) =>
+      getBotInstance(decryptSecret(bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY), bot.id),
+    invalidate: (bot) => tenantResolver?.invalidate(bot.botTokenHash, bot.id),
+  });
 }

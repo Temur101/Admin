@@ -1,7 +1,7 @@
 import type { Lang, Prisma, PrismaClient } from "@prisma/client";
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { QuizConfig, QuizNode } from "@lcqb/contracts";
-import { QuizConfigSchema } from "@lcqb/contracts";
+import { QuizConfigSchema, createEmptyQuizConfig } from "@lcqb/contracts";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
@@ -28,6 +28,14 @@ export function getBotQuizConfig(settings: Record<string, unknown> | undefined):
     return DEFAULT_LEADCATCH_QUIZ;
   }
   const raw = "quiz" in settings ? settings.quiz : settings;
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "nodes" in raw &&
+    Array.isArray(raw.nodes) &&
+    raw.nodes.length === 0
+  )
+    return createEmptyQuizConfig();
   const parsed = QuizConfigSchema.safeParse(raw);
   if (parsed.success && validateQuizDag(parsed.data).valid) {
     return parsed.data;
@@ -62,7 +70,8 @@ export async function startLeadCatchQuiz(
   const startNode = config.nodes.find((n) => n.id === config.startNodeId);
 
   if (!startNode) {
-    await sendReply(ctx, t(lang, "welcome_client"));
+    delete ctx.session.quiz;
+    await sendReply(ctx, t(lang, "bot_not_configured"));
     return;
   }
 
@@ -193,7 +202,10 @@ export async function handleLeadCatchContact(
       });
     }
   } catch (err) {
-    logger.error({ err: (err as Error).message, botId: ctx.botMeta.id }, "Failed to save lead to database");
+    logger.error(
+      { err: (err as Error).message, botId: ctx.botMeta.id },
+      "Failed to save lead to database",
+    );
   }
 
   // 2. Format answers for admin notification
@@ -220,7 +232,10 @@ export async function handleLeadCatchContact(
       },
     );
   } catch (err) {
-    logger.error({ err: (err as Error).message, botId: ctx.botMeta.id }, "Failed to dispatch admin lead notification");
+    logger.error(
+      { err: (err as Error).message, botId: ctx.botMeta.id },
+      "Failed to dispatch admin lead notification",
+    );
   }
 
   // 4. Clear quiz session state

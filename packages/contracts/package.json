@@ -9,6 +9,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./validation": {
+      "import": "./dist/config-validation.js",
+      "types": "./dist/config-validation.d.ts"
     }
   },
   "scripts": {

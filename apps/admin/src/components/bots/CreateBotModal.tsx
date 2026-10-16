@@ -1,204 +1,221 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, Copy, Check } from "lucide-react";
-import { createBot, type CreateBotResult } from "../../api/bots.js";
-import type { TenantItem } from "../../api/tenants.js";
+import { useNavigate } from "react-router-dom";
+import { CreateTenantRequestSchema } from "@lcqb/contracts";
+import { createBot } from "../../api/bots.js";
+import { createTenant, type TenantItem } from "../../api/tenants.js";
+import { useAuthUserId } from "../../context/AuthContext.js";
+import { useCreationDraft } from "../../hooks/useCreationDraft.js";
+import { newCreationDraft } from "../../utils/onboarding-draft.js";
+import { BotSetupSelection } from "./BotSetupSelection.js";
+import { SetupSteps } from "./onboarding/SetupSteps.js";
+import { ClientStep } from "./onboarding/ClientStep.js";
+import { TaskStep } from "./onboarding/TaskStep.js";
+import { ApiErrorAlert } from "../common/ApiErrorAlert.js";
 import { Button } from "../common/Button.js";
 import { Modal } from "../common/Modal.js";
 import { Input } from "../common/Input.js";
 import { Alert } from "../common/Alert.js";
 
-interface CreateBotModalProps {
+interface Props {
   isOpen: boolean;
   onClose: () => void;
   tenants: TenantItem[];
+  draftScope?: string;
 }
-
-export function CreateBotModal({ isOpen, onClose, tenants }: CreateBotModalProps) {
+export function CreateBotModal({ isOpen, onClose, tenants, draftScope }: Props) {
+  const actorId = useAuthUserId();
+  return (
+    <CreationWizard
+      key={draftScope ?? actorId ?? "memory"}
+      isOpen={isOpen}
+      onClose={onClose}
+      tenants={tenants}
+      draftScope={draftScope ?? actorId}
+    />
+  );
+}
+function CreationWizard({ isOpen, onClose, tenants, draftScope }: Props) {
+  const { draft, update, storageFailed } = useCreationDraft(draftScope);
   const queryClient = useQueryClient();
-  const [tenantId, setTenantId] = useState("");
-  const [botType, setBotType] = useState<"LEADCATCH" | "QUICKBOOK">("LEADCATCH");
+  const navigate = useNavigate();
   const [botToken, setBotToken] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
-  const [createdResult, setCreatedResult] = useState<CreateBotResult | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const createMutation = useMutation({
-    mutationFn: createBot,
-    onSuccess: (data) => {
-      void queryClient.invalidateQueries({ queryKey: ["bots"] });
-      setCreatedResult(data);
-      setBotToken("");
-      setFormError(null);
-    },
-    onError: (err: Error) => {
-      setFormError(err.message || "Ошибка подключения Telegram-бота");
+  const [newTenant, setNewTenant] = useState<TenantItem | null>(null);
+  const tenantMutation = useMutation({
+    mutationFn: createTenant,
+    onSuccess: (tenant) => {
+      setNewTenant({ ...tenant, status: "ACTIVE", botsCount: 0 });
+      update({ tenantId: tenant.id, clientMode: "existing", step: 1 });
+      void queryClient.invalidateQueries({ queryKey: ["tenants"] });
     },
   });
-
-  const handleCreate = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!tenantId || !botToken.trim()) {
-      setFormError("Выберите арендатора и укажите токен Telegram-бота");
-      return;
+  const botMutation = useMutation({
+    mutationFn: createBot,
+    onSuccess: (bot) => {
+      update({ createdBotId: bot.id });
+      setBotToken("");
+      void queryClient.invalidateQueries({ queryKey: ["bots"] });
+      void queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      onClose();
+      navigate(`/bots/${bot.id}?setup=1`);
+    },
+  });
+  const pending = tenantMutation.isPending || botMutation.isPending;
+  const close = () => {
+    if (!pending) {
+      setBotToken("");
+      setFormError(null);
+      onClose();
     }
-    createMutation.mutate({ tenantId, botType, botToken: botToken.trim() });
   };
-
-  const handleCopyLink = (link: string) => {
-    void navigator.clipboard.writeText(link);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleClose = () => {
-    setCreatedResult(null);
+  const next = () => {
     setFormError(null);
-    onClose();
+    if (draft.step === 0) {
+      if (draft.clientMode === "new") {
+        const parsed = CreateTenantRequestSchema.safeParse({
+          clientName: draft.clientName.trim(),
+          contactPhone: draft.contactPhone.trim(),
+        });
+        if (!parsed.success) {
+          setFormError("Укажите имя клиента и корректный телефон (минимум 5 символов).");
+          return;
+        }
+        tenantMutation.mutate(parsed.data);
+      } else {
+        const selected = [...tenants, ...(newTenant ? [newTenant] : [])].find(
+          (tenant) => tenant.id === draft.tenantId,
+        );
+        if (!selected || selected.status === "SUSPENDED" || selected.isSuspended) {
+          setFormError("Выберите действующего клиента или создайте нового.");
+          return;
+        }
+        update({ step: 1 });
+      }
+    } else if (draft.step === 1) update({ step: 2 });
+    else {
+      if (botToken.trim().length < 10) {
+        setFormError("Введите токен из @BotFather.");
+        return;
+      }
+      botMutation.mutate({
+        tenantId: draft.tenantId,
+        botType: draft.botType,
+        botToken: botToken.trim(),
+        templateId: draft.templateId || undefined,
+        resourceType:
+          draft.botType === "QUICKBOOK" && !draft.templateId ? draft.resourceType : undefined,
+        startPaused: true,
+      });
+    }
   };
-
   return (
     <Modal
       isOpen={isOpen}
-      onClose={handleClose}
-      title={createdResult ? "Бот успешно подключен!" : "Подключение Telegram-бота"}
-      description={createdResult ? "Бот зарегистрирован и готов к работе" : "Введите токен бота, полученный в @BotFather"}
+      onClose={close}
+      title="Настройка нового бота"
+      description="Пройдите шаги по порядку. Можно остановиться и продолжить позже."
+      maxWidth="2xl"
     >
-      {createdResult ? (
+      {draft.createdBotId ? (
         <div className="space-y-4">
-          {createdResult.warning ? (
-            <Alert type="warning" title="Предупреждение webhook">
-              {createdResult.warning}
-            </Alert>
-          ) : (
-            <Alert type="success" title="Webhook настроен">
-              Бот активирован с 14-дневным пробным периодом.
-            </Alert>
-          )}
-
-          <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl space-y-1.5 text-xs">
-            <p className="font-semibold text-slate-200">Чеклист запуска:</p>
-            <ol className="list-decimal list-inside space-y-1 text-slate-400 text-[11px]">
-              <li>Перейдите в бота по ссылке-приглашению ниже</li>
-              <li>Нажмите команду /start для привязки роли администратора</li>
-              <li>Настройте сценарий во вкладке бота</li>
-            </ol>
-          </div>
-
-          {createdResult.inviteLink && (
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-slate-300">
-                Ссылка-приглашение для администратора клиента:
-              </label>
-              <div className="flex gap-2">
-                <input
-                  readOnly
-                  value={createdResult.inviteLink}
-                  className="flex-1 px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-xs font-mono text-slate-300"
-                />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => handleCopyLink(createdResult.inviteLink!)}
-                  icon={copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                >
-                  {copied ? "Скопировано" : "Копировать"}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          <div className="flex items-center justify-between pt-2">
-            {createdResult.botUsername && (
-              <a
-                href={createdResult.inviteLink || `https://t.me/${createdResult.botUsername}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20 text-xs font-medium transition-colors"
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-                Открыть в Telegram
-              </a>
-            )}
-            <div className="ml-auto">
-              <Button variant="primary" onClick={handleClose}>
-                Готово
-              </Button>
-            </div>
+          <Alert type="info" title="Есть незавершённая настройка">
+            Бот уже подключён. Продолжите его настройку без повторного создания.
+          </Alert>
+          <div className="flex flex-wrap gap-3">
+            <Button
+              onClick={() => {
+                close();
+                navigate(`/bots/${draft.createdBotId}?setup=1`);
+              }}
+            >
+              Продолжить настройку
+            </Button>
+            <Button variant="outline" onClick={() => update(newCreationDraft())}>
+              Подключить другого бота
+            </Button>
           </div>
         </div>
       ) : (
-        <form onSubmit={handleCreate} className="space-y-4">
+        <div className="space-y-5">
+          <SetupSteps step={draft.step} />
+          <ApiErrorAlert error={tenantMutation.error || botMutation.error} />
           {formError && (
-            <Alert type="error" title="Ошибка">
+            <Alert type="error" title="Проверьте поля">
               {formError}
             </Alert>
           )}
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-300">Арендатор (Клиент)</label>
-            <select
-              value={tenantId}
-              onChange={(e) => setTenantId(e.target.value)}
-              className="w-full px-3.5 py-2 bg-slate-950 border border-slate-800 rounded-xl text-sm text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
-              required
-            >
-              <option value="">-- Выберите арендатора --</option>
-              {tenants.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.clientName} ({t.contactPhone})
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-1.5">
-            <label className="block text-xs font-medium text-slate-300">Тип решения</label>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                type="button"
-                onClick={() => setBotType("LEADCATCH")}
-                className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                  botType === "LEADCATCH"
-                    ? "border-indigo-500 bg-indigo-500/10 text-white"
-                    : "border-slate-800 bg-slate-950/40 text-slate-400 hover:border-slate-700"
-                }`}
+          {storageFailed && (
+            <Alert type="warning" title="Черновик не сохранён">
+              Браузер не разрешил сохранить прогресс. Не закрывайте страницу до завершения
+              подключения.
+            </Alert>
+          )}
+          <fieldset disabled={pending} className="space-y-5 min-w-0">
+            {draft.step === 0 && (
+              <ClientStep
+                draft={draft}
+                tenants={[
+                  ...tenants,
+                  ...(newTenant && !tenants.some((tenant) => tenant.id === newTenant.id)
+                    ? [newTenant]
+                    : []),
+                ]}
+                update={update}
+              />
+            )}
+            {draft.step === 1 && (
+              <TaskStep
+                botType={draft.botType}
+                onChange={(botType) => update({ botType, templateId: "" })}
+              />
+            )}
+            {draft.step === 2 && (
+              <div className="space-y-4">
+                <h4 className="text-lg font-semibold text-ui-text">
+                  Выберите шаблон и подключите Telegram-бота
+                </h4>
+                <BotSetupSelection
+                  botType={draft.botType}
+                  templateId={draft.templateId}
+                  resourceType={draft.resourceType}
+                  onTemplateChange={(templateId) => update({ templateId })}
+                  onResourceChange={(resourceType) => update({ resourceType })}
+                />
+                <Input
+                  label="Токен Telegram-бота (из @BotFather)"
+                  type="password"
+                  autoComplete="off"
+                  value={botToken}
+                  onChange={(event) => setBotToken(event.target.value)}
+                  helperText="Токен не сохраняется в черновике. При возвращении на этот шаг введите его заново."
+                />
+                <p className="text-sm text-ui-muted">
+                  Бот останется приостановленным до шага «Запуск».
+                </p>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <Button
+                variant="outline"
+                onClick={
+                  draft.step === 0
+                    ? close
+                    : () => {
+                        setFormError(null);
+                        update({ step: draft.step - 1 });
+                      }
+                }
               >
-                <p className="font-semibold text-xs">LeadCatch</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Опросники и лидогенерация</p>
-              </button>
-              <button
-                type="button"
-                onClick={() => setBotType("QUICKBOOK")}
-                className={`p-3 rounded-xl border text-left cursor-pointer transition-all ${
-                  botType === "QUICKBOOK"
-                    ? "border-indigo-500 bg-indigo-500/10 text-white"
-                    : "border-slate-800 bg-slate-950/40 text-slate-400 hover:border-slate-700"
-                }`}
-              >
-                <p className="font-semibold text-xs">QuickBook</p>
-                <p className="text-[10px] text-slate-500 mt-0.5">Онлайн-запись и слоты</p>
-              </button>
+                {" "}
+                {draft.step === 0 ? "Продолжить позже" : "Назад"}
+              </Button>
+              <Button onClick={next} isLoading={pending}>
+                {draft.step === 2 ? "Подключить и настроить" : "Далее"}
+              </Button>
             </div>
-          </div>
-
-          <Input
-            label="Токен Telegram-бота (из @BotFather)"
-            placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-            value={botToken}
-            onChange={(e) => setBotToken(e.target.value)}
-            required
-          />
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" type="button" onClick={handleClose}>
-              Отмена
-            </Button>
-            <Button variant="primary" type="submit" isLoading={createMutation.isPending}>
-              Подключить бота
-            </Button>
-          </div>
-        </form>
+          </fieldset>
+        </div>
       )}
     </Modal>
   );
