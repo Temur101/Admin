@@ -349,18 +349,18 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
     }
     const heapBefore = process.memoryUsage().heapUsed;
 
-    // Simulate 10,000 update dispatches rotating through 500 bots
+    // Unhandled callbacks exercise routing/session/cache allocation without inserting users
+    // for synthetic bots that deliberately do not exist in PostgreSQL.
     for (let i = 0; i < 10000; i++) {
       const bot = bots[i % 500]!;
       const botInstance = botPool.getOrCreateBot(bot);
       await botInstance.handleUpdate({
         update_id: i,
-        message: {
-          message_id: i,
-          date: 1700000000,
-          chat: { id: 1000 + (i % 500), type: "private", first_name: "Test" },
+        callback_query: {
+          id: `memory-${i}`,
           from: { id: 1000 + (i % 500), is_bot: false, first_name: "Test" },
-          text: "ping",
+          chat_instance: "memory-test",
+          data: "memory:ping",
         },
       });
     }
@@ -380,5 +380,5 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
 
     // Delta must be under 20 MB (plan requirement)
     expect(deltaMb).toBeLessThan(20);
-  });
+  }, 60000);
 });

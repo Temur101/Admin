@@ -61,8 +61,12 @@ export const QuizOptionSchema = z.object({
   id: z.string().min(1),
   text: LocalizedTextSchema,
   nextNodeId: z.string().min(1).nullable().optional(),
+  inputType: z.enum(["CHOICE", "TEXT"]).optional(),
 });
 export type QuizOption = z.infer<typeof QuizOptionSchema>;
+
+export const QUIZ_FREE_TEXT_MAX_LENGTH = 1000;
+export const QuizFreeTextAnswerSchema = z.string().trim().min(1).max(QUIZ_FREE_TEXT_MAX_LENGTH);
 
 export const QuizNodeSchema = z.object({
   id: z.string().min(1),
@@ -179,7 +183,14 @@ export type RejectReceiptRequest = z.infer<typeof RejectReceiptRequestSchema>;
 
 export const UpdatePlatformSettingsRequestSchema = z.object({
   paymentDetails: z.string().optional(),
-  tariffs: z.array(TariffOptionSchema).optional(),
+  tariffs: z
+    .array(TariffOptionSchema)
+    .length(3)
+    .refine(
+      (tariffs) => new Set(tariffs.map((tariff) => tariff.months)).size === 3,
+      "Укажите по одному тарифу на 1, 6 и 12 месяцев.",
+    )
+    .optional(),
   supportContact: z.string().optional(),
   alertBotToken: z.string().optional(),
   alertChatId: z.union([z.number(), z.string()]).optional(),

@@ -1,15 +1,22 @@
-import type { Lang, Prisma, PrismaClient } from "@prisma/client";
-import { InlineKeyboard, Keyboard } from "grammy";
-import type { QuizConfig, QuizNode } from "@lcqb/contracts";
-import { QuizConfigSchema, createEmptyQuizConfig } from "@lcqb/contracts";
+import { navigationKeyboard } from "../shared/client-menu.js";
+import { randomUUID } from "node:crypto";
+import { resolveCallbackId } from "../shared/callback-id.js";
+import { quizButtonTag } from "./quiz-session.js";
+export { handleLeadCatchContact, type LeadCatchContactOptions } from "./lead-submission.js";
+import type { Lang, PrismaClient } from "@prisma/client";
+import type { QuizNode, QuizOption } from "@lcqb/contracts";
+import {
+  getBotQuizConfig,
+  sendQuizNode,
+  sendQuizContactPrompt,
+  sendCustomAnswerPrompt,
+  resumeQuizStep,
+} from "./quiz-prompts.js";
+export { getBotQuizConfig, sendQuizNode } from "./quiz-prompts.js";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
-import { notifyAdmins } from "../shared/notification.js";
-import { validateQuizDag } from "./dag-validator.js";
-import { DEFAULT_LEADCATCH_QUIZ } from "./default-quiz.js";
-import { parseAndNormalizePhone } from "./phone.js";
 
 type SendMessageOptions = Parameters<PlatformBotContext["api"]["sendMessage"]>[2];
 
@@ -21,44 +28,6 @@ async function sendReply(
   const chatId = ctx.chat?.id ?? ctx.from?.id;
   if (!chatId) return;
   await ctx.api.sendMessage(chatId, text, extra);
-}
-
-export function getBotQuizConfig(settings: Record<string, unknown> | undefined): QuizConfig {
-  if (!settings || typeof settings !== "object") {
-    return DEFAULT_LEADCATCH_QUIZ;
-  }
-  const raw = "quiz" in settings ? settings.quiz : settings;
-  if (
-    raw &&
-    typeof raw === "object" &&
-    "nodes" in raw &&
-    Array.isArray(raw.nodes) &&
-    raw.nodes.length === 0
-  )
-    return createEmptyQuizConfig();
-  const parsed = QuizConfigSchema.safeParse(raw);
-  if (parsed.success && validateQuizDag(parsed.data).valid) {
-    return parsed.data;
-  }
-  return DEFAULT_LEADCATCH_QUIZ;
-}
-
-export async function sendQuizNode(
-  ctx: PlatformBotContext,
-  node: QuizNode,
-  lang: Lang,
-): Promise<void> {
-  const title = lang === "UZ" ? node.title.uz : node.title.ru;
-  const keyboard = new InlineKeyboard();
-
-  for (const opt of node.options) {
-    const text = lang === "UZ" ? opt.text.uz : opt.text.ru;
-    keyboard.text(text, `lc:opt:${node.id}:${opt.id}`).row();
-  }
-
-  await sendReply(ctx, title, {
-    reply_markup: keyboard,
-  });
 }
 
 export async function startLeadCatchQuiz(
@@ -77,6 +46,7 @@ export async function startLeadCatchQuiz(
 
   // Initialize or reset quiz FSM in session
   ctx.session.quiz = {
+    attemptId: randomUUID(),
     currentNodeId: startNode.id,
     stepCount: 1,
     answers: {},
@@ -87,6 +57,7 @@ export async function startLeadCatchQuiz(
 }
 
 export interface QuizOptionAnswerOptions {
+  attemptTag?: string;
   nodeId: string;
   optionId: string;
   transport: TelegramTransport;
@@ -100,151 +71,71 @@ export async function handleQuizOptionAnswer(
 ): Promise<void> {
   const lang = (ctx.session.lang as Lang) ?? "RU";
   const config = getBotQuizConfig(ctx.botMeta.settings);
-  const { nodeId, optionId } = opts;
-
-  // If session expired or was not started, restart quiz
-  if (!ctx.session.quiz) {
-    await startLeadCatchQuiz(ctx, prisma);
+  const quiz = ctx.session.quiz;
+  const stale = () => sendReply(ctx, t(lang, "quiz_stale_answer"));
+  if (!quiz) {
+    await sendReply(ctx, t(lang, "quiz_stale_answer"), { reply_markup: navigationKeyboard(ctx) });
     return;
   }
-
-  const currentNode = config.nodes.find((n) => n.id === nodeId);
-  if (!currentNode) {
-    await startLeadCatchQuiz(ctx, prisma);
+  if (opts.attemptTag ? opts.attemptTag !== quizButtonTag(ctx, config) : Boolean(quiz.attemptId)) {
+    await stale();
     return;
   }
-
-  const selectedOption = currentNode.options.find((o) => o.id === optionId);
+  const nodeId = resolveCallbackId(config.nodes, opts.nodeId);
+  const currentNode = config.nodes.find((node) => node.id === nodeId);
+  if (!currentNode || quiz.currentNodeId !== currentNode.id || quiz.answers[currentNode.id]) {
+    await stale();
+    // Redelivery recovers the current step after Telegram failed to send it.
+    await resumeQuizStep(ctx, config);
+    return;
+  }
+  const optionId = resolveCallbackId(currentNode.options, opts.optionId);
+  const selectedOption = currentNode.options.find((option) => option.id === optionId);
   if (!selectedOption) {
+    await stale();
     return;
   }
 
-  // Record answer
-  const qTitle = lang === "UZ" ? currentNode.title.uz : currentNode.title.ru;
-  const optText = lang === "UZ" ? selectedOption.text.uz : selectedOption.text.ru;
-
-  ctx.session.quiz.answers[currentNode.id] = {
-    question: qTitle,
-    answer: optText,
-    optionId: selectedOption.id,
+  if (selectedOption.inputType === "TEXT") {
+    quiz.pendingText = {
+      nodeId: currentNode.id,
+      optionId: selectedOption.id,
+      buttonTag: quizButtonTag(ctx, config),
+    };
+    await sendCustomAnswerPrompt(ctx);
+    return;
+  }
+  await completeQuizAnswer(
+    ctx,
+    currentNode,
+    selectedOption,
+    lang === "UZ" ? selectedOption.text.uz : selectedOption.text.ru,
+  );
+}
+export async function completeQuizAnswer(
+  ctx: PlatformBotContext,
+  node: QuizNode,
+  option: QuizOption,
+  answer: string,
+): Promise<void> {
+  const quiz = ctx.session.quiz!;
+  const lang = ctx.session.lang ?? "RU";
+  const config = getBotQuizConfig(ctx.botMeta.settings);
+  quiz.answers[node.id] = {
+    question: lang === "UZ" ? node.title.uz : node.title.ru,
+    answer,
+    optionId: option.id,
   };
-
-  // Check if there is a next question
-  if (selectedOption.nextNodeId) {
-    const nextNode = config.nodes.find((n) => n.id === selectedOption.nextNodeId);
+  delete quiz.pendingText;
+  if (option.nextNodeId) {
+    const nextNode = config.nodes.find((item) => item.id === option.nextNodeId);
     if (nextNode) {
-      ctx.session.quiz.currentNodeId = nextNode.id;
-      ctx.session.quiz.stepCount += 1;
+      quiz.currentNodeId = nextNode.id;
+      quiz.stepCount += 1;
       await sendQuizNode(ctx, nextNode, lang);
       return;
     }
   }
-
-  // Terminal node reached -> transition to CONTACT step
-  ctx.session.quiz.currentNodeId = "__contact__";
-
-  const keyboard = new Keyboard()
-    .requestContact(t(lang, "quiz_btn_share_phone"))
-    .resized()
-    .oneTime();
-
-  await sendReply(ctx, t(lang, "quiz_prompt_phone"), {
-    reply_markup: keyboard,
-  });
-}
-
-export interface LeadCatchContactOptions {
-  rawPhone: string;
-  transport: TelegramTransport;
-  logger: Logger;
-}
-
-export async function handleLeadCatchContact(
-  ctx: PlatformBotContext,
-  prisma: PrismaClient,
-  opts: LeadCatchContactOptions,
-): Promise<boolean> {
-  const lang = (ctx.session.lang as Lang) ?? "RU";
-  const { rawPhone, transport, logger } = opts;
-
-  const phoneRes = parseAndNormalizePhone(rawPhone);
-  if (!phoneRes.isValid || !phoneRes.normalized) {
-    await sendReply(ctx, t(lang, "quiz_invalid_phone"));
-    return false;
-  }
-
-  const normalizedPhone = phoneRes.normalized;
-  const answersRecord = ctx.session.quiz?.answers ?? {};
-
-  // 1. Persist lead in PostgreSQL (idempotent against retry of same attempt)
-  try {
-    const startedAt = ctx.session.quiz?.startedAt;
-    const existing = await prisma.lead.findFirst({
-      where: {
-        botId: ctx.botMeta.id,
-        customerTgId: BigInt(ctx.from?.id ?? 0),
-        phoneRaw: normalizedPhone,
-        ...(startedAt ? { createdAt: { gte: new Date(startedAt - 10000) } } : {}),
-      },
-    });
-
-    if (!existing) {
-      await prisma.lead.create({
-        data: {
-          botId: ctx.botMeta.id,
-          customerTgId: BigInt(ctx.from?.id ?? 0),
-          customerName: ctx.from?.first_name ?? null,
-          customerUsername: ctx.from?.username ?? null,
-          phoneRaw: normalizedPhone,
-          answers: answersRecord as unknown as Prisma.InputJsonValue,
-          isMasked: false,
-        },
-      });
-    }
-  } catch (err) {
-    logger.error(
-      { err: (err as Error).message, botId: ctx.botMeta.id },
-      "Failed to save lead to database",
-    );
-  }
-
-  // 2. Format answers for admin notification
-  const answersSummary: Record<string, string> = {};
-  for (const [key, val] of Object.entries(answersRecord)) {
-    answersSummary[val.question || key] = val.answer;
-  }
-
-  // 3. Notify bot administrators (with automatic contact masking if subscription is inactive)
-  try {
-    await notifyAdmins(
-      ctx.botMeta.id,
-      {
-        kind: "LEAD",
-        name: ctx.from?.first_name ?? null,
-        phone: normalizedPhone,
-        username: ctx.from?.username ?? null,
-        answers: answersSummary,
-      },
-      {
-        prisma,
-        transport,
-        logger,
-      },
-    );
-  } catch (err) {
-    logger.error(
-      { err: (err as Error).message, botId: ctx.botMeta.id },
-      "Failed to dispatch admin lead notification",
-    );
-  }
-
-  // 4. Clear quiz session state
-  ctx.session.quiz = undefined;
-
-  // 5. Send polite thank-you message to customer and remove phone request keyboard
-  await sendReply(ctx, t(lang, "quiz_thank_you"), {
-    reply_markup: { remove_keyboard: true },
-  });
-
-  return true;
+  quiz.currentNodeId = "__contact__";
+  await sendQuizContactPrompt(ctx, lang);
 }

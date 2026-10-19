@@ -118,8 +118,9 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
 
     // Check bot replied asking for language
     let calls = transport.callsOf("sendMessage");
-    expect(calls).toHaveLength(1);
-    expect(String(calls[0]?.payload.text)).toContain("выберите язык / Iltimos, tilni tanlang");
+    expect(calls).toHaveLength(2);
+    expect(calls[0]?.payload.reply_markup).toHaveProperty("keyboard");
+    expect(String(calls.at(-1)?.payload.text)).toContain("выберите язык / Iltimos, tilni tanlang");
 
     // Click UZ language callback button
     transport.clear();
@@ -151,7 +152,9 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
     expect(calls.length).toBeGreaterThanOrEqual(1);
     const combinedTexts = calls.map((c) => String(c.payload.text)).join(" ");
     expect(combinedTexts).toContain("o'zgartirildi");
-    expect(combinedTexts).toContain("Xush kelibsiz");
+    const session = JSON.parse((await redis.get(`sess:${botId}:${tgId}`)) ?? "{}");
+    expect(session.quiz?.currentNodeId).toBeDefined();
+    expect(calls.at(-1)?.payload.reply_markup).toHaveProperty("inline_keyboard");
   });
 
   it("2. should promote user to admin on /start adm_<valid_code> and show admin menu", async () => {

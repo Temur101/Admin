@@ -48,7 +48,6 @@ async function requestTokenRefresh(): Promise<string | null> {
       const res = await fetch("/api/v1/auth/refresh", {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) {
         return null;
@@ -69,14 +68,13 @@ async function requestTokenRefresh(): Promise<string | null> {
   return refreshPromise;
 }
 
-export async function apiRequest<T>(
-  endpoint: string,
-  options: RequestInit = {},
-): Promise<T> {
+export async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const token = getStoredToken();
   const headers = new Headers(options.headers || {});
 
-  if (!headers.has("Content-Type") && !(options.body instanceof FormData)) {
+  if (options.body == null || options.body === "") {
+    headers.delete("Content-Type");
+  } else if (!headers.has("Content-Type") && typeof options.body === "string") {
     headers.set("Content-Type", "application/json");
   }
 

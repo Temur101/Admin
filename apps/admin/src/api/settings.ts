@@ -1,7 +1,7 @@
 import { apiRequest } from "./client.js";
 import type { UpdatePlatformSettingsRequest } from "@lcqb/contracts";
 
-export interface PlatformTariff {
+interface PlatformTariff {
   months: number;
   amountUzs?: number;
   priceUzs?: number;
@@ -15,11 +15,13 @@ export interface PlatformSettingsData {
   alertChatId?: string | null;
   alertBotUsername?: string | null;
   hasAlertBotToken?: boolean;
-  tariffs?: PlatformTariff[] | {
-    tariff1m?: number;
-    tariff6m?: number;
-    tariff12m?: number;
-  };
+  tariffs?:
+    | PlatformTariff[]
+    | {
+        tariff1m?: number;
+        tariff6m?: number;
+        tariff12m?: number;
+      };
 }
 
 export async function getPlatformSettings(): Promise<PlatformSettingsData> {

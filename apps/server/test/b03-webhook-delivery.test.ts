@@ -494,7 +494,43 @@ describe("B03: Webhook Reception Without Message Loss", () => {
     const resolved = await resolver.resolve(botTokenHashA);
     expect(resolved).not.toBeNull();
 
-    // User starts quiz and shares phone contact
+    // Reach the actual contact step; a phone without an active quiz is intentionally ignored.
+    const user = { id: USER_ID, is_bot: false as const, first_name: "LeadCustomer" };
+    const chat = { id: USER_ID, type: "private" as const, first_name: "LeadCustomer" };
+    await pool.handleUpdate(resolved!, {
+      update_id: 49000,
+      message: { message_id: 1, date: 1, from: user, chat, text: "/start" },
+    });
+    await pool.handleUpdate(resolved!, {
+      update_id: 49001,
+      callback_query: { id: "language", from: user, chat_instance: "test", data: "set_lang:RU" },
+    });
+    for (let step = 0; step < 3; step++) {
+      const last = transport
+        .callsOf("sendMessage")
+        .filter((call) => Number(call.payload.chat_id) === USER_ID)
+        .at(-1)!;
+      const markup = last.payload.reply_markup as {
+        inline_keyboard: { callback_data: string }[][];
+      };
+      await pool.handleUpdate(resolved!, {
+        update_id: 49002 + step,
+        callback_query: {
+          id: `answer-${step}`,
+          from: user,
+          chat_instance: "test",
+          data: markup.inline_keyboard[0]![0]!.callback_data,
+        },
+      });
+    }
+    let fail = true;
+    pool.getOrCreateBot(resolved!).api.config.use(async (previous, method, body, signal) => {
+      if (method === "sendMessage" && fail) {
+        fail = false;
+        throw new Error("Telegram confirmation lost");
+      }
+      return previous(method, body, signal);
+    });
     const payload = {
       update_id: 50005,
       message: {
@@ -512,7 +548,12 @@ describe("B03: Webhook Reception Without Message Loss", () => {
     // First execution
     const enqueue1 = await inboxService.enqueue(botIdA, 50005, payload);
     expect(enqueue1.status).toBe("ENQUEUED");
-    await inboxService.processItem(enqueue1.inboxId!, resolved!, payload);
+    await expect(inboxService.processItem(enqueue1.inboxId!, resolved!, payload)).rejects.toThrow(
+      "Telegram confirmation lost",
+    );
+    expect(
+      (await prisma.webhookInbox.findUnique({ where: { id: enqueue1.inboxId! } }))?.status,
+    ).toBe("RECEIVED");
 
     let leads = await prisma.lead.findMany({
       where: { botId: botIdA, customerTgId: BigInt(USER_ID) },
@@ -520,7 +561,10 @@ describe("B03: Webhook Reception Without Message Loss", () => {
     expect(leads.length).toBe(1);
 
     // Simulate recovery / retry of the exact same message contact payload
-    await inboxService.processItem(enqueue1.inboxId!, resolved!, payload).catch(() => {});
+    await inboxService.processItem(enqueue1.inboxId!, resolved!, payload);
+    expect(
+      (await prisma.webhookInbox.findUnique({ where: { id: enqueue1.inboxId! } }))?.status,
+    ).toBe("COMPLETED");
 
     // Leads count MUST still be exactly 1 (no duplicate lead!)
     leads = await prisma.lead.findMany({

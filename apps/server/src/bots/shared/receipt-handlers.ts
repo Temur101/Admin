@@ -92,6 +92,8 @@ async function processFileReceipt(
       months: ctx.session.payment.months,
       amountUzs: ctx.session.payment.amountUzs,
       imagePath: savedPath,
+      textNote:
+        ctx.message && "caption" in ctx.message ? ctx.message.caption?.trim() || null : null,
       telegramFileId: fileId,
     });
 
@@ -155,10 +157,7 @@ export function registerReceiptHandlers(
     ctx.session.lang = lang;
 
     if (ctx.botMeta.subscriptionStatus === "BLOCKED") {
-      await sendReply(
-        ctx,
-        t(lang, "sub_blocked_alert", { support: env.SUPPORT_CONTACT }),
-      );
+      await sendReply(ctx, t(lang, "sub_blocked_alert", { support: env.SUPPORT_CONTACT }));
       return;
     }
 
@@ -188,15 +187,22 @@ export function registerReceiptHandlers(
     ctx.session.lang = lang;
 
     if (ctx.botMeta.subscriptionStatus === "BLOCKED") {
-      await sendReply(
-        ctx,
-        t(lang, "sub_blocked_alert", { support: env.SUPPORT_CONTACT }),
-      );
+      await sendReply(ctx, t(lang, "sub_blocked_alert", { support: env.SUPPORT_CONTACT }));
       return;
     }
 
     const matchStr = Array.isArray(ctx.match) ? ctx.match[1] : "1";
     const months = Number(matchStr ?? 1);
+    if (![1, 6, 12].includes(months)) {
+      ctx.session.payment = undefined;
+      await sendReply(ctx, t(lang, "pay_select_tariff"), {
+        reply_markup: buildTariffInlineKeyboard(
+          lang,
+          resolveTariffPrices(await prisma.platformSettings.findUnique({ where: { id: 1 } })),
+        ),
+      });
+      return;
+    }
 
     const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
     const tariffs = resolveTariffPrices(settings);
@@ -291,7 +297,8 @@ export function registerReceiptHandlers(
         {
           type: "NEW_RECEIPT",
           botName: ctx.botMeta.botUsername ? `@${ctx.botMeta.botUsername}` : ctx.botMeta.id,
-          clientName: [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Admin",
+          clientName:
+            [ctx.from.first_name, ctx.from.last_name].filter(Boolean).join(" ") || "Admin",
           phone: user.username ? `@${user.username}` : String(ctx.from.id),
           tariffMonths: res.receipt.months,
           amountUzs: res.receipt.amount,

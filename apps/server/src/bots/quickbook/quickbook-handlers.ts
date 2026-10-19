@@ -1,3 +1,6 @@
+import { navigationKeyboard } from "../shared/client-menu.js";
+import { resetClientFlow } from "../shared/flow-reset.js";
+import { callbackId } from "../shared/callback-id.js";
 import { RESOURCE_LABELS } from "@lcqb/contracts";
 import type { PrismaClient } from "@prisma/client";
 import { InlineKeyboard } from "grammy";
@@ -21,7 +24,9 @@ export interface QuickBookComposerOptions {
 export async function startQuickBookFlow(
   ctx: PlatformBotContext,
   _prisma: PrismaClient,
+  redis?: Redis,
 ): Promise<void> {
+  if (!(await resetClientFlow(ctx, redis))) return;
   const lang = ctx.session.lang ?? "RU";
   const config = getQuickBookConfig(ctx.botMeta.settings);
 
@@ -35,7 +40,7 @@ export async function startQuickBookFlow(
   for (const srv of config.services) {
     const srvName = lang === "UZ" ? srv.name.uz : srv.name.ru;
     const label = `${srvName} (${srv.durationMin} мин, ${srv.priceUzs.toLocaleString()} сум)`;
-    keyboard.text(label, `qb:srv:${srv.id}`).row();
+    keyboard.text(label, `qb:srv:${callbackId(srv.id)}`).row();
   }
 
   const title = t(lang, "qb_choose_service");
@@ -53,7 +58,12 @@ export async function renderAlternativeSlots(
 
   for (const slot of slots.slice(0, 4)) {
     const label = `${slot.timeLabel} (${slot.staffName})`;
-    keyboard.text(label, `qb:slot:${serviceId}:${slot.staffId}:${slot.slotTimeIso}`).row();
+    keyboard
+      .text(
+        label,
+        `qb:slot:${callbackId(serviceId)}:${callbackId(slot.staffId)}:${slot.slotTimeIso}`,
+      )
+      .row();
   }
 
   await ctx.reply(t(lang, "qb_slot_taken"), { reply_markup: keyboard });
@@ -96,8 +106,6 @@ export async function handleQuickBookContact(
   });
 
   if (bookingRes.success) {
-    delete ctx.session.quickbook;
-
     const srv = config.services.find((s) => s.id === bookingRes.booking.serviceId);
     const staff = config.resources.find((r) => r.id === bookingRes.booking.staffId);
     const srvName = srv
@@ -125,8 +133,9 @@ export async function handleQuickBookContact(
     });
 
     await ctx.reply(successMsg, {
-      reply_markup: { remove_keyboard: true },
+      reply_markup: navigationKeyboard(ctx),
     });
+    if (ctx.session.quickbook === session) delete ctx.session.quickbook;
   } else if ("alternativeSlots" in bookingRes) {
     await renderAlternativeSlots(
       ctx,

@@ -1,15 +1,11 @@
+import { DEFAULT_TARIFFS, normalizeTariffs } from "@lcqb/contracts/tariffs";
 import { useUnsavedChanges } from "../context/UnsavedChangesContext.js";
 import { ApiErrorAlert } from "../components/common/ApiErrorAlert.js";
 import type { UpdatePlatformSettingsRequest } from "@lcqb/contracts";
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Save, Bell, CreditCard, ShieldAlert, Sparkles, Send } from "lucide-react";
-import {
-  getPlatformSettings,
-  updatePlatformSettings,
-  sendTestAlert,
-  type PlatformTariff,
-} from "../api/settings.js";
+import { getPlatformSettings, updatePlatformSettings, sendTestAlert } from "../api/settings.js";
 import { Button } from "../components/common/Button.js";
 import { Input } from "../components/common/Input.js";
 import { Alert } from "../components/common/Alert.js";
@@ -22,9 +18,9 @@ export function SettingsPage() {
   const [supportContact, setSupportContact] = useState("");
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [alertChatId, setAlertChatId] = useState("");
-  const [tariff1m, setTariff1m] = useState(100000);
-  const [tariff6m, setTariff6m] = useState(500000);
-  const [tariff12m, setTariff12m] = useState(900000);
+  const [tariff1m, setTariff1m] = useState(DEFAULT_TARIFFS[0]!.amountUzs);
+  const [tariff6m, setTariff6m] = useState(DEFAULT_TARIFFS[1]!.amountUzs);
+  const [tariff12m, setTariff12m] = useState(DEFAULT_TARIFFS[2]!.amountUzs);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -53,29 +49,23 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (!settings || hydrated) return;
-    const tariffs = Array.isArray(settings.tariffs) ? settings.tariffs : [];
-    const amount = (months: number, fallback: number) => {
-      const tariff = tariffs.find((item: PlatformTariff) => item.months === months);
-      return tariff?.amountUzs ?? tariff?.priceUzs ?? fallback;
-    };
+    const tariffs = normalizeTariffs(settings.tariffs);
+    const amount = (months: number) =>
+      tariffs.find((tariff) => tariff.months === months)!.amountUzs;
     const initial = {
       paymentDetails: settings.paymentDetails || "",
       supportContact: settings.supportContact || "",
       maintenanceMode: settings.maintenanceMode ?? false,
       alertChatId: settings.alertChatId?.trim() || undefined,
-      tariffs: [
-        { months: 1, amountUzs: amount(1, 100000) },
-        { months: 6, amountUzs: amount(6, 500000) },
-        { months: 12, amountUzs: amount(12, 900000) },
-      ],
+      tariffs,
     };
     setPaymentDetails(initial.paymentDetails);
     setSupportContact(initial.supportContact);
     setMaintenanceMode(initial.maintenanceMode);
     setAlertChatId(initial.alertChatId ?? "");
-    setTariff1m(amount(1, 100000));
-    setTariff6m(amount(6, 500000));
-    setTariff12m(amount(12, 900000));
+    setTariff1m(amount(1));
+    setTariff6m(amount(6));
+    setTariff12m(amount(12));
     setSavedSnapshot(JSON.stringify(initial));
     setHydrated(true);
   }, [settings, hydrated]);
@@ -241,12 +231,14 @@ export function SettingsPage() {
               </h3>
               <p className="text-sm text-ui-muted">
                 Временно приостанавливает диалоги в клиентских ботах с уведомлением о технических
-                работах.
+                работах. Включается после сохранения настроек; управление владельца и отмена
+                существующих записей остаются доступны.
               </p>
             </div>
             <label className="relative inline-flex items-center cursor-pointer">
               <input
                 type="checkbox"
+                aria-label="Режим технического перерыва"
                 checked={maintenanceMode}
                 onChange={(e) => setMaintenanceMode(e.target.checked)}
                 className="sr-only peer"

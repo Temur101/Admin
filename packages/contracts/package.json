@@ -13,6 +13,10 @@
     "./validation": {
       "import": "./dist/config-validation.js",
       "types": "./dist/config-validation.d.ts"
+    },
+    "./tariffs": {
+      "import": "./dist/tariffs.js",
+      "types": "./dist/tariffs.d.ts"
     }
   },
   "scripts": {

@@ -12,11 +12,10 @@ export default defineConfig({
         execArgv: ["--expose-gc"],
       },
     },
-    include: ["apps/*/test/**/*.test.ts", "packages/*/test/**/*.test.ts"],
+    include: ["apps/server/test/**/*.test.ts", "packages/*/test/**/*.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
     },
   },
 });
-

@@ -1,4 +1,5 @@
 import type { QuickBookConfig, QuickBookResource, QuickBookService } from "@lcqb/contracts";
+import { bookingWindow } from "./booking-horizon.js";
 import { parseTimeToMinutes } from "./slot-generator.js";
 
 /**
@@ -37,7 +38,12 @@ export function validateBookingSlotEligibility(params: {
   | { valid: true }
   | {
       valid: false;
-      error: "SERVICE_NOT_SUPPORTED" | "SLOT_IN_PAST" | "OUTSIDE_HORIZON" | "NOT_IN_SCHEDULE" | "SLOT_IN_BREAK";
+      error:
+        | "SERVICE_NOT_SUPPORTED"
+        | "SLOT_IN_PAST"
+        | "OUTSIDE_HORIZON"
+        | "NOT_IN_SCHEDULE"
+        | "SLOT_IN_BREAK";
     } {
   const { config, service, staff, slotDate } = params;
   const now = params.now ?? new Date();
@@ -53,9 +59,8 @@ export function validateBookingSlotEligibility(params: {
   }
 
   // 3. Booking horizon
-  const horizonDays = config.bookingHorizonDays ?? 14;
-  const maxTimeMs = now.getTime() + horizonDays * 24 * 3600 * 1000;
-  if (slotDate.getTime() > maxTimeMs) {
+  const { end } = bookingWindow(config, now);
+  if (slotDate.getTime() >= end) {
     return { valid: false, error: "OUTSIDE_HORIZON" };
   }
 

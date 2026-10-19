@@ -18,19 +18,14 @@ export function buildAdminReplyKeyboard(
   } else {
     kb.text(t(l, "admin_menu_leads")).row();
   }
-  return kb
-    .text(t(l, "admin_menu_sub"))
-    .text(t(l, "admin_menu_lang"))
-    .resized();
+  return kb.text(t(l, "admin_menu_sub")).text(t(l, "admin_menu_lang")).resized();
 }
 
 export function buildLanguageInlineKeyboard(): InlineKeyboard {
-  return new InlineKeyboard()
-    .text("🇷🇺 Русский", "set_lang:RU")
-    .text("🇺🇿 O'zbekcha", "set_lang:UZ");
+  return new InlineKeyboard().text("🇷🇺 Русский", "set_lang:RU").text("🇺🇿 O'zbekcha", "set_lang:UZ");
 }
 
-import { env } from "../../core/env.js";
+import { platformTariffs } from "../../core/platform-tariffs.js";
 
 export interface PlatformTariffs {
   tariff1m: number;
@@ -39,50 +34,8 @@ export interface PlatformTariffs {
 }
 
 export function resolveTariffPrices(settings?: { tariffs?: unknown } | null): PlatformTariffs {
-  const rawTariffs = settings?.tariffs;
-  if (Array.isArray(rawTariffs)) {
-    const t1 = rawTariffs.find(
-      (t) => t && typeof t === "object" && (t as { months?: number }).months === 1,
-    ) as { amountUzs?: number } | undefined;
-    const t6 = rawTariffs.find(
-      (t) => t && typeof t === "object" && (t as { months?: number }).months === 6,
-    ) as { amountUzs?: number } | undefined;
-    const t12 = rawTariffs.find(
-      (t) => t && typeof t === "object" && (t as { months?: number }).months === 12,
-    ) as { amountUzs?: number } | undefined;
-
-    return {
-      tariff1m: typeof t1?.amountUzs === "number" ? t1.amountUzs : env.TARIFF_1M_UZS,
-      tariff6m: typeof t6?.amountUzs === "number" ? t6.amountUzs : env.TARIFF_6M_UZS,
-      tariff12m: typeof t12?.amountUzs === "number" ? t12.amountUzs : env.TARIFF_12M_UZS,
-    };
-  }
-
-  const custom = rawTariffs as Record<string, unknown> | undefined;
-  const t1 =
-    typeof custom?.["1m"] === "number"
-      ? custom["1m"]
-      : typeof custom?.tariff1m === "number"
-        ? custom.tariff1m
-        : env.TARIFF_1M_UZS;
-  const t6 =
-    typeof custom?.["6m"] === "number"
-      ? custom["6m"]
-      : typeof custom?.tariff6m === "number"
-        ? custom.tariff6m
-        : env.TARIFF_6M_UZS;
-  const t12 =
-    typeof custom?.["12m"] === "number"
-      ? custom["12m"]
-      : typeof custom?.tariff12m === "number"
-        ? custom.tariff12m
-        : env.TARIFF_12M_UZS;
-
-  return {
-    tariff1m: t1,
-    tariff6m: t6,
-    tariff12m: t12,
-  };
+  const [one, six, twelve] = platformTariffs(settings?.tariffs);
+  return { tariff1m: one!.amountUzs, tariff6m: six!.amountUzs, tariff12m: twelve!.amountUzs };
 }
 
 export function buildTariffInlineKeyboard(

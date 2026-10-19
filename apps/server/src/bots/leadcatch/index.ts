@@ -1,13 +1,11 @@
+import { handleQuizTextAnswer, returnToQuizOptions } from "./text-answer.js";
+import { sendCustomAnswerPrompt } from "./quiz-prompts.js";
 import type { PrismaClient } from "@prisma/client";
 import type { Bot } from "grammy";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
-import {
-  handleLeadCatchContact,
-  handleQuizOptionAnswer,
-  startLeadCatchQuiz,
-} from "./quiz-flow.js";
+import { handleLeadCatchContact, handleQuizOptionAnswer, startLeadCatchQuiz } from "./quiz-flow.js";
 
 export * from "./dag-validator.js";
 export * from "./default-quiz.js";
@@ -31,25 +29,25 @@ export function registerLeadCatchBot(
     await startLeadCatchQuiz(ctx, prisma);
   });
 
-  // 2. Handle quiz option selection callbacks (lc:opt:<nodeId>:<optionId>)
-  bot.callbackQuery(/^lc:opt:([^:]+):([^:]+)$/, async (ctx) => {
-    const match = ctx.match;
-    const nodeId = Array.isArray(match) ? match[1] : undefined;
-    const optionId = Array.isArray(match) ? match[2] : undefined;
-
+  // New callbacks carry an attempt/configuration tag; legacy buttons only work in legacy sessions.
+  bot.callbackQuery(/^lc:(?:ans:([^:]+):|opt:)([^:]+):([^:]+)$/, async (ctx) => {
+    const [, attemptTag, nodeId, optionId] = ctx.match;
     if (!nodeId || !optionId) return;
-
     await ctx.answerCallbackQuery().catch(() => {});
-    await handleQuizOptionAnswer(ctx, prisma, {
-      nodeId,
-      optionId,
-      transport,
-      logger,
-    });
+    await handleQuizOptionAnswer(ctx, prisma, { attemptTag, nodeId, optionId, transport, logger });
+  });
+
+  bot.callbackQuery(/^lc:back:([^:]+):([^:]+)$/, async (ctx) => {
+    await ctx.answerCallbackQuery().catch(() => {});
+    await returnToQuizOptions(ctx, ctx.match[1]!, ctx.match[2]!);
   });
 
   // 3. Handle contact received via Telegram native "request_contact" button
   bot.on("message:contact", async (ctx) => {
+    if (ctx.session.quiz?.pendingText) {
+      await sendCustomAnswerPrompt(ctx);
+      return;
+    }
     const contact = ctx.message.contact;
     if (!contact?.phone_number) return;
 
@@ -64,8 +62,16 @@ export function registerLeadCatchBot(
   bot.on("message:text", async (ctx, next) => {
     const text = ctx.message.text?.trim() ?? "";
 
+    if (text.startsWith("/")) return next();
+    if (await handleQuizTextAnswer(ctx, ctx.message.text)) return;
+
     // Ignore commands or admin menu keywords
-    if (text.startsWith("/") || text.startsWith("📋") || text.startsWith("💳") || text.startsWith("🌐")) {
+    if (
+      text.startsWith("/") ||
+      text.startsWith("📋") ||
+      text.startsWith("💳") ||
+      text.startsWith("🌐")
+    ) {
       return next();
     }
 
@@ -80,6 +86,11 @@ export function registerLeadCatchBot(
     }
 
     return next();
+  });
+
+  bot.on("message", async (ctx, next) => {
+    if (ctx.session.quiz?.pendingText) await sendCustomAnswerPrompt(ctx);
+    else await next();
   });
 
   // 5. Global error catcher: protects against crashes, customer never sees errors

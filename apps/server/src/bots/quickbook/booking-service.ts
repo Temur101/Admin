@@ -6,10 +6,7 @@ import type { Logger } from "../../core/logger.js";
 import { notifyAdmins } from "../shared/notification.js";
 import { parseAndNormalizePhone } from "../shared/phone.js";
 import { releaseSlotLock } from "./slot-lock.js";
-import {
-  getAlternativeSlots,
-  type TimeSlot,
-} from "./slot-generator.js";
+import { getAlternativeSlots, type TimeSlot } from "./slot-generator.js";
 import { formatTashkentDateTime } from "../shared/payment-service.js";
 
 export const REMINDER_ZSET_KEY = "booking:reminders";
@@ -51,16 +48,15 @@ export type CreateBookingResult =
   | { success: false; error: "SERVICE_NOT_FOUND" | "STAFF_NOT_FOUND" | "SERVICE_NOT_SUPPORTED" }
   | {
       success: false;
-      error: "SLOT_TAKEN" | "SLOT_IN_PAST" | "OUTSIDE_HORIZON" | "NOT_IN_SCHEDULE" | "SLOT_IN_BREAK";
+      error:
+        "SLOT_TAKEN" | "SLOT_IN_PAST" | "OUTSIDE_HORIZON" | "NOT_IN_SCHEDULE" | "SLOT_IN_BREAK";
       alternativeSlots: TimeSlot[];
     };
 
 import { getTashkentTimeParts, validateBookingSlotEligibility } from "./booking-validator.js";
 export { getTashkentTimeParts, validateBookingSlotEligibility };
 
-export async function createBooking(
-  params: CreateBookingParams,
-): Promise<CreateBookingResult> {
+export async function createBooking(params: CreateBookingParams): Promise<CreateBookingResult> {
   const {
     prisma,
     redis,
@@ -98,7 +94,7 @@ export async function createBooking(
   const slotDate = typeof slotTime === "string" ? new Date(slotTime) : slotTime;
   const serviceName = lang === "UZ" ? service.name.uz : service.name.ru;
   const staffName = lang === "UZ" ? staff.name.uz : staff.name.ru;
-  const dateStr = slotDate.toISOString().slice(0, 10);
+  const dateStr = getTashkentTimeParts(slotDate).dateStr;
 
   // 3. Check slot business eligibility (schedule, duration, break, past, horizon, compatibility)
   const eligibility = validateBookingSlotEligibility({
@@ -227,7 +223,8 @@ export async function createBooking(
   } catch (err: unknown) {
     const errorMsg = (err as Error).message ?? "";
     const errObj = typeof err === "object" && err !== null ? (err as Record<string, unknown>) : {};
-    const errCode = (errObj.code as string | undefined) ?? (errObj.meta as { code?: string } | undefined)?.code;
+    const errCode =
+      (errObj.code as string | undefined) ?? (errObj.meta as { code?: string } | undefined)?.code;
 
     const isConflict =
       errorMsg.includes("SLOT_ALREADY_BOOKED") ||

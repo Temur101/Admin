@@ -4,10 +4,7 @@ import type { Redis } from "ioredis";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
-import {
-  registerQuickBookHandlers,
-  startQuickBookFlow,
-} from "./quickbook-composer.js";
+import { registerQuickBookHandlers, startQuickBookFlow } from "./quickbook-composer.js";
 
 export * from "./default-config.js";
 export * from "./config-resolver.js";
@@ -29,7 +26,7 @@ export function registerQuickBookBot(
 ): void {
   // /book command allows manually starting the booking flow
   bot.command("book", async (ctx) => {
-    await startQuickBookFlow(ctx, opts.prisma);
+    await startQuickBookFlow(ctx, opts.prisma, opts.redis);
   });
 
   registerQuickBookHandlers(bot, opts);

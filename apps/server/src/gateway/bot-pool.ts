@@ -1,3 +1,5 @@
+import { maintenanceMiddleware } from "../bots/shared/maintenance.js";
+import { registerNavigationFallback } from "../bots/shared/navigation-handlers.js";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { Bot, session } from "grammy";
 import { RedisAdapter } from "@grammyjs/storage-redis";
@@ -25,7 +27,10 @@ export function extractTelegramBotId(token: string): number | null {
   return null;
 }
 
-export function normalizeBotUsername(username: string | null | undefined, fallback: string): string {
+export function normalizeBotUsername(
+  username: string | null | undefined,
+  fallback: string,
+): string {
   if (!username) return fallback.replace(/^@/, "");
   return username.trim().replace(/^@/, "");
 }
@@ -69,7 +74,10 @@ export class BotPool {
   }
 
   getOrCreateBot(resolved: ResolvedBot): Bot<PlatformBotContext> {
-    const cleanUsername = normalizeBotUsername(resolved.botUsername, `bot_${resolved.id.slice(0, 8)}`);
+    const cleanUsername = normalizeBotUsername(
+      resolved.botUsername,
+      `bot_${resolved.id.slice(0, 8)}`,
+    );
     const existing = this.cache.get(resolved.id);
     if (existing) {
       if (this.cachedTokens.get(resolved.id) !== resolved.botTokenEnc) {
@@ -123,7 +131,9 @@ export class BotPool {
         }
       }
       const effectiveMeta = meta ?? resolved;
-      return this.metaStorage.run(effectiveMeta, () => originalHandleUpdate(update, webhookReplyEnvelope));
+      return this.metaStorage.run(effectiveMeta, () =>
+        originalHandleUpdate(update, webhookReplyEnvelope),
+      );
     };
 
     // Telegram transport transformer
@@ -135,6 +145,8 @@ export class BotPool {
     // Dynamic per-update metadata resolution
     bot.use((ctx, next) => {
       ctx.botMeta = this.metaStorage.getStore() ?? this.latestMeta.get(resolved.id) ?? resolved;
+      const target = /^\/\w+@(\w+)(?:\s|$)/.exec(ctx.message?.text ?? "")?.[1];
+      if (target && target.toLowerCase() !== ctx.me.username.toLowerCase()) return;
       return next();
     });
 
@@ -153,16 +165,19 @@ export class BotPool {
       }),
     );
 
+    bot.use(maintenanceMiddleware(this.prisma, this.redis, this.logger));
+
     // Register shared handlers (start, admin invite code, lang, admin menu, receipts)
-    registerSharedBotHandlers(bot, this.prisma, {
+    const navigation = registerSharedBotHandlers(bot, this.prisma, {
       redis: this.redis,
       transport: this.transport,
       uploadDir: env.UPLOAD_DIR,
+      logger: this.logger,
       onClientStart: async (ctx) => {
         if (ctx.botMeta.botType === "LEADCATCH") {
           await startLeadCatchQuiz(ctx, this.prisma);
         } else if (ctx.botMeta.botType === "QUICKBOOK") {
-          await startQuickBookFlow(ctx, this.prisma);
+          await startQuickBookFlow(ctx, this.prisma, this.redis);
         }
       },
     });
@@ -183,11 +198,16 @@ export class BotPool {
       });
     }
 
+    registerNavigationFallback(bot, navigation);
+
     // Cache the bot instance
     this.cache.set(resolved.id, bot);
     this.cachedTokens.set(resolved.id, resolved.botTokenEnc);
     this.latestMeta.set(resolved.id, resolved);
-    this.logger.debug({ botId: resolved.id, botType: resolved.botType }, "Bot instance initialized in pool");
+    this.logger.debug(
+      { botId: resolved.id, botType: resolved.botType },
+      "Bot instance initialized in pool",
+    );
 
     return bot;
   }
@@ -234,4 +254,3 @@ function deriveBotId(botId: string): number {
   for (const ch of botId) h = (h * 31 + ch.charCodeAt(0)) % 2_000_000_000;
   return h + 1;
 }
-

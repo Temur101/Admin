@@ -15,10 +15,14 @@ export interface ReceiptItem {
   amount: number;
   status: "PENDING" | "APPROVED" | "REJECTED";
   createdAt: string;
+  rejectionReason?: string | null;
+  reviewedAt?: string | null;
 }
 
 export async function getReceipts(status = "PENDING"): Promise<ReceiptItem[]> {
-  const data = await apiRequest<{ ok: true; receipts: ReceiptItem[] }>(`/api/v1/receipts?status=${status}`);
+  const data = await apiRequest<{ ok: true; receipts: ReceiptItem[] }>(
+    `/api/v1/receipts?status=${status}`,
+  );
   return data.receipts;
 }
 

@@ -178,6 +178,83 @@ describe("Настройка опросника", () => {
       fireEvent.click(preview.getByRole("button", { name: "Вариант ответа" }));
     expect(preview.getByText("Следующий шаг — контакт клиента")).toBeTruthy();
   });
+  it("добавляет свой ответ с переходом и сохраняет тип через переключение JSON", async () => {
+    const config = createQuizChain();
+    open(config, "LEADCATCH");
+    fireEvent.click(screen.getByRole("button", { name: "Вопрос 1: добавить свой ответ" }));
+    expect(
+      (screen.getByLabelText("Вопрос 1, ответ 2: тип ответа") as HTMLSelectElement).value,
+    ).toBe("TEXT");
+    expect(
+      (screen.getByLabelText("Вопрос 1, ответ 2: следующий шаг") as HTMLSelectElement).value,
+    ).toBe(config.nodes[1]!.id);
+    fireEvent.click(screen.getByRole("button", { name: "JSON" }));
+    expect((screen.getByRole("textbox") as HTMLTextAreaElement).value).toContain(
+      '"inputType": "TEXT"',
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Визуальный" }));
+    expect(
+      (screen.getByLabelText("Вопрос 1, ответ 2: тип ответа") as HTMLSelectElement).value,
+    ).toBe("TEXT");
+    save();
+    await waitFor(() => expect(updateBotSettings).toHaveBeenCalledOnce());
+    const saved = vi.mocked(updateBotSettings).mock.calls[0]![1] as typeof config;
+    expect(saved.nodes[0]!.options[1]).toEqual(
+      expect.objectContaining({
+        inputType: "TEXT",
+        text: { ru: "Свой ответ", uz: "O‘z javobim" },
+        nextNodeId: config.nodes[1]!.id,
+      }),
+    );
+  });
+  it("предпросмотр ждёт непустой текст своего ответа и продолжает выбранную ветку", () => {
+    const config = createQuizChain();
+    config.nodes[0]!.options.push({
+      id: "custom",
+      text: { ru: "Свой ответ", uz: "O‘z javobim" },
+      inputType: "TEXT",
+      nextNodeId: config.nodes[1]!.id,
+    });
+    open(config, "LEADCATCH");
+    const preview = within(screen.getByRole("region", { name: "Предпросмотр диалога" }));
+    fireEvent.click(preview.getByRole("button", { name: "Свой ответ" }));
+    expect(preview.getByText("Новый вопрос 1")).toBeTruthy();
+    fireEvent.click(preview.getByRole("button", { name: "Отправить ответ" }));
+    expect(preview.getByText("Введите от 1 до 1000 символов.")).toBeTruthy();
+    fireEvent.change(preview.getByLabelText("Ваш ответ"), {
+      target: { value: "Можно другую услугу?" },
+    });
+    fireEvent.click(preview.getByRole("button", { name: "Отправить ответ" }));
+    expect(preview.getByText("Новый вопрос 2")).toBeTruthy();
+    expect(preview.getByText("Можно другую услугу?")).toBeTruthy();
+    expect(updateBotSettings).not.toHaveBeenCalled();
+  });
+  it("возврат из текстового предпросмотра не отправляет черновик и доступен на UZ", () => {
+    const config = createQuizChain();
+    config.nodes[0]!.options[0]!.inputType = "TEXT";
+    open(config, "LEADCATCH");
+    const preview = within(screen.getByRole("region", { name: "Предпросмотр диалога" }));
+    fireEvent.click(preview.getByRole("button", { name: "UZ" }));
+    fireEvent.click(preview.getByRole("button", { name: "Javob varianti" }));
+    fireEvent.change(preview.getByLabelText("Javobingiz"), { target: { value: "Boshqa savol" } });
+    fireEvent.click(preview.getByRole("button", { name: "Variantlarga qaytish" }));
+    expect(preview.getByText("Yangi savol 1")).toBeTruthy();
+    expect(preview.queryByText("Boshqa savol")).toBeNull();
+    fireEvent.click(preview.getByRole("button", { name: "Javob varianti" }));
+    expect((preview.getByLabelText("Javobingiz") as HTMLTextAreaElement).value).toBe("");
+  });
+  it("можно превратить обычную кнопку в свой ответ и обратно", () => {
+    open(createQuizChain(), "LEADCATCH");
+    const type = screen.getByLabelText("Вопрос 1, ответ 1: тип ответа");
+    fireEvent.change(type, { target: { value: "TEXT" } });
+    const preview = within(screen.getByRole("region", { name: "Предпросмотр диалога" }));
+    fireEvent.click(preview.getByRole("button", { name: "Вариант ответа" }));
+    expect(preview.getByLabelText("Ваш ответ")).toBeTruthy();
+    fireEvent.change(type, { target: { value: "CHOICE" } });
+    const updatedPreview = within(screen.getByRole("region", { name: "Предпросмотр диалога" }));
+    fireEvent.click(updatedPreview.getByRole("button", { name: "Вариант ответа" }));
+    expect(updatedPreview.getByText("Новый вопрос 2")).toBeTruthy();
+  });
   it("объясняет круговой переход и не сохраняет такой опрос", () => {
     const config = createQuizChain();
     config.nodes[2]!.options[0]!.nextNodeId = config.startNodeId;

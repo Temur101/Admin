@@ -87,6 +87,41 @@ describe("Сохранение настройки на сервере", () => {
     expect(response.statusCode).toBe(200);
     expect(response.json().settings.nodes).toHaveLength(3);
   });
+  it("сохраняет тип своего ответа и выбранный переход", async () => {
+    type = "LEADCATCH";
+    const config = createQuizChain();
+    config.nodes[0]!.options.push({
+      id: "custom",
+      text: { ru: "Свой ответ", uz: "O‘z javobim" },
+      inputType: "TEXT",
+      nextNodeId: config.nodes[1]!.id,
+    });
+    const response = await send(config);
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.nodes[0].options[1]).toEqual(config.nodes[0]!.options[1]);
+    expect(update.mock.calls[0]![0].data.settings.nodes[0].options[1].inputType).toBe("TEXT");
+  });
+  it("не пропускает раннее завершение через свой ответ", async () => {
+    type = "LEADCATCH";
+    const config = createQuizChain();
+    config.nodes[0]!.options.push({
+      id: "custom",
+      text: { ru: "Свой ответ", uz: "O‘z javobim" },
+      inputType: "TEXT",
+      nextNodeId: null,
+    });
+    const response = await send(config);
+    expect(response.statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+  });
+  it("отклоняет неизвестный тип ввода в JSON", async () => {
+    type = "LEADCATCH";
+    const config = createQuizChain();
+    const invalid = JSON.parse(JSON.stringify(config));
+    invalid.nodes[0].options[0].inputType = "UNKNOWN";
+    expect((await send(invalid)).statusCode).toBe(400);
+    expect(update).not.toHaveBeenCalled();
+  });
   it("готовые шаблоны записи проходят обновлённую проверку", () => {
     for (const template of TEMPLATES_CATALOG.filter((template) => template.botType === "QUICKBOOK"))
       expect(bookingSetupIssues(template.config), template.id).toEqual([]);

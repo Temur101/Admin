@@ -45,11 +45,14 @@ export function QuestionCard({
     onUpdate({ ...node, options: newOptions });
   };
 
-  const handleAddOption = () => {
+  const handleAddOption = (custom = false) => {
     const newOption: QuizOption = {
       id: crypto.randomUUID(),
-      text: { ru: `Вариант ${node.options.length + 1}`, uz: `Variant ${node.options.length + 1}` },
-      nextNodeId: null,
+      text: custom
+        ? { ru: "Свой ответ", uz: "O‘z javobim" }
+        : { ru: `Вариант ${node.options.length + 1}`, uz: `Variant ${node.options.length + 1}` },
+      nextNodeId: custom ? (node.options[0]?.nextNodeId ?? null) : null,
+      ...(custom ? { inputType: "TEXT" as const } : {}),
     };
     onUpdate({ ...node, options: [...node.options, newOption] });
   };
@@ -138,11 +141,19 @@ export function QuestionCard({
           </label>
           <button
             type="button"
-            onClick={handleAddOption}
+            onClick={() => handleAddOption()}
             className="inline-flex items-center gap-1 text-sm font-medium text-ui-accent hover:text-ui-accent-hover cursor-pointer"
           >
             <Plus className="h-3 w-3" />
             Добавить вариант
+          </button>
+          <button
+            type="button"
+            aria-label={`Вопрос ${index + 1}: добавить свой ответ`}
+            onClick={() => handleAddOption(true)}
+            className="text-sm font-medium text-ui-accent hover:text-ui-accent-hover cursor-pointer"
+          >
+            Добавить свой ответ
           </button>
         </div>
 

@@ -1,13 +1,11 @@
+import { ReceiptDetailsModal } from "../components/receipts/ReceiptDetailsModal.js";
+import { ApiErrorAlert } from "../components/common/ApiErrorAlert.js";
+import { formatPlatformDate } from "../utils/dates.js";
+import { ApiError } from "../api/client.js";
 import React, { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, X, FileText, Image } from "lucide-react";
-import {
-  getReceipts,
-  approveReceipt,
-  rejectReceipt,
-  getReceiptImageUrl,
-  type ReceiptItem,
-} from "../api/receipts.js";
+import { getReceipts, approveReceipt, rejectReceipt, type ReceiptItem } from "../api/receipts.js";
 import { Button } from "../components/common/Button.js";
 import { Modal } from "../components/common/Modal.js";
 import { StatusBadge } from "../components/common/Badge.js";
@@ -17,12 +15,18 @@ import { Textarea } from "../components/common/Input.js";
 export function ReceiptsPage() {
   const queryClient = useQueryClient();
   const [activeStatus, setActiveStatus] = useState<string>("PENDING");
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedReceipt, setSelectedReceipt] = useState<ReceiptItem | null>(null);
   const [rejectItem, setRejectItem] = useState<ReceiptItem | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [actionFeedback, setActionFeedback] = useState<string | null>(null);
 
-  const { data: receipts = [], isLoading } = useQuery({
+  const {
+    data: receipts = [],
+    isLoading,
+    isFetching,
+    refetch,
+    error,
+  } = useQuery({
     queryKey: ["receipts", activeStatus],
     queryFn: () => getReceipts(activeStatus),
     refetchInterval: 15000,
@@ -31,14 +35,20 @@ export function ReceiptsPage() {
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["receipts"] });
     void queryClient.invalidateQueries({ queryKey: ["pending-receipts-count"] });
+    for (const key of ["bots", "bot", "bot-health", "dashboard-metrics"])
+      void queryClient.invalidateQueries({ queryKey: [key] });
   };
 
+  const handleActionError = (err: Error) => {
+    if (err instanceof ApiError && err.statusCode === 409) invalidate();
+  };
   const approveMut = useMutation({
     mutationFn: (id: string) => approveReceipt(id),
     onSuccess: () => {
       invalidate();
-      setActionFeedback("Чек успешно одобрен. Подписка бота активирована.");
+      setActionFeedback("Оплата подтверждена. Данные подписки обновлены.");
     },
+    onError: handleActionError,
   });
 
   const rejectMut = useMutation({
@@ -49,10 +59,13 @@ export function ReceiptsPage() {
       setRejectReason("");
       setActionFeedback("Чек отклонен, срок подписки скорректирован.");
     },
+    onError: handleActionError,
   });
 
   const handleApprove = (r: ReceiptItem) => {
     if (confirm(`Одобрить оплату ${r.amount.toLocaleString("ru-RU")} UZS от ${r.tenantName}?`)) {
+      setActionFeedback(null);
+      rejectMut.reset();
       approveMut.mutate(r.id);
     }
   };
@@ -81,8 +94,14 @@ export function ReceiptsPage() {
         </Alert>
       )}
 
+      <ApiErrorAlert error={error || approveMut.error || (!rejectItem && rejectMut.error)} />
+      {error && (
+        <Button variant="outline" isLoading={isFetching} onClick={() => void refetch()}>
+          Повторить загрузку
+        </Button>
+      )}
       {/* Фильтры статусов */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         {["PENDING", "APPROVED", "REJECTED"].map((st) => (
           <button
             key={st}
@@ -124,6 +143,12 @@ export function ReceiptsPage() {
                     Загрузка чеков...
                   </td>
                 </tr>
+              ) : error ? (
+                <tr>
+                  <td colSpan={7} className="px-5 py-10 text-center text-ui-muted">
+                    Не удалось загрузить список чеков.
+                  </td>
+                </tr>
               ) : receipts.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-5 py-10 text-center text-ui-muted">
@@ -142,17 +167,20 @@ export function ReceiptsPage() {
                     <td className="px-5 py-3.5">
                       {r.kind === "PHOTO" ? (
                         <button
-                          onClick={() => setSelectedImage(getReceiptImageUrl(r.id))}
+                          onClick={() => setSelectedReceipt(r)}
                           className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-ui-info-soft text-ui-info border border-ui-info-border hover:bg-ui-info-soft transition-colors cursor-pointer"
                         >
                           <Image className="h-3.5 w-3.5" />
                           <span>Скриншот</span>
                         </button>
                       ) : (
-                        <span className="inline-flex items-center gap-1 text-ui-muted font-mono">
+                        <button
+                          onClick={() => setSelectedReceipt(r)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-ui-info-border text-ui-info bg-ui-info-soft"
+                        >
                           <FileText className="h-3.5 w-3.5" />
-                          <span>Текст</span>
-                        </span>
+                          <span>Открыть текст</span>
+                        </button>
                       )}
                     </td>
                     <td className="px-5 py-3.5 font-medium text-ui-secondary">
@@ -164,9 +192,7 @@ export function ReceiptsPage() {
                     <td className="px-5 py-3.5">
                       <StatusBadge status={r.status} />
                     </td>
-                    <td className="px-5 py-3.5 text-ui-muted">
-                      {new Date(r.createdAt).toLocaleString("ru-RU")}
-                    </td>
+                    <td className="px-5 py-3.5 text-ui-muted">{formatPlatformDate(r.createdAt)}</td>
                     <td className="px-5 py-3.5 text-right">
                       {r.status === "PENDING" ? (
                         <div className="flex justify-end gap-1.5">
@@ -176,6 +202,7 @@ export function ReceiptsPage() {
                             className="bg-ui-success hover:bg-ui-success border-ui-success-border"
                             onClick={() => handleApprove(r)}
                             isLoading={approveMut.isPending}
+                            disabled={rejectMut.isPending}
                             icon={<Check className="h-3.5 w-3.5" />}
                           >
                             Одобрить
@@ -183,7 +210,14 @@ export function ReceiptsPage() {
                           <Button
                             variant="danger"
                             size="sm"
-                            onClick={() => setRejectItem(r)}
+                            onClick={() => {
+                              setRejectItem(r);
+                              setRejectReason("");
+                              setActionFeedback(null);
+                              rejectMut.reset();
+                              approveMut.reset();
+                            }}
+                            disabled={approveMut.isPending || rejectMut.isPending}
                             icon={<X className="h-3.5 w-3.5" />}
                           >
                             Отклонить
@@ -201,42 +235,42 @@ export function ReceiptsPage() {
         </div>
       </div>
 
-      {/* Модалка просмотра изображения */}
-      <Modal
-        isOpen={!!selectedImage}
-        onClose={() => setSelectedImage(null)}
-        title="Скриншот чека оплаты"
-        maxWidth="2xl"
-      >
-        {selectedImage && (
-          <div className="flex justify-center bg-ui-subtle p-4 rounded-xl">
-            <img
-              src={selectedImage}
-              alt="Чек оплаты"
-              className="max-h-[70vh] object-contain rounded-lg"
-            />
-          </div>
-        )}
-      </Modal>
+      {selectedReceipt && (
+        <ReceiptDetailsModal
+          key={selectedReceipt.id}
+          receipt={selectedReceipt}
+          onClose={() => setSelectedReceipt(null)}
+        />
+      )}
 
       {/* Модалка указания причины отклонения */}
       <Modal
         isOpen={!!rejectItem}
-        onClose={() => setRejectItem(null)}
+        onClose={() => {
+          if (!rejectMut.isPending) setRejectItem(null);
+        }}
         title="Отклонение чека оплаты"
         description="Укажите причину отказа. Она будет отправлена клиенту в Telegram."
       >
         <form onSubmit={handleRejectSubmit} className="space-y-4">
+          <ApiErrorAlert error={rejectMut.error} />
           <Textarea
             label="Причина отклонения чека"
             placeholder="Например: Платеж не поступил на карту или чек не читаем..."
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
             required
+            maxLength={500}
+            disabled={rejectMut.isPending}
           />
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" type="button" onClick={() => setRejectItem(null)}>
+            <Button
+              variant="outline"
+              type="button"
+              disabled={rejectMut.isPending}
+              onClick={() => setRejectItem(null)}
+            >
               Отмена
             </Button>
             <Button variant="danger" type="submit" isLoading={rejectMut.isPending}>

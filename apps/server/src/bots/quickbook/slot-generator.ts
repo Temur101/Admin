@@ -1,6 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import type { QuickBookConfig } from "@lcqb/contracts";
+import { isBookingDateAllowed } from "./booking-horizon.js";
 import { isSlotLocked } from "./slot-lock.js";
 
 export interface TimeSlot {
@@ -75,12 +76,11 @@ function formatMinutesToLabel(minutes: number): string {
 /**
  * Generates available booking time slots for a given date, service and resource.
  */
-export async function generateAvailableSlots(
-  opts: GenerateSlotsOptions,
-): Promise<TimeSlot[]> {
+export async function generateAvailableSlots(opts: GenerateSlotsOptions): Promise<TimeSlot[]> {
   const { botId, config, serviceId, staffId, dateStr, prisma, redis } = opts;
   const now = opts.now ?? new Date();
   const lang = opts.lang ?? "RU";
+  if (!isBookingDateAllowed(dateStr, config, now)) return [];
 
   const service = config.services.find((s) => s.id === serviceId);
   if (!service) return [];
@@ -213,6 +213,7 @@ export async function getAlternativeSlots(
 ): Promise<TimeSlot[]> {
   const alternatives: TimeSlot[] = [];
   const { dateStr } = opts;
+  const now = opts.now ?? new Date();
   const parts = dateStr.split("-").map(Number);
   const baseDate = new Date(Date.UTC(parts[0] ?? 2026, (parts[1] ?? 1) - 1, parts[2] ?? 1));
 
@@ -221,9 +222,11 @@ export async function getAlternativeSlots(
     const nextDate = new Date(baseDate.getTime() + dayOffset * 86400000);
     const nextDateStr = nextDate.toISOString().slice(0, 10);
 
+    if (!isBookingDateAllowed(nextDateStr, opts.config, now)) continue;
     const slots = await generateAvailableSlots({
       ...opts,
       dateStr: nextDateStr,
+      now,
     });
 
     for (const slot of slots) {

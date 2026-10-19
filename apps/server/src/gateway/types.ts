@@ -23,6 +23,9 @@ export interface QuizSessionAnswer {
 }
 
 export interface QuizSessionState {
+  attemptId?: string;
+  notifiedLeadId?: string;
+  pendingText?: { nodeId: string; optionId: string; buttonTag: string };
   currentNodeId: string;
   stepCount: number;
   answers: Record<string, QuizSessionAnswer>;
@@ -36,6 +39,8 @@ export interface QuickBookSessionState {
   slotTimeIso?: string;
   lockedUntil?: number;
   lockToken?: string;
+  lockDurationMin?: number;
+  lockIntervalMin?: number;
 }
 
 export interface PaymentSessionState {
@@ -44,6 +49,7 @@ export interface PaymentSessionState {
 }
 
 export interface PlatformBotSession {
+  languageNextAction?: "start" | "menu";
   lang?: "RU" | "UZ";
   isAdmin?: boolean;
   quiz?: QuizSessionState;

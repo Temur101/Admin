@@ -1,17 +1,16 @@
+import {
+  registerNavigationHandlers,
+  type NavigationOptions,
+  type NavigationControls,
+} from "./navigation-handlers.js";
 import type { Lang, PrismaClient } from "@prisma/client";
 import type { Bot } from "grammy";
-import type { Redis } from "ioredis";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
-import {
-  buildAdminReplyKeyboard,
-  buildLanguageInlineKeyboard,
-  fetchRecentEntriesText,
-  formatSubscriptionStatusText,
-} from "./admin-menu.js";
+import { fetchRecentEntriesText, formatSubscriptionStatusText } from "./admin-menu.js";
 import { t } from "./i18n.js";
 import { registerReceiptHandlers } from "./receipt-handlers.js";
-import { isActualBotAdmin, setUserLanguage, upsertBotUser } from "./user-service.js";
+import { isActualBotAdmin } from "./user-service.js";
 
 type SendMessageOptions = Parameters<PlatformBotContext["api"]["sendMessage"]>[2];
 
@@ -25,9 +24,7 @@ async function sendReply(
   await ctx.api.sendMessage(chatId, text, extra);
 }
 
-export interface SharedBotHandlersOptions {
-  onClientStart?: (ctx: PlatformBotContext) => Promise<void>;
-  redis?: Redis;
+export interface SharedBotHandlersOptions extends NavigationOptions {
   transport?: TelegramTransport;
   uploadDir?: string;
 }
@@ -36,95 +33,8 @@ export function registerSharedBotHandlers(
   bot: Bot<PlatformBotContext>,
   prisma: PrismaClient,
   opts?: SharedBotHandlersOptions,
-): void {
-  const handleStart = async (ctx: PlatformBotContext, matchParam?: string) => {
-    const rawMatch = (matchParam ?? (typeof ctx.match === "string" ? ctx.match : "")).trim();
-    const inviteCode = rawMatch.startsWith("adm_") ? rawMatch.slice(4) : null;
-
-    if (!ctx.from) return;
-
-    const { user, newlyBecameAdmin } = await upsertBotUser(prisma, {
-      botId: ctx.botMeta.id,
-      tgId: ctx.from.id,
-      firstName: ctx.from.first_name,
-      username: ctx.from.username,
-      inviteCode,
-      expectedInviteCode: ctx.botMeta.adminInviteCode,
-    });
-
-    ctx.session.lang = user.lang ?? undefined;
-    ctx.session.isAdmin = user.isAdmin;
-    ctx.session.payment = undefined;
-
-    // If user has not chosen language yet -> prompt language selection
-    if (!user.lang) {
-      await sendReply(ctx, "Пожалуйста, выберите язык / Iltimos, tilni tanlang:", {
-        reply_markup: buildLanguageInlineKeyboard(),
-      });
-      return;
-    }
-
-    if (user.isAdmin) {
-      const msg = newlyBecameAdmin
-        ? t(user.lang, "welcome_admin")
-        : t(user.lang, "admin_menu_title");
-      await sendReply(ctx, msg, {
-        reply_markup: buildAdminReplyKeyboard(user.lang, ctx.botMeta?.botType),
-      });
-      return;
-    }
-
-    // Client flow: always greet the client, then trigger bot-specific client flow
-    await sendReply(ctx, t(user.lang, "welcome_client"));
-    if (opts?.onClientStart) {
-      await opts.onClientStart(ctx);
-    }
-  };
-
-  // 1. /start command: supports both standard Telegram bot_command entity and plain text /start
-  bot.command("start", async (ctx) => {
-    await handleStart(ctx, typeof ctx.match === "string" ? ctx.match : undefined);
-  });
-
-  bot.hears(/^\/start(?:\s+(.*))?$/, async (ctx) => {
-    // Avoid double-processing if bot.command already triggered
-    if (ctx.hasCommand?.("start")) return;
-    const matchText = Array.isArray(ctx.match) ? ctx.match[1] : undefined;
-    await handleStart(ctx, matchText);
-  });
-
-  // 2. Language selection callback
-  bot.callbackQuery(/^set_lang:(RU|UZ)$/, async (ctx) => {
-    const lang = (Array.isArray(ctx.match) ? ctx.match[1] : "RU") as Lang;
-    if (!ctx.from) return;
-
-    await setUserLanguage(prisma, ctx.botMeta.id, ctx.from.id, lang);
-    ctx.session.lang = lang;
-    await ctx.answerCallbackQuery();
-
-    await sendReply(ctx, t(lang, "language_selected"));
-
-    // Check if user is admin
-    const user = await prisma.botUser.findUnique({
-      where: {
-        botId_tgId: {
-          botId: ctx.botMeta.id,
-          tgId: BigInt(ctx.from.id),
-        },
-      },
-    });
-
-    if (user?.isAdmin) {
-      await sendReply(ctx, t(lang, "admin_menu_title"), {
-        reply_markup: buildAdminReplyKeyboard(lang, ctx.botMeta?.botType),
-      });
-    } else {
-      await sendReply(ctx, t(lang, "welcome_client"));
-      if (opts?.onClientStart) {
-        await opts.onClientStart(ctx);
-      }
-    }
-  });
+): NavigationControls {
+  const navigation = registerNavigationHandlers(bot, prisma, opts);
 
   // 3. Admin menu callbacks
   bot.callbackQuery("admin:leads", async (ctx) => {
@@ -153,22 +63,8 @@ export function registerSharedBotHandlers(
     await sendReply(ctx, text, { reply_markup: keyboard });
   });
 
-  bot.callbackQuery("admin:lang", async (ctx) => {
-    if (!ctx.from) return;
-    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
-    if (!isAdmin) {
-      await ctx.answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true });
-      return;
-    }
-    await ctx.answerCallbackQuery();
-    const lang = (ctx.session.lang as Lang) ?? "RU";
-    await sendReply(ctx, t(lang, "choose_language"), {
-      reply_markup: buildLanguageInlineKeyboard(),
-    });
-  });
-
   // 4. Admin Reply Keyboard text handlers (handles Russian and Uzbek button text)
-  bot.hears([/📋/], async (ctx) => {
+  bot.hears([t("RU", "admin_menu_leads"), t("UZ", "admin_menu_leads")], async (ctx) => {
     if (!ctx.from) return;
     const user = await prisma.botUser.findUnique({
       where: {
@@ -186,7 +82,7 @@ export function registerSharedBotHandlers(
     await sendReply(ctx, text);
   });
 
-  bot.hears([/💳/], async (ctx) => {
+  bot.hears([t("RU", "admin_menu_sub"), t("UZ", "admin_menu_sub")], async (ctx) => {
     if (!ctx.from) return;
     const user = await prisma.botUser.findUnique({
       where: {
@@ -204,29 +100,12 @@ export function registerSharedBotHandlers(
     await sendReply(ctx, text, { reply_markup: keyboard });
   });
 
-  bot.hears([/🌐/], async (ctx) => {
-    if (!ctx.from) return;
-    const user = await prisma.botUser.findUnique({
-      where: {
-        botId_tgId: {
-          botId: ctx.botMeta.id,
-          tgId: BigInt(ctx.from.id),
-        },
-      },
-    });
-    if (!user?.isAdmin) return;
-
-    ctx.session.payment = undefined;
-    const lang = user.lang ?? "RU";
-    await sendReply(ctx, t(lang, "choose_language"), {
-      reply_markup: buildLanguageInlineKeyboard(),
-    });
-  });
-
   // 5. Payment & receipts handlers (delegated to receipt-handlers module)
   registerReceiptHandlers(bot, prisma, {
     redis: opts?.redis,
     transport: opts?.transport,
     uploadDir: opts?.uploadDir,
+    logger: opts?.logger,
   });
+  return navigation;
 }

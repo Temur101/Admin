@@ -1,3 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { handleLeadCatchContact } from "../src/bots/leadcatch/lead-submission.js";
+import type { PlatformBotContext } from "../src/gateway/types.js";
+import { callbackId } from "../src/bots/shared/callback-id.js";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Redis } from "ioredis";
 import { MockTelegramTransport } from "../src/adapters/telegram/mock-transport.js";
@@ -23,14 +27,35 @@ interface SentMessagePayload {
   reply_markup?: unknown;
 }
 
-function getLastMessageTo(transport: MockTelegramTransport, chatId: number): SentMessagePayload | undefined {
-  const calls = transport.callsOf("sendMessage").filter((c) => Number(c.payload.chat_id) === chatId);
+function getLastMessageTo(
+  transport: MockTelegramTransport,
+  chatId: number,
+): SentMessagePayload | undefined {
+  const calls = transport
+    .callsOf("sendMessage")
+    .filter((c) => Number(c.payload.chat_id) === chatId);
   if (calls.length === 0) return undefined;
   const last = calls[calls.length - 1]!;
   return {
     text: typeof last.payload.text === "string" ? last.payload.text : undefined,
     reply_markup: last.payload.reply_markup,
   };
+}
+
+function answerButton(
+  transport: MockTelegramTransport,
+  chatId: number,
+  nodeId: string,
+  optionId: string,
+): string {
+  const markup = getLastMessageTo(transport, chatId)?.reply_markup as
+    { inline_keyboard?: { callback_data?: string }[][] } | undefined;
+  const suffix = `:${callbackId(nodeId)}:${callbackId(optionId)}`;
+  const button = markup?.inline_keyboard
+    ?.flat()
+    .find((item) => item.callback_data?.endsWith(suffix));
+  if (!button?.callback_data) throw new Error(`Answer button not found for ${nodeId}/${optionId}`);
+  return button.callback_data;
 }
 
 describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
@@ -135,13 +160,18 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         message_id: 1,
         date: Math.floor(Date.now() / 1000),
         chat: { id: CLIENT_TG_ID, type: "private", first_name: "John Client" },
-        from: { id: CLIENT_TG_ID, is_bot: false, first_name: "John Client", username: "john_client" },
+        from: {
+          id: CLIENT_TG_ID,
+          is_bot: false,
+          first_name: "John Client",
+          username: "john_client",
+        },
         text: "/start",
       },
     });
 
     // Language selection is offered
-    const langMsg = getLastMessageTo(transport,CLIENT_TG_ID);
+    const langMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(langMsg).toBeDefined();
     expect(langMsg?.text).toContain("выберите язык");
 
@@ -150,14 +180,19 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       update_id: 2,
       callback_query: {
         id: "cb_lang_1",
-        from: { id: CLIENT_TG_ID, is_bot: false, first_name: "John Client", username: "john_client" },
+        from: {
+          id: CLIENT_TG_ID,
+          is_bot: false,
+          first_name: "John Client",
+          username: "john_client",
+        },
         chat_instance: "inst_1",
         data: "set_lang:RU",
       },
     });
 
     // Question 1 of DAG quiz is presented
-    const q1Msg = getLastMessageTo(transport,CLIENT_TG_ID);
+    const q1Msg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q1Msg?.text).toContain("Какая услуга вас интересует?");
 
     // Step 3: Client clicks Option 1 ("Консультация") -> transitions to Q2
@@ -167,11 +202,11 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_opt_1",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "John Client" },
         chat_instance: "inst_1",
-        data: "lc:opt:q1_service:opt_consult",
+        data: answerButton(transport, CLIENT_TG_ID, "q1_service", "opt_consult"),
       },
     });
 
-    const q2Msg = getLastMessageTo(transport,CLIENT_TG_ID);
+    const q2Msg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q2Msg?.text).toContain("Когда вам удобно обсудить детали?");
 
     // Step 4: Client clicks Option 2 ("В первой половине дня") -> transitions to Q3
@@ -181,11 +216,11 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_opt_2",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "John Client" },
         chat_instance: "inst_1",
-        data: "lc:opt:q2_time:opt_morning",
+        data: answerButton(transport, CLIENT_TG_ID, "q2_time", "opt_morning"),
       },
     });
 
-    const q3Msg = getLastMessageTo(transport,CLIENT_TG_ID);
+    const q3Msg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q3Msg?.text).toContain("Укажите ориентировочный бюджет:");
 
     // Step 5: Client clicks Option 1 ("Базовый") -> terminal node reached, contact requested
@@ -195,11 +230,11 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_opt_3",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "John Client" },
         chat_instance: "inst_1",
-        data: "lc:opt:q3_budget:opt_budget_base",
+        data: answerButton(transport, CLIENT_TG_ID, "q3_budget", "opt_budget_base"),
       },
     });
 
-    const contactPromptMsg = getLastMessageTo(transport,CLIENT_TG_ID);
+    const contactPromptMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(contactPromptMsg?.text).toContain("отправьте ваш номер телефона");
 
     // Step 6: Client sends contact via Telegram native button
@@ -209,7 +244,12 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         message_id: 6,
         date: Math.floor(Date.now() / 1000),
         chat: { id: CLIENT_TG_ID, type: "private", first_name: "John Client" },
-        from: { id: CLIENT_TG_ID, is_bot: false, first_name: "John Client", username: "john_client" },
+        from: {
+          id: CLIENT_TG_ID,
+          is_bot: false,
+          first_name: "John Client",
+          username: "john_client",
+        },
         contact: {
           phone_number: "+998 90 123 45 67",
           first_name: "John Client",
@@ -218,7 +258,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     });
 
     // Client receives polite thank-you message
-    const thankYouMsg = getLastMessageTo(transport,CLIENT_TG_ID);
+    const thankYouMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(thankYouMsg?.text).toContain("Спасибо! Ваша заявка успешно принята");
 
     // Database verification: Lead is saved with full normalized phone
@@ -231,7 +271,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     expect(lead.isMasked).toBe(false);
 
     // Admin notification verification: unmasked phone and answers delivered to admin
-    const adminMsg = getLastMessageTo(transport,ADMIN_TG_ID);
+    const adminMsg = getLastMessageTo(transport, ADMIN_TG_ID);
     expect(adminMsg).toBeDefined();
     expect(adminMsg?.text).toContain("🔔 Новая заявка:");
     expect(adminMsg?.text).toContain("+998901234567");
@@ -269,12 +309,17 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         message_id: 11,
         date: Math.floor(Date.now() / 1000),
         chat: { id: CLIENT_TG_ID, type: "private", first_name: "Secret Client" },
-        from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Secret Client", username: "secret_client" },
+        from: {
+          id: CLIENT_TG_ID,
+          is_bot: false,
+          first_name: "Secret Client",
+          username: "secret_client",
+        },
         text: "/start",
       },
     });
 
-    const q1 = getLastMessageTo(transport,CLIENT_TG_ID);
+    const q1 = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q1?.text).toContain("Какая услуга вас интересует?");
 
     // Step 2: Answer Q1
@@ -284,7 +329,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_e1",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Secret Client" },
         chat_instance: "inst_1",
-        data: "lc:opt:q1_service:opt_project",
+        data: answerButton(transport, CLIENT_TG_ID, "q1_service", "opt_project"),
       },
     });
 
@@ -295,7 +340,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_e2",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Secret Client" },
         chat_instance: "inst_1",
-        data: "lc:opt:q2_time:opt_asap",
+        data: answerButton(transport, CLIENT_TG_ID, "q2_time", "opt_asap"),
       },
     });
 
@@ -306,7 +351,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_e3",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Secret Client" },
         chat_instance: "inst_1",
-        data: "lc:opt:q3_budget:opt_budget_pro",
+        data: answerButton(transport, CLIENT_TG_ID, "q3_budget", "opt_budget_pro"),
       },
     });
 
@@ -317,13 +362,18 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         message_id: 15,
         date: Math.floor(Date.now() / 1000),
         chat: { id: CLIENT_TG_ID, type: "private", first_name: "Secret Client" },
-        from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Secret Client", username: "secret_client" },
+        from: {
+          id: CLIENT_TG_ID,
+          is_bot: false,
+          first_name: "Secret Client",
+          username: "secret_client",
+        },
         text: "90 987 65 43",
       },
     });
 
     // Client receives identical friendly thank-you without any errors
-    const clientThankYou = getLastMessageTo(transport,CLIENT_TG_ID);
+    const clientThankYou = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(clientThankYou?.text).toContain("Спасибо! Ваша заявка успешно принята");
 
     // Database check: Lead is saved with full phone
@@ -332,7 +382,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     expect(leads[0]!.phoneRaw).toBe("+998909876543");
 
     // Admin receives MASKED notification with payment button
-    const adminMsg = getLastMessageTo(transport,ADMIN_TG_ID);
+    const adminMsg = getLastMessageTo(transport, ADMIN_TG_ID);
     expect(adminMsg).toBeDefined();
     expect(adminMsg?.text).toContain("🔔 Новая заявка (СКРЫТА):");
     expect(adminMsg?.text).toContain("+998 90 *** ** 43");
@@ -340,7 +390,9 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     expect(adminMsg?.text).toContain("Оплатите подписку для открытия контактов!");
 
     // Inline button to pay is attached
-    const replyMarkup = adminMsg?.reply_markup as { inline_keyboard: Array<Array<{ text: string }>> };
+    const replyMarkup = adminMsg?.reply_markup as {
+      inline_keyboard: Array<Array<{ text: string }>>;
+    };
     expect(replyMarkup?.inline_keyboard?.[0]?.[0]?.text).toContain("Оплатить");
   });
 
@@ -375,7 +427,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_1",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Test" },
         chat_instance: "inst_1",
-        data: "lc:opt:q1_service:opt_consult",
+        data: answerButton(transport, CLIENT_TG_ID, "q1_service", "opt_consult"),
       },
     });
 
@@ -385,7 +437,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_2",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Test" },
         chat_instance: "inst_1",
-        data: "lc:opt:q2_time:opt_morning",
+        data: answerButton(transport, CLIENT_TG_ID, "q2_time", "opt_morning"),
       },
     });
 
@@ -395,7 +447,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_3",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Test" },
         chat_instance: "inst_1",
-        data: "lc:opt:q3_budget:opt_budget_base",
+        data: answerButton(transport, CLIENT_TG_ID, "q3_budget", "opt_budget_base"),
       },
     });
 
@@ -411,7 +463,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    const errorMsg = getLastMessageTo(transport,CLIENT_TG_ID);
+    const errorMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(errorMsg?.text).toContain("укажите корректный номер телефона");
 
     // No lead created yet
@@ -430,7 +482,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    const successMsg = getLastMessageTo(transport,CLIENT_TG_ID);
+    const successMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(successMsg?.text).toContain("Спасибо! Ваша заявка успешно принята");
 
     const leads = await prisma.lead.findMany({ where: { botId } });
@@ -469,12 +521,12 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         id: "cb_idle_1",
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Idle User" },
         chat_instance: "inst_1",
-        data: "lc:opt:q1_service:opt_audit",
+        data: answerButton(transport, CLIENT_TG_ID, "q1_service", "opt_audit"),
       },
     });
 
     // Verify client is at Q2
-    const q2Msg = getLastMessageTo(transport,CLIENT_TG_ID);
+    const q2Msg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q2Msg?.text).toContain("Когда вам удобно обсудить детали?");
 
     // Simulate 1 hour session expiration in Redis
@@ -495,5 +547,43 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     // Quiz starts cleanly from Q1
     const restartMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(restartMsg?.text).toContain("Какая услуга вас интересует?");
+  });
+  it("повторные и параллельные отправки создают одну заявку на прохождение в PostgreSQL", async () => {
+    const attemptId = randomUUID();
+    const api = botPool.getOrCreateBot(resolvedBot).api;
+    const contextFor = (id: string) =>
+      ({
+        api,
+        botMeta: resolvedBot,
+        from: { id: CLIENT_TG_ID, first_name: "Repeat client" },
+        chat: { id: CLIENT_TG_ID },
+        session: {
+          lang: "RU",
+          quiz: {
+            attemptId: id,
+            currentNodeId: "__contact__",
+            stepCount: 3,
+            startedAt: Date.now(),
+            answers: { q1: { question: "Запрос", answer: "Консультация" } },
+          },
+        },
+      }) as unknown as PlatformBotContext;
+    const options = { rawPhone: "+998901234567", transport, logger };
+    const first = contextFor(attemptId),
+      retry = contextFor(attemptId);
+    expect(
+      await Promise.all([
+        handleLeadCatchContact(first, prisma, options),
+        handleLeadCatchContact(retry, prisma, options),
+      ]),
+    ).toEqual([true, true]);
+    let leads = await prisma.lead.findMany({ where: { botId } });
+    expect(leads).toHaveLength(1);
+    expect(leads[0]!.id).toBe(attemptId);
+    await handleLeadCatchContact(contextFor(attemptId), prisma, options);
+    expect(await prisma.lead.count({ where: { botId } })).toBe(1);
+    await handleLeadCatchContact(contextFor(randomUUID()), prisma, options);
+    leads = await prisma.lead.findMany({ where: { botId } });
+    expect(leads).toHaveLength(2);
   });
 });

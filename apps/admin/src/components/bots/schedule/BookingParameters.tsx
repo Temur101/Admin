@@ -44,7 +44,7 @@ export function BookingParameters({
           max={60}
           value={config.bookingHorizonDays}
           onChange={(e) => update({ bookingHorizonDays: Number(e.target.value) })}
-          helperText="На сколько дней вперёд клиент сможет выбрать дату: от 1 до 60."
+          helperText="От 1 до 60 календарных дней, включая сегодня, по времени Ташкента. Например, 1 — только сегодня."
         />
       </div>
       <details className="text-sm text-ui-secondary">

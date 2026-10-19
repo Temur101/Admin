@@ -1,3 +1,4 @@
+import { platformTariffs } from "../core/platform-tariffs.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import { UpdatePlatformSettingsRequestSchema } from "@lcqb/contracts";
@@ -6,10 +7,7 @@ import { encryptSecret } from "../core/crypto.js";
 import { env } from "../core/env.js";
 import { notifyPlatformOwner } from "../core/platform-notifier.js";
 
-export function registerSettingsRoutes(
-  app: FastifyInstance,
-  prisma: PrismaClient,
-): void {
+export function registerSettingsRoutes(app: FastifyInstance, prisma: PrismaClient): void {
   // GET /api/v1/settings - Get platform settings
   app.get(
     "/api/v1/settings",
@@ -21,11 +19,7 @@ export function registerSettingsRoutes(
           data: {
             id: 1,
             paymentDetails: "8600 0000 0000 0000 (Uzcard)",
-            tariffs: [
-              { months: 1, priceUzs: 150000 },
-              { months: 3, priceUzs: 400000 },
-              { months: 12, priceUzs: 1400000 },
-            ],
+            tariffs: platformTariffs(),
             supportContact: "@support",
             paymentInstructions: "Пришлите скриншот чека об оплате прямо в этот чат.",
           },
@@ -37,7 +31,7 @@ export function registerSettingsRoutes(
         settings: {
           id: settings.id,
           paymentDetails: settings.paymentDetails,
-          tariffs: settings.tariffs,
+          tariffs: platformTariffs(settings.tariffs),
           supportContact: settings.supportContact,
           hasAlertBotToken: !!settings.alertBotTokenEnc,
           alertChatId: settings.alertChatId ?? null,
@@ -85,10 +79,7 @@ export function registerSettingsRoutes(
       if (alertBotUsername !== undefined) updateData.alertBotUsername = alertBotUsername;
 
       if (alertBotToken) {
-        updateData.alertBotTokenEnc = encryptSecret(
-          alertBotToken,
-          env.TOKEN_ENCRYPTION_KEY,
-        );
+        updateData.alertBotTokenEnc = encryptSecret(alertBotToken, env.TOKEN_ENCRYPTION_KEY);
       }
 
       if (alertChatId !== undefined) {
@@ -100,10 +91,7 @@ export function registerSettingsRoutes(
         create: {
           id: 1,
           paymentDetails: paymentDetails ?? "8600 0000 0000 0000",
-          tariffs: tariffs ?? [
-            { months: 1, priceUzs: 150000 },
-            { months: 3, priceUzs: 400000 },
-          ],
+          tariffs: tariffs ?? platformTariffs(),
           supportContact: supportContact ?? "@support",
           paymentInstructions: paymentInstructions ?? "Пришлите чек об оплате.",
           maintenanceMode: maintenanceMode ?? false,
@@ -117,7 +105,7 @@ export function registerSettingsRoutes(
         settings: {
           id: updated.id,
           paymentDetails: updated.paymentDetails,
-          tariffs: updated.tariffs,
+          tariffs: platformTariffs(updated.tariffs),
           supportContact: updated.supportContact,
           hasAlertBotToken: !!updated.alertBotTokenEnc,
           alertChatId: updated.alertChatId ?? null,

@@ -152,6 +152,11 @@ export function registerReceiptsRoutes(
         return reply.code(404).send({ ok: false, error: "Receipt not found" });
       }
 
+      if (receipt.status !== "APPROVED")
+        return reply
+          .code(409)
+          .send({ ok: false, error: "Чек уже отклонён. Обновите список платежей." });
+
       const sub = await prisma.subscription.findUnique({
         where: { botId: receipt.botId },
       });
@@ -200,6 +205,11 @@ export function registerReceiptsRoutes(
       if (!receipt) {
         return reply.code(404).send({ ok: false, error: "Receipt not found" });
       }
+
+      if (receipt.status !== "REJECTED")
+        return reply
+          .code(409)
+          .send({ ok: false, error: "Чек уже одобрен. Обновите список платежей." });
 
       const sub = await prisma.subscription.findUnique({
         where: { botId: receipt.botId },

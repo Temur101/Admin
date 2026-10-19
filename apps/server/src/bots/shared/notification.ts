@@ -33,6 +33,21 @@ export interface NotifyAdminsOptions {
   logger: Logger;
 }
 
+// Telegram limits plain text messages to 4096 characters. Preserve full answers and Unicode.
+function textChunks(text: string): string[] {
+  const chunks: string[] = [];
+  let chunk = "";
+  for (const character of text) {
+    if (chunk.length + character.length > 4000) {
+      chunks.push(chunk);
+      chunk = "";
+    }
+    chunk += character;
+  }
+  if (chunk) chunks.push(chunk);
+  return chunks;
+}
+
 /**
  * Sends a new lead or booking notification to all registered administrators of the bot.
  * Automatically masks sensitive customer data if the subscription is EXPIRED, GRACE_PERIOD, or BLOCKED.
@@ -114,9 +129,15 @@ export async function notifyAdmins(
     }
 
     try {
-      await api.sendMessage(Number(admin.tgId), text, {
-        reply_markup: keyboard.inline_keyboard.length > 0 ? keyboard : undefined,
-      });
+      const chunks = textChunks(text);
+      for (let index = 0; index < chunks.length; index++) {
+        await api.sendMessage(Number(admin.tgId), chunks[index]!, {
+          reply_markup:
+            index === chunks.length - 1 && keyboard.inline_keyboard.length > 0
+              ? keyboard
+              : undefined,
+        });
+      }
       sentCount++;
     } catch (err) {
       logger.error(

@@ -1,5 +1,11 @@
 import { useState } from "react";
-import type { QuizNode } from "@lcqb/contracts";
+import {
+  QuizFreeTextAnswerSchema,
+  QUIZ_FREE_TEXT_MAX_LENGTH,
+  type QuizNode,
+  type QuizOption,
+} from "@lcqb/contracts";
+import { Textarea } from "../../common/Input.js";
 import { Button } from "../../common/Button.js";
 export function QuizFlowPreview({
   nodes,
@@ -13,12 +19,20 @@ export function QuizFlowPreview({
   const [finished, setFinished] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lang, setLang] = useState<"ru" | "uz">("ru");
+  const [pendingText, setPendingText] = useState<QuizOption | null>(null);
+  const [text, setText] = useState("");
+  const [textError, setTextError] = useState(false);
+  const [lastAnswer, setLastAnswer] = useState<string | null>(null);
   const current = nodes.find((node) => node.id === activeId);
   const reset = () => {
     setActiveId(startNodeId);
     setPath([startNodeId]);
     setFinished(false);
     setError(null);
+    setPendingText(null);
+    setText("");
+    setTextError(false);
+    setLastAnswer(null);
   };
   const answer = (nextId?: string | null) => {
     if (!nextId) {
@@ -35,6 +49,18 @@ export function QuizFlowPreview({
     }
     setPath([...path, nextId]);
     setActiveId(nextId);
+  };
+  const submitText = () => {
+    const parsed = QuizFreeTextAnswerSchema.safeParse(text);
+    if (!parsed.success || !pendingText) {
+      setTextError(true);
+      return;
+    }
+    setLastAnswer(parsed.data);
+    answer(pendingText.nextNodeId);
+    setPendingText(null);
+    setText("");
+    setTextError(false);
   };
   return (
     <section
@@ -66,6 +92,11 @@ export function QuizFlowPreview({
         className="p-4 rounded-xl border border-ui-border bg-ui-surface space-y-3"
         aria-live="polite"
       >
+        {lastAnswer && (
+          <p className="rounded-xl bg-ui-accent-soft p-3 whitespace-pre-wrap break-words">
+            {lastAnswer}
+          </p>
+        )}
         {error ? (
           <p className="text-sm text-ui-danger">{error}</p>
         ) : finished ? (
@@ -90,16 +121,61 @@ export function QuizFlowPreview({
             <p className="rounded-xl bg-ui-subtle p-3 break-words">
               {current.title[lang] || "Заполните текст вопроса"}
             </p>
-            {current.options.map((option) => (
-              <button
-                key={option.id}
-                type="button"
-                onClick={() => answer(option.nextNodeId)}
-                className="block w-full text-left rounded-xl border border-ui-border bg-ui-subtle hover:bg-ui-accent-soft p-3 text-sm break-words"
+            {pendingText ? (
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  submitText();
+                }}
+                className="space-y-3"
               >
-                {option.text[lang] || "Заполните ответ"}
-              </button>
-            ))}
+                <p className="text-sm text-ui-secondary">{pendingText.text[lang]}</p>
+                <Textarea
+                  label={lang === "ru" ? "Ваш ответ" : "Javobingiz"}
+                  value={text}
+                  maxLength={QUIZ_FREE_TEXT_MAX_LENGTH}
+                  onChange={(event) => {
+                    setText(event.target.value);
+                    setTextError(false);
+                  }}
+                  error={
+                    textError
+                      ? lang === "ru"
+                        ? `Введите от 1 до ${QUIZ_FREE_TEXT_MAX_LENGTH} символов.`
+                        : `1 dan ${QUIZ_FREE_TEXT_MAX_LENGTH} gacha belgi kiriting.`
+                      : undefined
+                  }
+                />
+                <Button type="submit" size="sm">
+                  {lang === "ru" ? "Отправить ответ" : "Javobni yuborish"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setPendingText(null);
+                    setText("");
+                    setTextError(false);
+                  }}
+                >
+                  {lang === "ru" ? "Вернуться к вариантам" : "Variantlarga qaytish"}
+                </Button>
+              </form>
+            ) : (
+              current.options.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() =>
+                    option.inputType === "TEXT" ? setPendingText(option) : answer(option.nextNodeId)
+                  }
+                  className="block w-full text-left rounded-xl border border-ui-border bg-ui-subtle hover:bg-ui-accent-soft p-3 text-sm break-words"
+                >
+                  {option.text[lang] || "Заполните ответ"}
+                </button>
+              ))
+            )}
           </>
         ) : (
           <p className="text-sm text-ui-muted">
