@@ -41,10 +41,12 @@ export function registerSharedBotHandlers(
     if (!ctx.from) return;
     const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
     if (!isAdmin) {
-      await ctx.answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true });
+      await ctx
+        .answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true })
+        .catch(() => {});
       return;
     }
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
     const lang = (ctx.session.lang as Lang) ?? "RU";
     const text = await fetchRecentEntriesText(prisma, ctx.botMeta, lang);
     await sendReply(ctx, text);
@@ -54,10 +56,12 @@ export function registerSharedBotHandlers(
     if (!ctx.from) return;
     const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
     if (!isAdmin) {
-      await ctx.answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true });
+      await ctx
+        .answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true })
+        .catch(() => {});
       return;
     }
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
     const lang = (ctx.session.lang as Lang) ?? "RU";
     const { text, keyboard } = formatSubscriptionStatusText(ctx.botMeta, lang);
     await sendReply(ctx, text, { reply_markup: keyboard });

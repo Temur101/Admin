@@ -240,6 +240,39 @@ describe("Stage 7: Admin REST API & Clarifications Integration Test", () => {
       });
       expect(extendRes.statusCode).toBe(200);
 
+      // Verify stats.adminsCount vs stats.usersCount in list and details endpoints
+      await prisma.botUser.createMany({
+        data: [
+          { botId: bot.id, tgId: 1001n, firstName: "Admin 1", isAdmin: true },
+          { botId: bot.id, tgId: 2001n, firstName: "Client 1", isAdmin: false },
+          { botId: bot.id, tgId: 2002n, firstName: "Client 2", isAdmin: false },
+        ],
+      });
+
+      const botsListRes = await app.inject({
+        method: "GET",
+        url: "/api/v1/bots",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(botsListRes.statusCode).toBe(200);
+      const listedBot = botsListRes
+        .json<{ bots: Array<{ id: string; stats: { adminsCount: number; usersCount: number } }> }>()
+        .bots.find((b) => b.id === bot.id);
+      expect(listedBot?.stats.adminsCount).toBe(1);
+      expect(listedBot?.stats.usersCount).toBe(3);
+
+      const botDetailRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/bots/${bot.id}`,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(botDetailRes.statusCode).toBe(200);
+      const detailedBot = botDetailRes.json<{
+        bot: { stats: { adminsCount: number; usersCount: number } };
+      }>().bot;
+      expect(detailedBot.stats.adminsCount).toBe(1);
+      expect(detailedBot.stats.usersCount).toBe(3);
+
       // Permanent purge with ?purge=true
       const purgeRes = await app.inject({
         method: "DELETE",

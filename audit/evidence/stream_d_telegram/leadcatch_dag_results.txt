@@ -1,0 +1,17 @@
+=== LEADCATCH DAG ALGORITHMS UNIT TEST REPORT ===
+Executed: 2026-10-19T14:51:41Z
+Command: pnpm vitest run apps/server/test/leadcatch-dag.test.ts
+
+ RUN  v3.2.7 F:/Рабочий стол/AAA
+
+ ✓ apps/server/test/leadcatch-dag.test.ts (11 tests) 7ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Duration  1.50s
+
+Algorithms Verified:
+- Cycle detection via Depth-First Search (DFS): detects directed cycles accurately
+- Path length enforcement: minimum 3 steps, maximum 5 steps
+- Reachability analysis: checks that all declared nodes are reachable from startNodeId
+- Terminal node validation: verifies that quiz branches terminate with null nextNodeId

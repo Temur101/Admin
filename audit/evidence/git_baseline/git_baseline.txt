@@ -1,0 +1,28 @@
+=== GIT BASELINE VERIFICATION ===
+Generated: 2026-10-19T14:47:45Z
+Working Directory: f:\Рабочий стол\AAA
+Integrity Mode: development / read-only audit
+
+$ git rev-parse HEAD
+c7a9084185d48c15df99cdf6197f702c9be782cd
+
+$ git status
+On branch main
+Your branch is up to date with 'origin/main'.
+
+nothing to commit, working tree clean
+
+$ git status --porcelain
+(output is empty; no modified or untracked tracked-files)
+
+$ git branch -a
+* main
+  remotes/origin/HEAD -> origin/main
+  remotes/origin/main
+
+$ git log -n 5 --oneline
+c7a9084 fix: complete payment, bot navigation and maintenance improvements
+445fa83 feat(admin): simplify bot setup and improve visual editors
+6dddb5f feat(admin): complete Stage 7, 8 and 8.5 (Waves 1-3)
+2bd0519 refactor(server): modularize services, isolate test settings, and finalize verification (B08/B09)
+02f002a fix(build): clean build entrypoint, dynamic tariffs, and typed bot handlers (B08)

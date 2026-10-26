@@ -2,7 +2,9 @@ import { registerBookingSelectionHandlers } from "./booking-selection.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
 import { isActualBotAdmin } from "../shared/user-service.js";
-import { cancelBooking } from "./booking-service.js";
+import { cancelBooking, formatTashkentDateTime } from "./booking-service.js";
+import { notifyAdmins } from "../shared/notification.js";
+import { getQuickBookConfig } from "./config-resolver.js";
 
 export {
   type QuickBookComposerOptions,
@@ -15,6 +17,30 @@ import {
   startQuickBookFlow,
   type QuickBookComposerOptions,
 } from "./quickbook-handlers.js";
+
+function resolveBookingDetails(
+  booking: {
+    bot?: { settings: unknown } | null;
+    serviceId: string;
+    serviceName: string;
+    staffId: string;
+    slotTime: Date;
+  },
+  settings: unknown,
+  lang: "RU" | "UZ",
+) {
+  const config = getQuickBookConfig(
+    (booking.bot?.settings ?? settings) as Record<string, unknown> | null | undefined,
+  );
+  const loc = lang === "UZ" ? "uz" : "ru";
+  const service = config.services.find((s) => s.id === booking.serviceId);
+  const resource = config.resources.find((r) => r.id === booking.staffId);
+  return {
+    serviceName: service?.name[loc] || booking.serviceName,
+    staffName: resource?.name[loc] || booking.staffId,
+    timeFormatted: formatTashkentDateTime(booking.slotTime),
+  };
+}
 
 export function registerQuickBookHandlers(
   bot: import("grammy").Bot<PlatformBotContext>,
@@ -110,6 +136,7 @@ export function registerQuickBookHandlers(
 
     const booking = await prisma.booking.findUnique({
       where: { id: bookingId },
+      include: { bot: true },
     });
 
     if (!booking || booking.botId !== ctx.botMeta.id) {
@@ -133,6 +160,28 @@ export function registerQuickBookHandlers(
       await prisma.booking.update({
         where: { id: bookingId },
         data: { status: "CONFIRMED" },
+      });
+    }
+
+    const lockKey = `booking:confirm_notified:${bookingId}`;
+    const setRes = await redis.set(lockKey, "1", "EX", 86400, "NX").catch(() => null);
+    if (setRes === "OK") {
+      const details = resolveBookingDetails(booking, ctx.botMeta.settings, lang);
+      await notifyAdmins(
+        ctx.botMeta.id,
+        {
+          kind: "BOOKING_CONFIRMED",
+          name: booking.customerName,
+          phone: booking.customerPhone,
+          service: details.serviceName,
+          staff: details.staffName,
+          time: details.timeFormatted,
+          serviceId: booking.serviceId,
+          staffId: booking.staffId,
+        },
+        { prisma, transport: opts.transport, logger: opts.logger },
+      ).catch((err) => {
+        opts.logger.error({ err: (err as Error).message }, "Failed to notify admins of booking confirmation");
       });
     }
 
@@ -160,6 +209,26 @@ export function registerQuickBookHandlers(
         await ctx.reply("Запись не найдена / Band topilmadi");
       }
       return;
+    }
+
+    if (!result.alreadyCancelled) {
+      const details = resolveBookingDetails(result.booking, ctx.botMeta.settings, lang);
+      await notifyAdmins(
+        ctx.botMeta.id,
+        {
+          kind: "BOOKING_CANCELLED",
+          name: result.booking.customerName,
+          phone: result.booking.customerPhone,
+          service: details.serviceName,
+          staff: details.staffName,
+          time: details.timeFormatted,
+          serviceId: result.booking.serviceId,
+          staffId: result.booking.staffId,
+        },
+        { prisma, transport: opts.transport, logger: opts.logger },
+      ).catch((err) => {
+        opts.logger.error({ err: (err as Error).message }, "Failed to notify admins of booking cancellation");
+      });
     }
 
     await ctx.reply(t(lang, "qb_cancelled_reply"));

@@ -145,6 +145,53 @@ describe("Wave 2 Security, Recovery and Memory Audits", () => {
       });
       expect(verified.tokenType).toBe("access");
     });
+
+    it("should revoke both accessToken and refreshToken in Redis upon logout", async () => {
+      const { accessToken, refreshToken } = await getTokens();
+
+      // Verify accessToken works before logout
+      const meBefore = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      expect(meBefore.statusCode).toBe(200);
+
+      // Logout passing both Authorization header and refreshToken cookie
+      const logoutRes = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/logout",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        cookies: {
+          refreshToken,
+        },
+      });
+      expect(logoutRes.statusCode).toBe(200);
+
+      // Old accessToken must immediately fail with 401
+      const meAfter = await app.inject({
+        method: "GET",
+        url: "/api/v1/auth/me",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+      expect(meAfter.statusCode).toBe(401);
+
+      // Old refreshToken must fail with 401 on /api/v1/auth/refresh
+      const refreshAfter = await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/refresh",
+        cookies: {
+          refreshToken,
+        },
+      });
+      expect(refreshAfter.statusCode).toBe(401);
+    });
   });
 
   describe("CRIT-01, MAJ-10 & CRIT-07: Receipts storage, traversal defense & auth", () => {
@@ -210,6 +257,26 @@ describe("Wave 2 Security, Recovery and Memory Audits", () => {
         url: `/api/v1/receipts/${receipt.id}/image?token=invalid.jwt.token`,
       });
       expect(unauthRes.statusCode).toBe(401);
+
+      // Logout and verify revoked accessToken fails for both ?token= and Authorization header
+      await app.inject({
+        method: "POST",
+        url: "/api/v1/auth/logout",
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      const revokedQueryRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/receipts/${receipt.id}/image?token=${encodeURIComponent(accessToken)}`,
+      });
+      expect(revokedQueryRes.statusCode).toBe(401);
+
+      const revokedHeaderRes = await app.inject({
+        method: "GET",
+        url: `/api/v1/receipts/${receipt.id}/image`,
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      expect(revokedHeaderRes.statusCode).toBe(401);
 
       // Clean up file
       await fs.unlink(fullPath).catch(() => {});

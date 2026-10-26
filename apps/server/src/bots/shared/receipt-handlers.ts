@@ -141,7 +141,7 @@ export function registerReceiptHandlers(
 ): void {
   bot.callbackQuery("admin:pay", async (ctx) => {
     if (!ctx.from) return;
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
 
     const user = await prisma.botUser.findUnique({
       where: {
@@ -171,7 +171,7 @@ export function registerReceiptHandlers(
 
   bot.callbackQuery(/^pay:tariff:(\d+)$/, async (ctx) => {
     if (!ctx.from) return;
-    await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery().catch(() => {});
 
     const user = await prisma.botUser.findUnique({
       where: {

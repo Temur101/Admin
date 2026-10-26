@@ -7,6 +7,7 @@ import type { Logger } from "../../core/logger.js";
 import { t } from "./i18n.js";
 import { maskName, maskPhone, maskUsername } from "./masking.js";
 import { isMaskedStatus } from "./subscription.js";
+import { getQuickBookConfig } from "../quickbook/config-resolver.js";
 
 export interface LeadNotifyPayload {
   kind: "LEAD";
@@ -23,9 +24,37 @@ export interface BookingNotifyPayload {
   service: string;
   staff: string;
   time: string;
+  serviceId?: string;
+  staffId?: string;
 }
 
-export type AdminNotifyPayload = LeadNotifyPayload | BookingNotifyPayload;
+export interface BookingConfirmedNotifyPayload {
+  kind: "BOOKING_CONFIRMED";
+  name?: string | null;
+  phone: string;
+  service: string;
+  staff: string;
+  time: string;
+  serviceId?: string;
+  staffId?: string;
+}
+
+export interface BookingCancelledNotifyPayload {
+  kind: "BOOKING_CANCELLED";
+  name?: string | null;
+  phone: string;
+  service: string;
+  staff: string;
+  time: string;
+  serviceId?: string;
+  staffId?: string;
+}
+
+export type AdminNotifyPayload =
+  | LeadNotifyPayload
+  | BookingNotifyPayload
+  | BookingConfirmedNotifyPayload
+  | BookingCancelledNotifyPayload;
 
 export interface NotifyAdminsOptions {
   prisma: PrismaClient;
@@ -104,20 +133,48 @@ export async function notifyAdmins(
         });
       }
     } else {
+      let serviceDisplay = payload.service;
+      let staffDisplay = payload.staff;
+      if (bot.settings && (payload.serviceId || payload.staffId)) {
+        const config = getQuickBookConfig(bot.settings as Record<string, unknown> | null | undefined);
+        const loc = lang === "UZ" ? "uz" : "ru";
+        if (payload.serviceId) {
+          const srv = config.services.find((s) => s.id === payload.serviceId);
+          if (srv?.name[loc]) serviceDisplay = srv.name[loc];
+        }
+        if (payload.staffId) {
+          const res = config.resources.find((r) => r.id === payload.staffId);
+          if (res?.name[loc]) staffDisplay = res.name[loc];
+        }
+      }
+
+      const openKey =
+        payload.kind === "BOOKING_CONFIRMED"
+          ? "booking_confirmed_notification_open"
+          : payload.kind === "BOOKING_CANCELLED"
+            ? "booking_cancelled_notification_open"
+            : "booking_notification_open";
+      const maskedKey =
+        payload.kind === "BOOKING_CONFIRMED"
+          ? "booking_confirmed_notification_masked"
+          : payload.kind === "BOOKING_CANCELLED"
+            ? "booking_cancelled_notification_masked"
+            : "booking_notification_masked";
+
       if (masked) {
-        text = t(lang, "booking_notification_masked", {
+        text = t(lang, maskedKey, {
           name: maskName(payload.name),
           phone: maskPhone(payload.phone),
-          service: payload.service,
-          staff: payload.staff,
+          service: serviceDisplay,
+          staff: staffDisplay,
           time: payload.time,
         });
       } else {
-        text = t(lang, "booking_notification_open", {
+        text = t(lang, openKey, {
           name: payload.name || "—",
           phone: payload.phone,
-          service: payload.service,
-          staff: payload.staff,
+          service: serviceDisplay,
+          staff: staffDisplay,
           time: payload.time,
         });
       }

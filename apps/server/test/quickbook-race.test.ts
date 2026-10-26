@@ -85,6 +85,7 @@ describe("QuickBook Race Condition Test (50 Parallel Bookings)", () => {
         staffId: "staff_alisher",
         slotTime,
         config: QUICKBOOK_TEST_CONFIG,
+        now: new Date("2026-10-20T03:00:00.000Z"),
       });
     });
 

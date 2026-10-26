@@ -45,7 +45,7 @@ export class UpdateDeduplicator {
   }
 
   /**
-   * Atomically claims update via NX. Returns true if first time, false if duplicate.
+   * Atomically claims update via NX. Returns true if duplicate (already seen), false if first time.
    */
   async checkAndSet(botId: string, updateId: number): Promise<boolean> {
     const k = this.key(botId, updateId);

@@ -1,0 +1,38 @@
+================================================================================
+[ADVERSARIAL STRESS TEST] SCN-E2E-04: Webhook Idempotency & Duplicate Rejection
+Timestamp: 2026-10-19T15:13:01.256Z
+================================================================================
+
+--- Phase 0: Test Fixture Setup ---
+[+] Seeded Bot 1 (0a7a7e9b-5145-4eb8-9ac5-3ea7d6528695, hash: b42b6cc29319f3fc4ae0b4a9bc2f312ec1ddb2a51aac1d91b47ac606ce49f3e8) and Bot 2 (dfc58a20-f15a-42e7-81b2-f55114186237, hash: acc4b998f1c6b207d7fb73dfcb231c70912d70b87eb44bf54c5ffe893d2d6588)
+
+--- Experiment 1: Triple Sequential Delivery of Identical Update ---
+[i] 1st Delivery: status=200, body={"ok":true}
+[i] 2nd Delivery: status=200, body={"ok":true,"duplicate":true}
+[i] 3rd Delivery: status=200, body={"ok":true,"duplicate":true}
+[i] WebhookInbox records for update 80001: 1 (Expected: 1)
+[Verdict Exp 1]: PASS
+
+--- Experiment 2: 50 Concurrent Burst Deliveries of Exact Same Update ---
+[i] Burst Dispatched: 50 in 1491 ms
+[i] Primary Accepted (new): 1 (Expected: 1)
+[i] Duplicate Handled ({ duplicate: true }): 49 (Expected: 49)
+[i] Unexpected Errors: 0 (Expected: 0)
+[i] WebhookInbox records for update 80002: 1 (Expected: 1)
+[Verdict Exp 2]: PASS
+
+--- Experiment 3: Duplicate Inline Button Click (CallbackQuery) ---
+[i] Button Click 1: status=200, body={"ok":true}
+[i] Button Click 2 (repeat): status=200, body={"ok":true,"duplicate":true}
+[i] WebhookInbox records for callback update 80003: 1
+[Verdict Exp 3]: PASS
+
+--- Experiment 4: Cross-Bot update_id Isolation (No Collision) ---
+[i] Bot 1 Delivery: status=200, body={"ok":true}
+[i] Bot 2 Delivery: status=200, body={"ok":true}
+[i] WebhookInbox: Bot 1 count=1, Bot 2 count=1
+[Verdict Exp 4]: PASS
+
+================================================================================
+FINAL ADVERSARIAL VERDICT: PASS (Idempotency & Dedup Verified)
+================================================================================

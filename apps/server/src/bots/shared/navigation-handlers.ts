@@ -112,7 +112,9 @@ export function registerNavigationHandlers(
   );
   bot.callbackQuery("admin:lang", async (ctx) => {
     if (!ctx.from || !(await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id))) {
-      await ctx.answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true });
+      await ctx
+        .answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo'q", show_alert: true })
+        .catch(() => {});
       return;
     }
     await ctx.answerCallbackQuery().catch(() => {});

@@ -12,6 +12,7 @@ import { BotQuizEditorTab } from "../components/bots/BotQuizEditorTab.js";
 import { BotScheduleEditorTab } from "../components/bots/BotScheduleEditorTab.js";
 import { BotAdminsTab } from "../components/bots/BotAdminsTab.js";
 import { BotDiagnosticsTab } from "../components/bots/BotDiagnosticsTab.js";
+import { BotResetSection } from "../components/bots/BotResetSection.js";
 
 type TabId = "overview" | "templates" | "config" | "admins" | "diagnostics";
 
@@ -19,6 +20,7 @@ export function BotDetailsPage() {
   const { id } = useParams<{ id: string }>();
   const [search] = useSearchParams();
   const [editorRevision, setEditorRevision] = useState(0);
+
   const [activeTab, setActiveTab] = useState<TabId>("overview");
 
   const {
@@ -33,10 +35,8 @@ export function BotDetailsPage() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-6 w-32 bg-ui-hover rounded" />
-        <div className="h-20 bg-ui-surface border border-ui-border rounded-2xl" />
-        <div className="h-64 bg-ui-surface border border-ui-border rounded-2xl" />
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-ui-accent" />
       </div>
     );
   }
@@ -46,12 +46,13 @@ export function BotDetailsPage() {
       <div className="space-y-4">
         <Link
           to="/bots"
-          className="inline-flex items-center gap-1.5 text-sm text-ui-accent hover:underline"
+          className="inline-flex items-center gap-2 text-sm text-ui-muted hover:text-ui-text transition-colors"
         >
-          <ArrowLeft className="h-3.5 w-3.5" /> Назад к списку ботов
+          <ArrowLeft className="h-4 w-4" />
+          Назад к списку ботов
         </Link>
-        <Alert type="error" title="Бот не найден">
-          Не удалось найти бота с указанным ID. Возможно, он был удален.
+        <Alert type="error" title="Ошибка загрузки бота">
+          {error instanceof Error ? error.message : "Бот не найден"}
         </Alert>
       </div>
     );
@@ -69,47 +70,52 @@ export function BotDetailsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-4">
-        <Link
-          to="/bots"
-          className="inline-flex items-center gap-1.5 text-sm text-ui-accent hover:underline"
-        >
-          <ArrowLeft className="h-3.5 w-3.5" /> Все боты
-        </Link>
+      {/* Шапка страницы */}
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <Link
+            to="/bots"
+            className="inline-flex items-center gap-1.5 text-sm text-ui-accent hover:underline"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Все боты
+          </Link>
+          <Link to={`/bots/${bot.id}?setup=1`} className="inline-flex text-sm text-ui-accent">
+            Открыть мастер запуска
+          </Link>
+        </div>
 
-        <Link to={`/bots/${bot.id}?setup=1`} className="inline-flex text-sm text-ui-accent">
-          Открыть мастер запуска
-        </Link>
-      </div>
-      {/* Заголовок бота */}
-      <div className="p-6 bg-ui-surface border border-ui-border rounded-2xl flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-4">
-        <div className="flex min-w-0 flex-1 items-start gap-3">
-          <div className="h-12 w-12 shrink-0 rounded-2xl bg-ui-accent-soft text-ui-accent flex items-center justify-center">
-            <Bot className="h-6 w-6" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="w-full text-xl font-bold text-ui-text tracking-tight break-all">
-                {bot.botUsername ? `@${bot.botUsername}` : "Telegram Bot"}
-              </h1>
-              <span className="font-mono text-sm px-2 py-0.5 rounded-md bg-ui-hover text-ui-secondary border border-ui-border">
-                {bot.botType}
-              </span>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-ui-accent-soft rounded-2xl border border-ui-accent-border">
+              <Bot className="h-6 w-6 text-ui-accent" />
             </div>
-            <p className="text-sm text-ui-muted mt-0.5">
-              Клиент: <span className="text-ui-text font-medium">{bot.tenantName}</span> · ID:{" "}
-              <span className="font-mono">{bot.id}</span>
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h1 className="text-2xl font-bold text-ui-text">
+                  {bot.botUsername ? `@${bot.botUsername}` : "Бот без юзернейма"}
+                </h1>
+                <StatusBadge status={bot.subscription?.status || "UNKNOWN"} />
+              </div>
+              <p className="text-sm text-ui-muted mt-0.5">
+                Клиент:{" "}
+                <Link
+                  to={`/tenants/${bot.tenantId}`}
+                  className="font-medium text-ui-text hover:underline"
+                >
+                  {bot.tenantName}
+                </Link>{" "}
+                · Тип:{" "}
+                <span className="font-medium text-ui-text">
+                  {bot.botType === "LEADCATCH" ? "Сбор заявок" : "Запись на услуги"}
+                </span>
+              </p>
+            </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <StatusBadge status={bot.subscription?.status || "UNKNOWN"} />
         </div>
       </div>
 
-      {/* Навигационные табы */}
-      <div className="border-b border-ui-border flex gap-2 overflow-x-auto pb-px">
+      {/* Навигация по табам */}
+      <div className="flex border-b border-ui-border overflow-x-auto gap-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeTab === tab.id;
@@ -117,13 +123,13 @@ export function BotDetailsPage() {
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-xl transition-all cursor-pointer border-b-2 -mb-px shrink-0 ${
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap transition-colors cursor-pointer ${
                 isActive
-                  ? "border-ui-accent text-ui-text bg-ui-surface"
-                  : "border-transparent text-ui-muted hover:text-ui-text hover:bg-ui-surface"
+                  ? "border-ui-accent text-ui-accent"
+                  : "border-transparent text-ui-muted hover:text-ui-text hover:border-ui-border"
               }`}
             >
-              <Icon className="h-3.5 w-3.5" />
+              <Icon className="h-4 w-4" />
               <span>{tab.label}</span>
             </button>
           );
@@ -142,6 +148,7 @@ export function BotDetailsPage() {
           ) : (
             <BotScheduleEditorTab key={`${bot.id}:${editorRevision}`} bot={bot} />
           )}
+          <BotResetSection bot={bot} />
         </div>
         {activeTab === "admins" && <BotAdminsTab bot={bot} />}
         {activeTab === "diagnostics" && <BotDiagnosticsTab bot={bot} />}

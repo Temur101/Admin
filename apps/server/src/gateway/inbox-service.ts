@@ -7,6 +7,14 @@ import type { UpdateDeduplicator } from "./deduplicator.js";
 import type { TenantResolver } from "./tenant-resolver.js";
 import type { ResolvedBot } from "./types.js";
 
+const RELEASE_SESSION_LOCK_LUA = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+  return redis.call("del", KEYS[1])
+else
+  return 0
+end
+`;
+
 export function extractTgUserId(update: Record<string, unknown>): number | bigint | null {
   const msg = (update.message ?? update.edited_message) as Record<string, unknown> | undefined;
   if (msg?.from && typeof (msg.from as Record<string, unknown>).id === "number") {
@@ -116,10 +124,7 @@ export class WebhookInboxService {
       if (res === "OK") {
         return async () => {
           try {
-            const current = await this.redis.get(key);
-            if (current === token) {
-              await this.redis.del(key);
-            }
+            await this.redis.eval(RELEASE_SESSION_LOCK_LUA, 1, key, token);
           } catch {
             // Ignore lock release failures
           }

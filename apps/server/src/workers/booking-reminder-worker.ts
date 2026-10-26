@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { PrismaClient } from "@prisma/client";
 import { InlineKeyboard } from "grammy";
 import type { Redis } from "ioredis";
+import { RESOURCE_LABELS } from "@lcqb/contracts";
 import { createBotApi, type TelegramTransport } from "../adapters/telegram/transport.js";
 import { decryptSecret } from "../core/crypto.js";
 import { env } from "../core/env.js";
 import type { Logger } from "../core/logger.js";
 import { t } from "../bots/shared/i18n.js";
-import { REMINDER_ZSET_KEY, formatTashkentDateTime } from "../bots/quickbook/booking-service.js";
+import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS, formatTashkentDateTime } from "../bots/quickbook/booking-service.js";
+import { getQuickBookConfig } from "../bots/quickbook/config-resolver.js";
 
 export interface BookingReminderWorkerOptions {
   prisma: PrismaClient;
@@ -41,7 +43,7 @@ end
 `;
 
 /**
- * Background worker checking for upcoming bookings to send a reminder 2 hours before the slot.
+ * Background worker checking for upcoming bookings to send a reminder 1 hour before the slot.
  * Ensures resilient processing:
  * 1. Redis ZSET + DB recovery (handles Redis crashes / downtime during booking).
  * 2. Atomic row-level claim/lease preventing race conditions between multiple workers.
@@ -114,17 +116,14 @@ export async function runBookingReminderWorker(
     let dbDueIds: string[] = [];
     if (enableDbRecovery) {
       try {
-        const twoHoursAhead = new Date(now.getTime() + 2 * 3600 * 1000);
+        const oneHourAhead = new Date(now.getTime() + REMINDER_LEAD_TIME_MS);
         const dbDueBookings = await prisma.booking.findMany({
           where: {
             status: "CONFIRMED",
             reminderSent: false,
-            slotTime: { lte: twoHoursAhead },
+            slotTime: { lte: oneHourAhead },
             reminderAttempts: { lt: maxAttempts },
-            OR: [
-              { reminderLockedUntil: null },
-              { reminderLockedUntil: { lte: now } },
-            ],
+            OR: [{ reminderLockedUntil: null }, { reminderLockedUntil: { lte: now } }],
           },
           select: { id: true },
           take: batchSize,
@@ -157,10 +156,7 @@ export async function runBookingReminderWorker(
           status: "CONFIRMED",
           reminderSent: false,
           reminderAttempts: { lt: maxAttempts },
-          OR: [
-            { reminderLockedUntil: null },
-            { reminderLockedUntil: { lte: now } },
-          ],
+          OR: [{ reminderLockedUntil: null }, { reminderLockedUntil: { lte: now } }],
         },
         data: {
           reminderLockedUntil: leaseUntil,
@@ -219,11 +215,7 @@ export async function runBookingReminderWorker(
         logger.info({ bookingId }, "Booking is manual or has no customerTgId; skipping Telegram push");
         await prisma.booking.update({
           where: { id: bookingId },
-          data: {
-            reminderSent: true,
-            reminderLockedUntil: null,
-            reminderLastError: null,
-          },
+          data: { reminderSent: true, reminderLockedUntil: null, reminderLastError: null },
         });
         await redis.zrem(REMINDER_ZSET_KEY, bookingId).catch(() => {});
         skippedCount++;
@@ -237,20 +229,22 @@ export async function runBookingReminderWorker(
 
         // Find customer language
         const user = await prisma.botUser.findUnique({
-          where: {
-            botId_tgId: {
-              botId: booking.bot.id,
-              tgId: booking.customerTgId,
-            },
-          },
+          where: { botId_tgId: { botId: booking.bot.id, tgId: booking.customerTgId } },
         });
         const lang = user?.lang ?? "RU";
+        const loc = lang === "UZ" ? "uz" : "ru";
+        const config = getQuickBookConfig(booking.bot.settings as Record<string, unknown> | null | undefined);
+        const service = config.services.find((s) => s.id === booking.serviceId);
+        const resource = config.resources.find((r) => r.id === booking.staffId);
+        const serviceName = service?.name[loc] || booking.serviceName;
+        const resourceName = resource?.name[loc] || booking.staffId;
+        const resourceLabel = config.resourceLabel?.[loc] || RESOURCE_LABELS[config.resourceType][loc];
 
         const text = t(lang, "qb_reminder_text", {
           time: formatTashkentDateTime(booking.slotTime),
-          service: booking.serviceName,
-          label: lang === "UZ" ? "Mutaxassis" : "Специалист",
-          resource: booking.staffId,
+          service: serviceName,
+          label: resourceLabel,
+          resource: resourceName,
         });
 
         const keyboard = new InlineKeyboard()

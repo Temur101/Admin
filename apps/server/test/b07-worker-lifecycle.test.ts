@@ -256,4 +256,43 @@ describe("B07: Background Worker Lifecycle, Scheduler & Health Probes", () => {
 
     await app.close();
   });
+
+  it("6. Prevents overlapping in-process ticks for the same worker", async () => {
+    const app = await buildApp({
+      prisma,
+      redis,
+      transport,
+      enableScheduler: true,
+      schedulerOptions: {
+        runImmediately: false,
+        subscriptionIntervalMs: 60_000,
+        reminderIntervalMs: 60_000,
+      },
+    });
+    await app.ready();
+
+    const scheduler = (
+      app as unknown as {
+        scheduler: {
+          triggerSubscriptionTick: () => Promise<unknown>;
+          triggerReminderTick: () => Promise<unknown>;
+          activeTaskCount: number;
+        };
+      }
+    ).scheduler;
+
+    const subTask1 = scheduler.triggerSubscriptionTick();
+    const subTask2 = scheduler.triggerSubscriptionTick();
+    expect(subTask1).toBe(subTask2);
+
+    const remTask1 = scheduler.triggerReminderTick();
+    const remTask2 = scheduler.triggerReminderTick();
+    expect(remTask1).toBe(remTask2);
+    expect(scheduler.activeTaskCount).toBe(2);
+
+    await Promise.all([subTask1, remTask1]);
+    expect(scheduler.activeTaskCount).toBe(0);
+
+    await app.close();
+  });
 });

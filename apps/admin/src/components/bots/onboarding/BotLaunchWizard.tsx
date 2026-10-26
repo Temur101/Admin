@@ -93,30 +93,32 @@ export function BotLaunchWizard({ bot, draftScope }: { bot: BotDetails; draftSco
         </p>
       )}
       <div className="bg-ui-surface rounded-2xl border border-ui-border p-4 sm:p-6 space-y-5">
-        <div hidden={step !== 3 || launched} className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold">Настройте сценарий клиента</h2>
-            <Button variant="outline" onClick={() => setTemplatesOpen(!templatesOpen)}>
-              {templatesOpen ? "Вернуться в редактор" : "Выбрать другой шаблон"}
-            </Button>
-          </div>
-          {templatesOpen && (
-            <BotTemplatesTab
-              bot={bot}
-              onApplied={() => {
-                setEditorRevision((value) => value + 1);
-                setTemplatesOpen(false);
-              }}
-            />
-          )}
-          <div hidden={templatesOpen}>
-            {bot.botType === "LEADCATCH" ? (
-              <BotQuizEditorTab key={editorRevision} bot={bot} />
-            ) : (
-              <BotScheduleEditorTab key={editorRevision} bot={bot} />
+        {step === 3 && !launched && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-xl font-semibold">Настройте сценарий клиента</h2>
+              <Button variant="outline" onClick={() => setTemplatesOpen(!templatesOpen)}>
+                {templatesOpen ? "Вернуться в редактор" : "Выбрать другой шаблон"}
+              </Button>
+            </div>
+            {templatesOpen && (
+              <BotTemplatesTab
+                bot={bot}
+                onApplied={() => {
+                  setEditorRevision((value) => value + 1);
+                  setTemplatesOpen(false);
+                }}
+              />
             )}
+            <div hidden={templatesOpen}>
+              {bot.botType === "LEADCATCH" ? (
+                <BotQuizEditorTab key={editorRevision} bot={bot} />
+              ) : (
+                <BotScheduleEditorTab key={editorRevision} bot={bot} />
+              )}
+            </div>
           </div>
-        </div>
+        )}
         {step === 4 && !launched && (
           <SetupCheckStep
             isActive={bot.isActive}

@@ -1,0 +1,9 @@
+=== CHECK MOCKS & CODE INTEGRITY REPORT ===
+Executed: 2026-10-19T14:51:10Z
+Command: pnpm check-mocks
+
+$ tsx scripts/check-mocks.ts
+✅ Anti-Mock & Code Integrity check passed: 0 violations.
+
+Verification Result: PASS
+No dummy implementations, simulated setTimeout delays, or hardcoded mock fixtures in apps/server/src.

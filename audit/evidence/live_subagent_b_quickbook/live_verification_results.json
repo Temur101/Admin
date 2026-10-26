@@ -1,0 +1,1003 @@
+{
+  "timestamp": "2026-10-19T16:23:58.313Z",
+  "step1_botConfig": {
+    "id": "f3ece32d-f484-422b-b8a2-1d545951933d",
+    "tenantId": "b93bfdb5-9e07-402b-b9ee-fd207f7f0bb2",
+    "botType": "QUICKBOOK",
+    "botTokenHash": "8879b91aa729ad78b1dcbd736b18ff0ffdb384026d667ad5000a4e9d117131d1",
+    "webhookSecret": "eebd9dc3b60f97ed607c72dc86644770767d6112215e9c2e5d5edcabca55a78d",
+    "botUsername": "QuickBook_test_bot",
+    "adminInviteCode": "d84c658f4e7f0f530330bcc9267c147d",
+    "settings": {
+      "services": [
+        {
+          "id": "srv_haircut",
+          "name": {
+            "ru": "Стрижка мужская классическая",
+            "uz": "Klassik erkaklar sochi"
+          },
+          "priceUzs": 80000,
+          "durationMin": 45
+        },
+        {
+          "id": "beard_trim",
+          "name": {
+            "ru": "Моделирование и стрижка бороды",
+            "uz": "Soqol modelirovka qilish"
+          },
+          "priceUzs": 50000,
+          "durationMin": 30
+        },
+        {
+          "id": "combo_hair_beard",
+          "name": {
+            "ru": "Комплекс (Стрижка + Борода)",
+            "uz": "Kompleks (Soch + Soqol)"
+          },
+          "priceUzs": 110000,
+          "durationMin": 60
+        }
+      ],
+      "timezone": "Asia/Tashkent",
+      "resources": [
+        {
+          "id": "master_alisher",
+          "name": {
+            "ru": "Алишер (Топ-барбер)",
+            "uz": "Alisher (Top-barber)"
+          },
+          "workDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "workHours": {
+            "end": "20:00",
+            "start": "10:00"
+          }
+        },
+        {
+          "id": "master_aziz",
+          "name": {
+            "ru": "Азиз (Барбер)",
+            "uz": "Aziz (Barber)"
+          },
+          "workDays": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "workHours": {
+            "end": "21:00",
+            "start": "11:00"
+          }
+        }
+      ],
+      "resourceType": "STAFF",
+      "slotIntervalMin": 30,
+      "bookingHorizonDays": 14
+    },
+    "isActive": true,
+    "createdAt": "2026-10-19T16:07:35.492Z",
+    "subscription": {
+      "id": "c17d5d01-7e3a-47b0-a5f0-630ecef3378c",
+      "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+      "status": "TRIAL",
+      "trialEndsAt": "2026-10-26T16:07:35.486Z",
+      "paidUntil": null,
+      "failedReceiptAttempts": 0,
+      "updatedAt": "2026-10-19T16:07:35.497Z"
+    },
+    "tenant": {
+      "id": "b93bfdb5-9e07-402b-b9ee-fd207f7f0bb2",
+      "clientName": "Клиент Б — Барбершоп QuickCut",
+      "contactPhone": "+998909998877",
+      "status": "ACTIVE",
+      "createdAt": "2026-10-19T16:07:28.279Z"
+    },
+    "botTokenEncRedacted": "[REDACTED_LEN_109]"
+  },
+  "stepA_adminRegistration": {
+    "tgId": 800001001,
+    "commandSent": "/start adm_d84c658f4e7f0f530330bcc9267c147d",
+    "httpResponseStart": {
+      "status": 200,
+      "durationMs": 83,
+      "body": {
+        "ok": true
+      }
+    },
+    "inboxStatusAfterStart": {
+      "id": "adb62a8f-ac2c-4709-87e6-0a2fece9d1ce",
+      "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+      "updateId": "8600001",
+      "payload": {
+        "message": {
+          "chat": {
+            "id": 800001001,
+            "type": "private",
+            "first_name": "Админ Барбершопа"
+          },
+          "date": 1792427038,
+          "from": {
+            "id": 800001001,
+            "is_bot": false,
+            "first_name": "Админ Барбершопа",
+            "language_code": "ru"
+          },
+          "text": "/start adm_d84c658f4e7f0f530330bcc9267c147d",
+          "entities": [
+            {
+              "type": "bot_command",
+              "length": 6,
+              "offset": 0
+            }
+          ],
+          "message_id": 8600001
+        },
+        "update_id": 8600001
+      },
+      "status": "RECEIVED",
+      "attempts": 1,
+      "maxAttempts": 3,
+      "lockedUntil": null,
+      "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+      "createdAt": "2026-10-19T16:23:58.615Z",
+      "processedAt": null
+    },
+    "botUserAfterStart": {
+      "id": "b1f57991-25ea-4ec1-b0ed-c44e2e88e9f2",
+      "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+      "tgId": "800001001",
+      "firstName": "Админ Барбершопа",
+      "username": null,
+      "lang": null,
+      "isAdmin": true,
+      "createdAt": "2026-10-19T16:23:58.666Z"
+    },
+    "httpResponseSetLang": {
+      "status": 200,
+      "durationMs": 61,
+      "body": {
+        "ok": true
+      }
+    },
+    "inboxStatusAfterLang": {
+      "id": "c3431f9b-491e-427c-9ae4-6cef1b2ff0e3",
+      "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+      "updateId": "8600002",
+      "payload": {
+        "update_id": 8600002,
+        "callback_query": {
+          "id": "cb_8600002",
+          "data": "set_lang:RU",
+          "from": {
+            "id": 800001001,
+            "is_bot": false,
+            "first_name": "Админ Барбершопа",
+            "language_code": "ru"
+          },
+          "message": {
+            "chat": {
+              "id": 800001001,
+              "type": "private",
+              "first_name": "Админ Барбершопа"
+            },
+            "date": 1792427039,
+            "text": "Bot message",
+            "message_id": 8600001
+          },
+          "chat_instance": "ci_800001001"
+        }
+      },
+      "status": "RECEIVED",
+      "attempts": 1,
+      "maxAttempts": 3,
+      "lockedUntil": null,
+      "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+      "createdAt": "2026-10-19T16:23:59.333Z",
+      "processedAt": null
+    },
+    "botUserAfterLang": {
+      "id": "b1f57991-25ea-4ec1-b0ed-c44e2e88e9f2",
+      "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+      "tgId": "800001001",
+      "firstName": "Админ Барбершопа",
+      "username": null,
+      "lang": "RU",
+      "isAdmin": true,
+      "createdAt": "2026-10-19T16:23:58.666Z"
+    }
+  },
+  "stepB_clientFsmFlow": {
+    "clientTgId": 800002001,
+    "clientName": "Тимур",
+    "clientPhone": "+998903334455",
+    "botUserAfterStart": {
+      "id": "4d0a388e-377a-455c-b6f2-4af0d58b3884",
+      "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+      "tgId": "800002001",
+      "firstName": "Тимур",
+      "username": null,
+      "lang": null,
+      "isAdmin": false,
+      "createdAt": "2026-10-19T16:24:00.336Z"
+    },
+    "botUserAfterLang": {
+      "id": "4d0a388e-377a-455c-b6f2-4af0d58b3884",
+      "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+      "tgId": "800002001",
+      "firstName": "Тимур",
+      "username": null,
+      "lang": "RU",
+      "isAdmin": false,
+      "createdAt": "2026-10-19T16:24:00.336Z"
+    },
+    "redisSlotLocksCreatedByServerOnSlotClick": {
+      "lock:slot:f3ece32d-f484-422b-b8a2-1d545951933d:master_alisher:1792472400": "800002001:1df29d16-9444-4ec6-a0da-61d374700698",
+      "lock:slot:f3ece32d-f484-422b-b8a2-1d545951933d:master_alisher:1792474200": "800002001:1df29d16-9444-4ec6-a0da-61d374700698",
+      "ttlSec": 59
+    },
+    "redisSlotLocksAfterPhoneConfirm": {
+      "lock:slot:f3ece32d-f484-422b-b8a2-1d545951933d:master_alisher:1792472400": null,
+      "lock:slot:f3ece32d-f484-422b-b8a2-1d545951933d:master_alisher:1792474200": null
+    },
+    "reminderZsetScore": "1792465200000",
+    "fsmSteps": [
+      {
+        "stepName": "1_start",
+        "updateId": 8600003,
+        "httpRes": {
+          "status": 200,
+          "durationMs": 11,
+          "body": {
+            "ok": true
+          }
+        },
+        "inboxStatus": {
+          "status": "RECEIVED",
+          "attempts": 1,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+        },
+        "redisSessionAfter": {
+          "isAdmin": false,
+          "languageNextAction": "start"
+        }
+      },
+      {
+        "stepName": "2_select_lang_RU",
+        "updateId": 8600004,
+        "httpRes": {
+          "status": 200,
+          "durationMs": 29,
+          "body": {
+            "ok": true
+          }
+        },
+        "inboxStatus": {
+          "status": "RECEIVED",
+          "attempts": 1,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+        },
+        "redisSessionAfter": {
+          "lang": "RU",
+          "isAdmin": false,
+          "quickbook": {}
+        }
+      },
+      {
+        "stepName": "3_click_book_button",
+        "updateId": 8600005,
+        "httpRes": {
+          "status": 200,
+          "durationMs": 42,
+          "body": {
+            "ok": true
+          }
+        },
+        "inboxStatus": {
+          "status": "RECEIVED",
+          "attempts": 1,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+        },
+        "redisSessionAfter": {
+          "lang": "RU",
+          "isAdmin": false,
+          "quickbook": {}
+        }
+      },
+      {
+        "stepName": "4_select_service_srv_haircut",
+        "updateId": 8600006,
+        "httpRes": {
+          "status": 200,
+          "durationMs": 7,
+          "body": {
+            "ok": true
+          }
+        },
+        "inboxStatus": {
+          "status": "RECEIVED",
+          "attempts": 1,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+        },
+        "redisSessionAfter": {
+          "lang": "RU",
+          "isAdmin": false,
+          "quickbook": {
+            "serviceId": "srv_haircut"
+          }
+        }
+      },
+      {
+        "stepName": "5_select_master_alisher",
+        "updateId": 8600007,
+        "httpRes": {
+          "status": 200,
+          "durationMs": 56,
+          "body": {
+            "ok": true
+          }
+        },
+        "inboxStatus": {
+          "status": "RECEIVED",
+          "attempts": 1,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+        },
+        "redisSessionAfter": {
+          "lang": "RU",
+          "isAdmin": false,
+          "quickbook": {
+            "serviceId": "srv_haircut",
+            "resourceId": "master_alisher"
+          }
+        }
+      },
+      {
+        "stepName": "6_select_date_2026-10-20",
+        "updateId": 8600008,
+        "httpRes": {
+          "status": 200,
+          "durationMs": 8,
+          "body": {
+            "ok": true
+          }
+        },
+        "inboxStatus": {
+          "status": "RECEIVED",
+          "attempts": 1,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+        },
+        "redisSessionAfter": {
+          "lang": "RU",
+          "isAdmin": false,
+          "quickbook": {
+            "serviceId": "srv_haircut",
+            "resourceId": "master_alisher",
+            "dateStr": "2026-10-20"
+          }
+        }
+      },
+      {
+        "stepName": "7_select_slot_10_00_tashkent",
+        "updateId": 8600009,
+        "httpRes": {
+          "status": 200,
+          "durationMs": 101,
+          "body": {
+            "ok": true
+          }
+        },
+        "inboxStatus": {
+          "status": "RECEIVED",
+          "attempts": 1,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+        },
+        "redisSessionAfter": {
+          "lang": "RU",
+          "isAdmin": false,
+          "quickbook": {
+            "serviceId": "srv_haircut",
+            "resourceId": "master_alisher",
+            "slotTimeIso": "2026-10-20T05:00:00.000Z",
+            "lockedUntil": 1792427105956,
+            "lockToken": "1df29d16-9444-4ec6-a0da-61d374700698",
+            "lockDurationMin": 45,
+            "lockIntervalMin": 30
+          }
+        }
+      },
+      {
+        "stepName": "8_send_phone_confirm",
+        "updateId": 8600010,
+        "httpRes": {
+          "status": 200,
+          "durationMs": 20,
+          "body": {
+            "ok": true
+          }
+        },
+        "inboxStatus": {
+          "status": "RECEIVED",
+          "attempts": 1,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+        },
+        "redisSessionAfter": {
+          "lang": "RU",
+          "isAdmin": false
+        }
+      }
+    ],
+    "createdBooking": {
+      "id": "dd454b81-6dc1-485e-b194-3979c90e840c",
+      "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+      "customerTgId": "800002001",
+      "customerName": "Тимур",
+      "customerPhone": "+998903334455",
+      "serviceId": "srv_haircut",
+      "serviceName": "Стрижка мужская классическая",
+      "staffId": "master_alisher",
+      "durationMin": 45,
+      "slotTime": "2026-10-20T05:00:00.000Z",
+      "endTime": "2026-10-20T05:45:00.000Z",
+      "status": "CONFIRMED",
+      "source": "TELEGRAM",
+      "reminderSent": false,
+      "reminderAttempts": 0,
+      "reminderLockedUntil": null,
+      "reminderLastError": null,
+      "isMasked": false,
+      "createdAt": "2026-10-19T16:24:05.990Z"
+    }
+  },
+  "stepC_concurrencyRace": {
+    "targetSlot": {
+      "serviceId": "beard_trim",
+      "staffId": "master_aziz",
+      "slotTimeIso": "2026-10-21T09:00:00.000Z",
+      "tashkentTime": "21.10.2026, 14:00"
+    },
+    "part1_slotCallbackRace": {
+      "totalCompetitors": 10,
+      "redisLockKey": "lock:slot:f3ece32d-f484-422b-b8a2-1d545951933d:master_aziz:1792573200",
+      "redisLockValue": "800003001:ee82ddcd-1a84-407d-81c5-dd5a46cea15c",
+      "winnerTgId": 800003001
+    },
+    "part2_phoneConfirmationDbRace": {
+      "totalCompetitors": 10,
+      "confirmedBookingsCount": 1,
+      "rejectedWithAlternativeSlotsCount": 9,
+      "confirmedBookings": [
+        {
+          "id": "cdd640cb-9de9-4d1a-87ff-8443d19c539a",
+          "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+          "customerTgId": "800003001",
+          "customerName": "Racer_1",
+          "customerPhone": "+998904440001",
+          "serviceId": "beard_trim",
+          "serviceName": "Моделирование и стрижка бороды",
+          "staffId": "master_aziz",
+          "durationMin": 30,
+          "slotTime": "2026-10-21T09:00:00.000Z",
+          "endTime": "2026-10-21T09:30:00.000Z",
+          "status": "CONFIRMED",
+          "source": "TELEGRAM",
+          "reminderSent": false,
+          "reminderAttempts": 0,
+          "reminderLockedUntil": null,
+          "reminderLastError": null,
+          "isMasked": false,
+          "createdAt": "2026-10-19T16:24:08.755Z"
+        }
+      ],
+      "competitorOutcomes": [
+        {
+          "tgId": 800003001,
+          "phone": "+998904440001",
+          "updateId": 8600021,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "CONFIRMED_WINNER",
+          "bookingCreated": {
+            "id": "cdd640cb-9de9-4d1a-87ff-8443d19c539a",
+            "status": "CONFIRMED",
+            "slotTime": "2026-10-21T09:00:00.000Z"
+          }
+        },
+        {
+          "tgId": 800003002,
+          "phone": "+998904440002",
+          "updateId": 8600022,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "REJECTED_WITH_ALTERNATIVE_SLOTS",
+          "bookingCreated": null
+        },
+        {
+          "tgId": 800003003,
+          "phone": "+998904440003",
+          "updateId": 8600023,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "REJECTED_WITH_ALTERNATIVE_SLOTS",
+          "bookingCreated": null
+        },
+        {
+          "tgId": 800003004,
+          "phone": "+998904440004",
+          "updateId": 8600024,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "REJECTED_WITH_ALTERNATIVE_SLOTS",
+          "bookingCreated": null
+        },
+        {
+          "tgId": 800003005,
+          "phone": "+998904440005",
+          "updateId": 8600025,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "REJECTED_WITH_ALTERNATIVE_SLOTS",
+          "bookingCreated": null
+        },
+        {
+          "tgId": 800003006,
+          "phone": "+998904440006",
+          "updateId": 8600026,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "REJECTED_WITH_ALTERNATIVE_SLOTS",
+          "bookingCreated": null
+        },
+        {
+          "tgId": 800003007,
+          "phone": "+998904440007",
+          "updateId": 8600027,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "REJECTED_WITH_ALTERNATIVE_SLOTS",
+          "bookingCreated": null
+        },
+        {
+          "tgId": 800003008,
+          "phone": "+998904440008",
+          "updateId": 8600028,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "REJECTED_WITH_ALTERNATIVE_SLOTS",
+          "bookingCreated": null
+        },
+        {
+          "tgId": 800003009,
+          "phone": "+998904440009",
+          "updateId": 8600029,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "REJECTED_WITH_ALTERNATIVE_SLOTS",
+          "bookingCreated": null
+        },
+        {
+          "tgId": 800003010,
+          "phone": "+998904440010",
+          "updateId": 8600030,
+          "httpStatus": 200,
+          "inboxStatus": "RECEIVED",
+          "inboxAttempts": 1,
+          "outcome": "REJECTED_WITH_ALTERNATIVE_SLOTS",
+          "bookingCreated": null
+        }
+      ]
+    }
+  },
+  "stepD_cancellationAndSecurity": {
+    "targetBookingId": "dd454b81-6dc1-485e-b194-3979c90e840c",
+    "d1_unauthorizedCancelByOtherUser": {
+      "attackerTgId": 800004001,
+      "callbackData": "book:cancel:dd454b81-6dc1-485e-b194-3979c90e840c",
+      "httpRes": {
+        "status": 200,
+        "durationMs": 9,
+        "body": {
+          "ok": true
+        }
+      },
+      "inboxStatus": {
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+      },
+      "bookingStatusAfterAttempt": "CONFIRMED"
+    },
+    "d2_nonExistentOrForeignCancel": {
+      "callbackData": "book:cancel:00000000-0000-0000-0000-000000000000",
+      "httpRes": {
+        "status": 200,
+        "durationMs": 5,
+        "body": {
+          "ok": true
+        }
+      },
+      "inboxStatus": {
+        "status": "RECEIVED",
+        "attempts": 1
+      }
+    },
+    "d3_ownerCancel": {
+      "ownerTgId": 800002001,
+      "callbackData": "book:cancel:dd454b81-6dc1-485e-b194-3979c90e840c",
+      "httpRes": {
+        "status": 200,
+        "durationMs": 9,
+        "body": {
+          "ok": true
+        }
+      },
+      "inboxStatus": {
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)"
+      },
+      "bookingAfterCancel": {
+        "id": "dd454b81-6dc1-485e-b194-3979c90e840c",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "customerTgId": "800002001",
+        "customerName": "Тимур",
+        "customerPhone": "+998903334455",
+        "serviceId": "srv_haircut",
+        "serviceName": "Стрижка мужская классическая",
+        "staffId": "master_alisher",
+        "durationMin": 45,
+        "slotTime": "2026-10-20T05:00:00.000Z",
+        "endTime": "2026-10-20T05:45:00.000Z",
+        "status": "CANCELLED",
+        "source": "TELEGRAM",
+        "reminderSent": false,
+        "reminderAttempts": 0,
+        "reminderLockedUntil": null,
+        "reminderLastError": null,
+        "isMasked": false,
+        "createdAt": "2026-10-19T16:24:05.990Z"
+      },
+      "reminderZsetScoreAfterCancel": null
+    },
+    "d4_slotReleasedAndRebooked": {
+      "slotAcquiredAfterCancel": true,
+      "lockKeyValue": "800002001:8bd71337-156a-448b-bea0-15e5e95c245f",
+      "newBookingInConfirmedStatus": {
+        "id": "db808de7-d315-44cf-9050-89482cd28272",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "customerTgId": "800002001",
+        "customerName": "Тимур",
+        "customerPhone": "+998903334455",
+        "serviceId": "srv_haircut",
+        "serviceName": "Стрижка мужская классическая",
+        "staffId": "master_alisher",
+        "durationMin": 45,
+        "slotTime": "2026-10-20T05:00:00.000Z",
+        "endTime": "2026-10-20T05:45:00.000Z",
+        "status": "CONFIRMED",
+        "source": "TELEGRAM",
+        "reminderSent": false,
+        "reminderAttempts": 0,
+        "reminderLockedUntil": null,
+        "reminderLastError": null,
+        "isMasked": false,
+        "createdAt": "2026-10-19T16:24:13.466Z"
+      }
+    }
+  },
+  "telegramApi400Behavior": {
+    "useMockTelegramEnv": false,
+    "transportKind": "real (https://api.telegram.org)",
+    "explanation": "When USE_MOCK_TELEGRAM=false, all outgoing bot replies (ctx.reply / ctx.api.sendMessage) are sent to real api.telegram.org using Bot 2's real token. Because synthetic test tgIds (800001001, 800002001, 800003001..800003010) do not have an active chat with @QuickBook_test_bot on Telegram's servers, api.telegram.org returns '400: Bad Request: chat not found'. Crucially: (1) All PostgreSQL transactions (BotUser upsert, Booking creation with pg_advisory_xact_lock, Booking cancellation) and Redis atomic operations (acquireSlotLock Lua script, releaseSlotLock Lua script, ZADD/ZREM booking:reminders) execute BEFORE the final ctx.reply() and are Durably Committed! (2) Admin notifications in createBooking are wrapped in .catch() so admin 400 errors never abort booking creation. (3) However, because ctx.reply() throws an unhandled GrammyError at the end of the handler, Grammy's session() middleware does not reach its post-next() session save step, and WebhookInboxService catches the error, leaving status='RECEIVED' (attempts=1) or 'FAILED' (after 3 attempts).",
+    "inboxItemsCount": 35,
+    "sampleInboxItems": [
+      {
+        "id": "adb62a8f-ac2c-4709-87e6-0a2fece9d1ce",
+        "updateId": "8600001",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:23:58.615Z"
+      },
+      {
+        "id": "c3431f9b-491e-427c-9ae4-6cef1b2ff0e3",
+        "updateId": "8600002",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:23:59.333Z"
+      },
+      {
+        "id": "ef17c0c3-b706-4217-a281-7053801e57ed",
+        "updateId": "8600003",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:00.319Z"
+      },
+      {
+        "id": "056256ed-197b-46ba-b104-c49a40f25d3a",
+        "updateId": "8600004",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:01.080Z"
+      },
+      {
+        "id": "ef320246-3a0c-4b01-8f52-4b58bcec202b",
+        "updateId": "8600005",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:01.928Z"
+      },
+      {
+        "id": "5f449661-0e0e-4ae1-896f-e2844600e846",
+        "updateId": "8600006",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:02.507Z"
+      },
+      {
+        "id": "535392eb-425b-4086-be59-9c95249a0884",
+        "updateId": "8600007",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:03.257Z"
+      },
+      {
+        "id": "b16a5409-6e67-4c77-995a-dc1ad27dbcc5",
+        "updateId": "8600008",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:04.132Z"
+      },
+      {
+        "id": "c6a554d5-2673-4e56-b292-387967734f87",
+        "updateId": "8600009",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:05.106Z"
+      },
+      {
+        "id": "0cbc2539-dede-4293-99ee-90b17f54a085",
+        "updateId": "8600010",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:05.967Z"
+      },
+      {
+        "id": "572de361-493a-450a-a295-8a38d979486f",
+        "updateId": "8600011",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:06.947Z"
+      },
+      {
+        "id": "79f00e59-cc36-47ac-82c3-f26bdd0014ea",
+        "updateId": "8600012",
+        "status": "RECEIVED",
+        "attempts": 1,
+        "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+        "createdAt": "2026-10-19T16:24:07.002Z"
+      }
+    ]
+  },
+  "finalDatabaseDump": {
+    "bot2Id": "f3ece32d-f484-422b-b8a2-1d545951933d",
+    "bot1UntouchedCheck": {
+      "bot1Exists": true
+    },
+    "bot2Users": [
+      {
+        "id": "b1f57991-25ea-4ec1-b0ed-c44e2e88e9f2",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800001001",
+        "firstName": "Админ Барбершопа",
+        "username": null,
+        "lang": "RU",
+        "isAdmin": true,
+        "createdAt": "2026-10-19T16:23:58.666Z"
+      },
+      {
+        "id": "4d0a388e-377a-455c-b6f2-4af0d58b3884",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800002001",
+        "firstName": "Тимур",
+        "username": null,
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:00.336Z"
+      },
+      {
+        "id": "a4099bf2-6879-49da-9aeb-38f6edb27866",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003001",
+        "firstName": "Racer_1",
+        "username": "racer_1",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.884Z"
+      },
+      {
+        "id": "9323da15-2e9e-4324-a8fa-2dae6442de2d",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003002",
+        "firstName": "Racer_2",
+        "username": "racer_2",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.888Z"
+      },
+      {
+        "id": "86087860-9622-4222-b24e-ada621b72aa2",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003003",
+        "firstName": "Racer_3",
+        "username": "racer_3",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.895Z"
+      },
+      {
+        "id": "bf50e7c9-988e-4012-b9b1-52520cd68291",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003004",
+        "firstName": "Racer_4",
+        "username": "racer_4",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.897Z"
+      },
+      {
+        "id": "0bfbae56-56d6-4558-a51b-d354543335cd",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003005",
+        "firstName": "Racer_5",
+        "username": "racer_5",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.900Z"
+      },
+      {
+        "id": "9c5610c3-7639-4591-a0f1-0a894aae814a",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003006",
+        "firstName": "Racer_6",
+        "username": "racer_6",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.909Z"
+      },
+      {
+        "id": "5834672b-eb13-40e3-a0f5-eb2afe7ebebe",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003007",
+        "firstName": "Racer_7",
+        "username": "racer_7",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.912Z"
+      },
+      {
+        "id": "08aeb6b0-0083-42a1-aece-fbde8952f7bf",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003008",
+        "firstName": "Racer_8",
+        "username": "racer_8",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.914Z"
+      },
+      {
+        "id": "ab4aa60c-a093-4fca-b734-918eb5aedf6d",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003009",
+        "firstName": "Racer_9",
+        "username": "racer_9",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.919Z"
+      },
+      {
+        "id": "430026ba-8302-448f-b09a-7c212787eef2",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "tgId": "800003010",
+        "firstName": "Racer_10",
+        "username": "racer_10",
+        "lang": "RU",
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:06.922Z"
+      }
+    ],
+    "bot2Bookings": [
+      {
+        "id": "dd454b81-6dc1-485e-b194-3979c90e840c",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "customerTgId": "800002001",
+        "customerName": "Тимур",
+        "customerPhone": "+998903334455",
+        "serviceId": "srv_haircut",
+        "serviceName": "Стрижка мужская классическая",
+        "staffId": "master_alisher",
+        "durationMin": 45,
+        "slotTime": "2026-10-20T05:00:00.000Z",
+        "endTime": "2026-10-20T05:45:00.000Z",
+        "status": "CANCELLED",
+        "source": "TELEGRAM",
+        "reminderSent": false,
+        "reminderAttempts": 0,
+        "reminderLockedUntil": null,
+        "reminderLastError": null,
+        "isMasked": false,
+        "createdAt": "2026-10-19T16:24:05.990Z"
+      },
+      {
+        "id": "cdd640cb-9de9-4d1a-87ff-8443d19c539a",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "customerTgId": "800003001",
+        "customerName": "Racer_1",
+        "customerPhone": "+998904440001",
+        "serviceId": "beard_trim",
+        "serviceName": "Моделирование и стрижка бороды",
+        "staffId": "master_aziz",
+        "durationMin": 30,
+        "slotTime": "2026-10-21T09:00:00.000Z",
+        "endTime": "2026-10-21T09:30:00.000Z",
+        "status": "CONFIRMED",
+        "source": "TELEGRAM",
+        "reminderSent": false,
+        "reminderAttempts": 0,
+        "reminderLockedUntil": null,
+        "reminderLastError": null,
+        "isMasked": false,
+        "createdAt": "2026-10-19T16:24:08.755Z"
+      },
+      {
+        "id": "db808de7-d315-44cf-9050-89482cd28272",
+        "botId": "f3ece32d-f484-422b-b8a2-1d545951933d",
+        "customerTgId": "800002001",
+        "customerName": "Тимур",
+        "customerPhone": "+998903334455",
+        "serviceId": "srv_haircut",
+        "serviceName": "Стрижка мужская классическая",
+        "staffId": "master_alisher",
+        "durationMin": 45,
+        "slotTime": "2026-10-20T05:00:00.000Z",
+        "endTime": "2026-10-20T05:45:00.000Z",
+        "status": "CONFIRMED",
+        "source": "TELEGRAM",
+        "reminderSent": false,
+        "reminderAttempts": 0,
+        "reminderLockedUntil": null,
+        "reminderLastError": null,
+        "isMasked": false,
+        "createdAt": "2026-10-19T16:24:13.466Z"
+      }
+    ]
+  }
+}

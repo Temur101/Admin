@@ -1,9 +1,16 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import * as argon2 from "argon2";
 import type { PrismaClient } from "@prisma/client";
+import type { Redis } from "ioredis";
 import { AdminLoginRequestSchema } from "@lcqb/contracts";
 import { env } from "../core/env.js";
 import type { Logger } from "../core/logger.js";
+
+const REFRESH_TTL_SEC = 7 * 24 * 3600;
+const ACCESS_FALLBACK_TTL_SEC = 15 * 60;
+
+const activeRedisByApp = new WeakMap<FastifyInstance, Redis>();
 
 export async function hashPassword(password: string): Promise<string> {
   return argon2.hash(password);
@@ -38,6 +45,8 @@ export interface AdminJwtPayload {
   adminId: string;
   email: string;
   tokenType: "access" | "refresh";
+  jti?: string;
+  exp?: number;
 }
 
 export async function authenticateAdmin(
@@ -50,6 +59,13 @@ export async function authenticateAdmin(
     if (!user || user.tokenType !== "access") {
       return reply.code(401).send({ ok: false, error: "Unauthorized" });
     }
+    const redis = activeRedisByApp.get(req.server);
+    if (redis && user.jti) {
+      const denied = await redis.exists(`auth:deny:access:${user.jti}`);
+      if (denied === 1) {
+        return reply.code(401).send({ ok: false, error: "Unauthorized" });
+      }
+    }
   } catch {
     return reply.code(401).send({ ok: false, error: "Unauthorized" });
   }
@@ -58,7 +74,12 @@ export async function authenticateAdmin(
 export function registerAuthRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
+  redis?: Redis,
 ): void {
+  if (redis) {
+    activeRedisByApp.set(app, redis);
+  }
+
   // Login with rate limiting
   app.post(
     "/api/v1/auth/login",
@@ -90,16 +111,21 @@ export function registerAuthRoutes(
         return reply.code(401).send({ ok: false, error: "Invalid email or password" });
       }
 
+      const accessJti = randomUUID();
+      const refreshJti = randomUUID();
+
       const accessTokenPayload: AdminJwtPayload = {
         adminId: admin.id,
         email: admin.email,
         tokenType: "access",
+        jti: accessJti,
       };
 
       const refreshTokenPayload: AdminJwtPayload = {
         adminId: admin.id,
         email: admin.email,
         tokenType: "refresh",
+        jti: refreshJti,
       };
 
       const accessToken = app.jwt.sign(accessTokenPayload, {
@@ -111,12 +137,16 @@ export function registerAuthRoutes(
         expiresIn: env.JWT_REFRESH_TTL,
       });
 
+      if (redis) {
+        await redis.set(`auth:refresh:${admin.id}:${refreshJti}`, "1", "EX", REFRESH_TTL_SEC);
+      }
+
       reply.setCookie("refreshToken", refreshToken, {
         httpOnly: true,
         secure: env.NODE_ENV === "production",
         sameSite: "strict",
         path: "/",
-        maxAge: 7 * 24 * 3600,
+        maxAge: REFRESH_TTL_SEC,
       });
 
       return reply.code(200).send({
@@ -146,6 +176,13 @@ export function registerAuthRoutes(
         return reply.code(401).send({ ok: false, error: "Invalid refresh token" });
       }
 
+      if (redis && decoded.jti) {
+        const exists = await redis.exists(`auth:refresh:${decoded.adminId}:${decoded.jti}`);
+        if (exists !== 1) {
+          return reply.code(401).send({ ok: false, error: "Invalid refresh token" });
+        }
+      }
+
       const admin = await prisma.admin.findUnique({
         where: { id: decoded.adminId },
       });
@@ -158,6 +195,7 @@ export function registerAuthRoutes(
         adminId: admin.id,
         email: admin.email,
         tokenType: "access",
+        jti: randomUUID(),
       };
 
       const newAccessToken = app.jwt.sign(tokenPayload, {
@@ -197,7 +235,42 @@ export function registerAuthRoutes(
   );
 
   // Logout
-  app.post("/api/v1/auth/logout", async (_req: FastifyRequest, reply: FastifyReply) => {
+  app.post("/api/v1/auth/logout", async (req: FastifyRequest, reply: FastifyReply) => {
+    if (redis) {
+      const rawRefresh = req.cookies.refreshToken;
+      if (rawRefresh) {
+        try {
+          const decoded = app.jwt.verify<AdminJwtPayload>(rawRefresh, {
+            key: env.JWT_REFRESH_SECRET,
+          });
+          if (decoded?.tokenType === "refresh" && decoded.jti) {
+            await redis.del(`auth:refresh:${decoded.adminId}:${decoded.jti}`);
+          }
+        } catch {
+          // Ignore invalid or expired refresh token on logout
+        }
+      }
+
+      const authHeader = req.headers.authorization;
+      if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+        const rawAccess = authHeader.slice(7).trim();
+        try {
+          const decodedAccess = app.jwt.verify<AdminJwtPayload>(rawAccess, {
+            key: env.JWT_ACCESS_SECRET,
+          });
+          if (decodedAccess?.tokenType === "access" && decodedAccess.jti) {
+            const nowSec = Math.floor(Date.now() / 1000);
+            const ttlSec = decodedAccess.exp
+              ? Math.max(1, decodedAccess.exp - nowSec)
+              : ACCESS_FALLBACK_TTL_SEC;
+            await redis.set(`auth:deny:access:${decodedAccess.jti}`, "1", "EX", ttlSec);
+          }
+        } catch {
+          // Ignore invalid or expired access token on logout
+        }
+      }
+    }
+
     reply.clearCookie("refreshToken", { path: "/" });
     return reply.code(200).send({ ok: true });
   });

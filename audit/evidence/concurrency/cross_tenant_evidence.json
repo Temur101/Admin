@@ -1,0 +1,41 @@
+{
+  "testName": "SCN-E2E-01: Cross-Tenant Isolation & ID Tampering",
+  "timestamp": "2026-10-19T15:11:33.182Z",
+  "vectors": {
+    "v1_booking_id_tampering": {
+      "attack1A_error": "FORBIDDEN",
+      "attack1B_error": "FORBIDDEN",
+      "legitSuccess": true,
+      "passed": true
+    },
+    "v2_admin_privilege_isolation": {
+      "betaAdminHasAlphaPrivilege": false,
+      "replayAttackPromoted": false,
+      "legitPromoted": true,
+      "passed": true
+    },
+    "v3_redis_session_isolation": {
+      "sessionKeyAlpha": "sess:dc355f61-4aa8-49b2-b36b-f9b3dddccc6a:55555",
+      "sessionKeyBeta": "sess:a7602f10-a744-44c4-b7eb-95a78da3e276:55555",
+      "passed": true
+    },
+    "v4_webhook_tampering_isolation": {
+      "noSecretStatus": 401,
+      "wrongSecretStatus": 401,
+      "invalidHashStatus": 400,
+      "validAlphaStatus": 200,
+      "validBetaStatus": 200,
+      "inboxAlpha": 1,
+      "inboxBeta": 1,
+      "passed": true
+    },
+    "v5_admin_api_probing": {
+      "noAuthStatus": 401,
+      "bogusTokenStatus": 401,
+      "passed": true
+    }
+  },
+  "summary": {
+    "passed": true
+  }
+}

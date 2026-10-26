@@ -172,9 +172,19 @@ export const ManualBookingRequestSchema = z.object({
 export type ManualBookingRequest = z.infer<typeof ManualBookingRequestSchema>;
 
 export const ExtendSubscriptionRequestSchema = z.object({
-  days: z.number().int().positive().default(30),
+  days: z.number().int().min(1).max(3650).default(30),
 });
 export type ExtendSubscriptionRequest = z.infer<typeof ExtendSubscriptionRequestSchema>;
+
+export const ReduceSubscriptionRequestSchema = z.object({
+  days: z.number().int().min(1).max(3650),
+});
+export type ReduceSubscriptionRequest = z.infer<typeof ReduceSubscriptionRequestSchema>;
+
+export const GrantTrialRequestSchema = z.object({
+  days: z.number().int().min(1).max(365).default(7),
+});
+export type GrantTrialRequest = z.infer<typeof GrantTrialRequestSchema>;
 
 export const RejectReceiptRequestSchema = z.object({
   reason: z.string().min(1).max(500),

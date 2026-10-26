@@ -1,5 +1,10 @@
 import { apiRequest } from "./client.js";
-import type { CreateBotRequest, ExtendSubscriptionRequest } from "@lcqb/contracts";
+import type {
+  CreateBotRequest,
+  ExtendSubscriptionRequest,
+  ReduceSubscriptionRequest,
+  GrantTrialRequest,
+} from "@lcqb/contracts";
 
 export interface BotListItem {
   id: string;
@@ -19,6 +24,7 @@ export interface BotListItem {
     leadsCount: number;
     bookingsCount: number;
     usersCount: number;
+    adminsCount?: number;
     receiptsCount: number;
   };
 }
@@ -109,6 +115,34 @@ export async function extendBotSubscription(
   await apiRequest(`/api/v1/bots/${id}/extend`, {
     method: "POST",
     body: JSON.stringify(payload),
+  });
+}
+
+export async function reduceBotSubscription(
+  id: string,
+  payload: ReduceSubscriptionRequest,
+): Promise<void> {
+  await apiRequest(`/api/v1/bots/${id}/reduce`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function grantBotTrial(
+  id: string,
+  payload: GrantTrialRequest,
+): Promise<void> {
+  await apiRequest(`/api/v1/bots/${id}/trial`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function resetBot(
+  id: string,
+): Promise<{ clearedSessions: number; warning?: string }> {
+  return apiRequest(`/api/v1/bots/${id}/reset`, {
+    method: "POST",
   });
 }
 

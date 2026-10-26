@@ -2,7 +2,6 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { randomBytes } from "node:crypto";
 import type { Bot } from "grammy";
 import type { PrismaClient } from "@prisma/client";
-import { ExtendSubscriptionRequestSchema } from "@lcqb/contracts";
 import { authenticateAdmin } from "./auth.js";
 import { decryptSecret } from "../core/crypto.js";
 import { env } from "../core/env.js";
@@ -67,72 +66,6 @@ export function registerBotsOpsRoutes(
       } catch {
         return reply.code(404).send({ ok: false, error: "Admin not found" });
       }
-    },
-  );
-
-  // POST /api/v1/bots/:id/extend - Manual subscription extension
-  app.post<{ Params: BotParams }>(
-    "/api/v1/bots/:id/extend",
-    { preHandler: [authenticateAdmin] },
-    async (req, reply) => {
-      const { id } = req.params;
-      const parsed = ExtendSubscriptionRequestSchema.safeParse(req.body ?? {});
-      const days = parsed.success ? parsed.data.days : 30;
-
-      const sub = await prisma.subscription.findUnique({ where: { botId: id } });
-      if (!sub) {
-        return reply.code(404).send({ ok: false, error: "Subscription not found" });
-      }
-
-      const now = Date.now();
-      const currentEnd = Math.max(
-        now,
-        sub.paidUntil ? sub.paidUntil.getTime() : sub.trialEndsAt.getTime(),
-      );
-      const newPaidUntil = new Date(currentEnd + days * 86400 * 1000);
-
-      const updated = await prisma.subscription.update({
-        where: { botId: id },
-        data: {
-          paidUntil: newPaidUntil,
-          status: "ACTIVE",
-          failedReceiptAttempts: 0,
-        },
-      });
-
-      return reply.send({
-        ok: true,
-        subscription: {
-          status: updated.status,
-          paidUntil: updated.paidUntil?.toISOString() ?? null,
-        },
-      });
-    },
-  );
-
-  // POST /api/v1/bots/:id/unblock - Unblock subscription
-  app.post<{ Params: BotParams }>(
-    "/api/v1/bots/:id/unblock",
-    { preHandler: [authenticateAdmin] },
-    async (req, reply) => {
-      const { id } = req.params;
-      const sub = await prisma.subscription.findUnique({ where: { botId: id } });
-      if (!sub) {
-        return reply.code(404).send({ ok: false, error: "Subscription not found" });
-      }
-
-      const updated = await prisma.subscription.update({
-        where: { botId: id },
-        data: {
-          status: "ACTIVE",
-          failedReceiptAttempts: 0,
-        },
-      });
-
-      return reply.send({
-        ok: true,
-        status: updated.status,
-      });
     },
   );
 

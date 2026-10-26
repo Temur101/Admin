@@ -92,19 +92,20 @@ export function registerReceiptsRoutes(
     async (req, reply) => {
       // Validate auth via header, cookie, or query token
       try {
+        let user: AdminJwtPayload | undefined;
         if (req.query.token) {
-          const decoded = app.jwt.verify<AdminJwtPayload>(req.query.token, {
+          user = app.jwt.verify<AdminJwtPayload>(req.query.token, {
             key: env.JWT_ACCESS_SECRET,
           });
-          if (!decoded || decoded.tokenType !== "access") {
-            return reply.code(401).send({ ok: false, error: "Unauthorized" });
-          }
         } else {
           await req.jwtVerify();
-          const user = req.user as AdminJwtPayload | undefined;
-          if (!user || user.tokenType !== "access") {
-            return reply.code(401).send({ ok: false, error: "Unauthorized" });
-          }
+          user = req.user as AdminJwtPayload | undefined;
+        }
+        if (!user || user.tokenType !== "access") {
+          return reply.code(401).send({ ok: false, error: "Unauthorized" });
+        }
+        if (user.jti && (await redis.exists(`auth:deny:access:${user.jti}`)) === 1) {
+          return reply.code(401).send({ ok: false, error: "Unauthorized" });
         }
       } catch {
         return reply.code(401).send({ ok: false, error: "Unauthorized" });

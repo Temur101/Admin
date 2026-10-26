@@ -1,0 +1,1542 @@
+{
+  "timestamp": "2026-10-19T16:24:01.330Z",
+  "environment": {
+    "USE_MOCK_TELEGRAM": "false",
+    "BOT_MODE": "polling",
+    "serverUrl": "http://127.0.0.1:8000"
+  },
+  "steps": {
+    "step1_bot1_db_record": {
+      "id": "b3462648-55a6-42d1-baac-f855448652d6",
+      "tenantId": "882160ca-c589-49f7-a01c-79759a0f3541",
+      "botType": "LEADCATCH",
+      "botUsername": "leadcatchteset_bot",
+      "botTokenHash": "7fdc908b7d3ab6d9f3f43015739c18f1354e2c83943cd98f6ae6ccda5aef47d1",
+      "webhookSecret": "5d3a31d092841f0c24a5cf1facf698534cb5c3ff58ddc3967cd024913a47e335",
+      "adminInviteCode": "d81d9c0bd197b6a1d487e89b5405bd3a",
+      "settings": {
+        "nodes": [
+          {
+            "id": "q1_subject",
+            "title": {
+              "ru": "Какое направление вас интересует?",
+              "uz": "Qaysi yo'nalish sizni qiziqtiradi?"
+            },
+            "options": [
+              {
+                "id": "opt_it",
+                "text": {
+                  "ru": "💻 Программирование / IT",
+                  "uz": "💻 Dasturlash / IT"
+                },
+                "nextNodeId": "q2_level"
+              },
+              {
+                "id": "opt_lang",
+                "text": {
+                  "ru": "🇬🇧 Английский язык",
+                  "uz": "🇬🇧 Ingliz tili"
+                },
+                "nextNodeId": "q2_level"
+              },
+              {
+                "id": "opt_math",
+                "text": {
+                  "ru": "📐 Точные науки / ЕГЭ",
+                  "uz": "📐 Aniq fanlar"
+                },
+                "nextNodeId": "q2_level"
+              }
+            ]
+          },
+          {
+            "id": "q2_level",
+            "title": {
+              "ru": "Ваш текущий уровень знаний?",
+              "uz": "Hozirgi bilim darajangiz qanday?"
+            },
+            "options": [
+              {
+                "id": "opt_beginner",
+                "text": {
+                  "ru": "🌱 Начинающий (с нуля)",
+                  "uz": "🌱 Boshlang'ich (noldan)"
+                },
+                "nextNodeId": "q3_schedule"
+              },
+              {
+                "id": "opt_middle",
+                "text": {
+                  "ru": "⚡️ Есть базовые знания",
+                  "uz": "⚡️ Boshlang'ich bilimlar bor"
+                },
+                "nextNodeId": "q3_schedule"
+              }
+            ]
+          },
+          {
+            "id": "q3_schedule",
+            "title": {
+              "ru": "В какое время вам удобно учиться?",
+              "uz": "Qaysi vaqtda o'qish qulay?"
+            },
+            "options": [
+              {
+                "id": "opt_morning",
+                "text": {
+                  "ru": "☀️ Утро (09:00 - 13:00)",
+                  "uz": "☀️ Ertalab (09:00 - 13:00)"
+                },
+                "nextNodeId": "q4_goal"
+              },
+              {
+                "id": "opt_evening",
+                "text": {
+                  "ru": "🌙 Вечер (18:00 - 21:00)",
+                  "uz": "🌙 Kechki payt (18:00 - 21:00)"
+                },
+                "nextNodeId": "q4_goal"
+              }
+            ]
+          },
+          {
+            "id": "q4_goal",
+            "title": {
+              "ru": "Ваша главная цель обучения?",
+              "uz": "O'qishdan asosiy maqsadingiz?"
+            },
+            "options": [
+              {
+                "id": "opt_job",
+                "text": {
+                  "ru": "💼 Трудоустройство / Карьера",
+                  "uz": "💼 Ishga joylashish"
+                },
+                "nextNodeId": "q5_phone"
+              },
+              {
+                "id": "opt_hobby",
+                "text": {
+                  "ru": "🎨 Для себя / Хобби",
+                  "uz": "🎨 O'zim uchun / Xobbi"
+                },
+                "nextNodeId": "q5_phone"
+              }
+            ]
+          },
+          {
+            "id": "q5_phone",
+            "title": {
+              "ru": "Оставьте контактный номер для связи с куратором:",
+              "uz": "Kurator siz bilan bog'lanishi uchun telefon raqamingizni qoldiring:"
+            },
+            "options": [
+              {
+                "id": "opt_phone_finish",
+                "text": {
+                  "ru": "📱 Отправить заявку",
+                  "uz": "📱 Ariza yuborish"
+                },
+                "nextNodeId": null
+              }
+            ]
+          }
+        ],
+        "startNodeId": "q1_subject"
+      },
+      "isActive": true,
+      "createdAt": "2026-10-19T16:07:30.059Z",
+      "subscription": {
+        "id": "d79a563e-0a6e-4386-a566-3778290119cc",
+        "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+        "status": "TRIAL",
+        "trialEndsAt": "2026-10-26T16:07:30.049Z",
+        "paidUntil": null,
+        "failedReceiptAttempts": 0,
+        "updatedAt": "2026-10-19T16:07:30.087Z"
+      }
+    },
+    "stepA_admin_registration": {
+      "webhookStart": {
+        "httpStatus": 200,
+        "httpBody": {
+          "ok": true
+        },
+        "inbox": {
+          "id": "2555d46b-0ef8-4ebd-80f9-e24e0b153ba5",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "updateId": "920001",
+          "payload": {
+            "message": {
+              "chat": {
+                "id": 700001001,
+                "type": "private",
+                "first_name": "Тимур Админ А"
+              },
+              "date": 1792427041,
+              "from": {
+                "id": 700001001,
+                "is_bot": false,
+                "username": "leadpro_owner",
+                "first_name": "Тимур Админ А"
+              },
+              "text": "/start adm_d81d9c0bd197b6a1d487e89b5405bd3a",
+              "entities": [
+                {
+                  "type": "bot_command",
+                  "length": 6,
+                  "offset": 0
+                }
+              ],
+              "message_id": 1001
+            },
+            "update_id": 920001
+          },
+          "status": "RECEIVED",
+          "attempts": 1,
+          "maxAttempts": 3,
+          "lockedUntil": null,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+          "createdAt": "2026-10-19T16:24:01.587Z",
+          "processedAt": null
+        }
+      },
+      "botUserAfterStart": {
+        "id": "7e79e727-9c86-403d-84f6-1907be165b02",
+        "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+        "tgId": "700001001",
+        "firstName": "Тимур Админ А",
+        "username": "leadpro_owner",
+        "lang": null,
+        "isAdmin": true,
+        "createdAt": "2026-10-19T16:24:01.624Z"
+      },
+      "webhookSetLang": {
+        "httpStatus": 200,
+        "httpBody": {
+          "ok": true
+        },
+        "inbox": {
+          "id": "6b74d3a3-c8dd-454b-a151-5d78ac1e15f0",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "updateId": "920002",
+          "payload": {
+            "update_id": 920002,
+            "callback_query": {
+              "id": "cb_adm_lang_920002",
+              "data": "set_lang:RU",
+              "from": {
+                "id": 700001001,
+                "is_bot": false,
+                "username": "leadpro_owner",
+                "first_name": "Тимур Админ А"
+              },
+              "message": {
+                "chat": {
+                  "id": 700001001,
+                  "type": "private",
+                  "first_name": "Тимур Админ А"
+                },
+                "date": 1792427041,
+                "text": "Пожалуйста, выберите язык / Iltimos, tilni tanlang:",
+                "message_id": 1002
+              },
+              "chat_instance": "ci_adm_1"
+            }
+          },
+          "status": "RECEIVED",
+          "attempts": 1,
+          "maxAttempts": 3,
+          "lockedUntil": null,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+          "createdAt": "2026-10-19T16:24:01.871Z",
+          "processedAt": null
+        }
+      },
+      "botUserAfterLang": {
+        "id": "7e79e727-9c86-403d-84f6-1907be165b02",
+        "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+        "tgId": "700001001",
+        "firstName": "Тимур Админ А",
+        "username": "leadpro_owner",
+        "lang": "RU",
+        "isAdmin": true,
+        "createdAt": "2026-10-19T16:24:01.624Z"
+      },
+      "verifiedIsAdmin": true
+    },
+    "stepB_isolation_negative_test": {
+      "foreignInviteUsed": "adm_d84c658f4e7f0f530330bcc9267c147d",
+      "webhookResponse": {
+        "httpStatus": 200,
+        "httpBody": {
+          "ok": true
+        },
+        "inbox": {
+          "id": "acb49272-5cde-4df3-9c0f-43e5fe43d8a4",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "updateId": "920003",
+          "payload": {
+            "message": {
+              "chat": {
+                "id": 700001099,
+                "type": "private",
+                "first_name": "Чужой Пользователь"
+              },
+              "date": 1792427042,
+              "from": {
+                "id": 700001099,
+                "is_bot": false,
+                "username": "foreign_invite_user",
+                "first_name": "Чужой Пользователь"
+              },
+              "text": "/start adm_d84c658f4e7f0f530330bcc9267c147d",
+              "entities": [
+                {
+                  "type": "bot_command",
+                  "length": 6,
+                  "offset": 0
+                }
+              ],
+              "message_id": 1003
+            },
+            "update_id": 920003
+          },
+          "status": "RECEIVED",
+          "attempts": 1,
+          "maxAttempts": 3,
+          "lockedUntil": null,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+          "createdAt": "2026-10-19T16:24:02.664Z",
+          "processedAt": null
+        }
+      },
+      "botUserRecord": {
+        "id": "f02fbb46-9bbc-4f7d-8cec-c97f10acfb2a",
+        "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+        "tgId": "700001099",
+        "firstName": "Чужой Пользователь",
+        "username": "foreign_invite_user",
+        "lang": null,
+        "isAdmin": false,
+        "createdAt": "2026-10-19T16:24:02.673Z"
+      },
+      "verifiedIsAdminFalse": true
+    },
+    "stepC_client1_full_quiz": {
+      "clientTgId": 700002001,
+      "firstName": "Азиз",
+      "attemptId": "55b69942-f5f6-40d5-a19f-ed9ebfda3709",
+      "trace": [
+        {
+          "substep": "1_start_command",
+          "webhook": {
+            "httpStatus": 200,
+            "httpBody": {
+              "ok": true
+            },
+            "inbox": {
+              "id": "480738c4-2d64-46c3-9ae5-21a061c72d9f",
+              "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+              "updateId": "920004",
+              "payload": {
+                "message": {
+                  "chat": {
+                    "id": 700002001,
+                    "type": "private",
+                    "first_name": "Азиз"
+                  },
+                  "date": 1792427043,
+                  "from": {
+                    "id": 700002001,
+                    "is_bot": false,
+                    "username": "aziz_student",
+                    "first_name": "Азиз"
+                  },
+                  "text": "/start",
+                  "entities": [
+                    {
+                      "type": "bot_command",
+                      "length": 6,
+                      "offset": 0
+                    }
+                  ],
+                  "message_id": 1004
+                },
+                "update_id": 920004
+              },
+              "status": "RECEIVED",
+              "attempts": 1,
+              "maxAttempts": 3,
+              "lockedUntil": null,
+              "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+              "createdAt": "2026-10-19T16:24:03.192Z",
+              "processedAt": null
+            }
+          },
+          "dbUser": {
+            "id": "ca752a7f-2e18-4e9f-b149-1ec0f3f70348",
+            "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+            "tgId": "700002001",
+            "firstName": "Азиз",
+            "username": "aziz_student",
+            "lang": null,
+            "isAdmin": false,
+            "createdAt": "2026-10-19T16:24:03.213Z"
+          },
+          "redisSessionRawBeforeSync": null
+        },
+        {
+          "substep": "2_set_lang_RU_and_quiz_init",
+          "webhook": {
+            "httpStatus": 200,
+            "httpBody": {
+              "ok": true
+            },
+            "inbox": {
+              "id": "94c59780-996f-457c-8490-96c5bd60e21d",
+              "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+              "updateId": "920005",
+              "payload": {
+                "update_id": 920005,
+                "callback_query": {
+                  "id": "cb_c1_lang",
+                  "data": "set_lang:RU",
+                  "from": {
+                    "id": 700002001,
+                    "is_bot": false,
+                    "username": "aziz_student",
+                    "first_name": "Азиз"
+                  },
+                  "message": {
+                    "chat": {
+                      "id": 700002001,
+                      "type": "private",
+                      "first_name": "Азиз"
+                    },
+                    "date": 1792427043,
+                    "text": "Пожалуйста, выберите язык / Iltimos, tilni tanlang:",
+                    "message_id": 1005
+                  },
+                  "chat_instance": "ci_c1"
+                }
+              },
+              "status": "RECEIVED",
+              "attempts": 1,
+              "maxAttempts": 3,
+              "lockedUntil": null,
+              "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+              "createdAt": "2026-10-19T16:24:03.744Z",
+              "processedAt": null
+            }
+          },
+          "dbUser": {
+            "id": "ca752a7f-2e18-4e9f-b149-1ec0f3f70348",
+            "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+            "tgId": "700002001",
+            "firstName": "Азиз",
+            "username": "aziz_student",
+            "lang": "RU",
+            "isAdmin": false,
+            "createdAt": "2026-10-19T16:24:03.213Z"
+          },
+          "redisSessionState": {
+            "lang": "RU",
+            "isAdmin": false,
+            "quiz": {
+              "attemptId": "55b69942-f5f6-40d5-a19f-ed9ebfda3709",
+              "currentNodeId": "q1_subject",
+              "stepCount": 1,
+              "answers": {},
+              "startedAt": 1792427044269
+            }
+          }
+        },
+        {
+          "substep": "quiz_node_q1_subject",
+          "callbackData": "lc:ans:52a6f47c082a:~c5fdc30577ab:~2b3b34e5dc06",
+          "redisBeforeNodeId": "q1_subject",
+          "webhook": {
+            "httpStatus": 200,
+            "httpBody": {
+              "ok": true
+            },
+            "inbox": {
+              "id": "12ab75dd-23b5-4880-9ae1-790781834ca7",
+              "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+              "updateId": "920006",
+              "payload": {
+                "update_id": 920006,
+                "callback_query": {
+                  "id": "cb_c1_q1_subject",
+                  "data": "lc:ans:52a6f47c082a:~c5fdc30577ab:~2b3b34e5dc06",
+                  "from": {
+                    "id": 700002001,
+                    "is_bot": false,
+                    "username": "aziz_student",
+                    "first_name": "Азиз"
+                  },
+                  "message": {
+                    "chat": {
+                      "id": 700002001,
+                      "type": "private",
+                      "first_name": "Азиз"
+                    },
+                    "date": 1792427044,
+                    "text": "Какое направление вас интересует?",
+                    "message_id": 1006
+                  },
+                  "chat_instance": "ci_c1"
+                }
+              },
+              "status": "RECEIVED",
+              "attempts": 1,
+              "maxAttempts": 3,
+              "lockedUntil": null,
+              "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+              "createdAt": "2026-10-19T16:24:04.286Z",
+              "processedAt": null
+            }
+          },
+          "redisAfterNodeId": "q2_level",
+          "accumulatedAnswersCount": 1
+        },
+        {
+          "substep": "quiz_node_q2_level",
+          "callbackData": "lc:ans:52a6f47c082a:~6c8e9dac61b5:~a84b09e2cf86",
+          "redisBeforeNodeId": "q2_level",
+          "webhook": {
+            "httpStatus": 200,
+            "httpBody": {
+              "ok": true
+            },
+            "inbox": {
+              "id": "0a8547e8-53fb-41c4-bc31-7bed77e0d806",
+              "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+              "updateId": "920007",
+              "payload": {
+                "update_id": 920007,
+                "callback_query": {
+                  "id": "cb_c1_q2_level",
+                  "data": "lc:ans:52a6f47c082a:~6c8e9dac61b5:~a84b09e2cf86",
+                  "from": {
+                    "id": 700002001,
+                    "is_bot": false,
+                    "username": "aziz_student",
+                    "first_name": "Азиз"
+                  },
+                  "message": {
+                    "chat": {
+                      "id": 700002001,
+                      "type": "private",
+                      "first_name": "Азиз"
+                    },
+                    "date": 1792427045,
+                    "text": "Ваш текущий уровень знаний?",
+                    "message_id": 1007
+                  },
+                  "chat_instance": "ci_c1"
+                }
+              },
+              "status": "RECEIVED",
+              "attempts": 1,
+              "maxAttempts": 3,
+              "lockedUntil": null,
+              "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+              "createdAt": "2026-10-19T16:24:05.302Z",
+              "processedAt": null
+            }
+          },
+          "redisAfterNodeId": "q3_schedule",
+          "accumulatedAnswersCount": 2
+        },
+        {
+          "substep": "quiz_node_q3_schedule",
+          "callbackData": "lc:ans:52a6f47c082a:~7c9f50da0078:~bfb5d058acec",
+          "redisBeforeNodeId": "q3_schedule",
+          "webhook": {
+            "httpStatus": 200,
+            "httpBody": {
+              "ok": true
+            },
+            "inbox": {
+              "id": "938bb20b-2096-4bcb-bdc4-8e454f51ac4e",
+              "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+              "updateId": "920008",
+              "payload": {
+                "update_id": 920008,
+                "callback_query": {
+                  "id": "cb_c1_q3_schedule",
+                  "data": "lc:ans:52a6f47c082a:~7c9f50da0078:~bfb5d058acec",
+                  "from": {
+                    "id": 700002001,
+                    "is_bot": false,
+                    "username": "aziz_student",
+                    "first_name": "Азиз"
+                  },
+                  "message": {
+                    "chat": {
+                      "id": 700002001,
+                      "type": "private",
+                      "first_name": "Азиз"
+                    },
+                    "date": 1792427045,
+                    "text": "В какое время вам удобно учиться?",
+                    "message_id": 1008
+                  },
+                  "chat_instance": "ci_c1"
+                }
+              },
+              "status": "RECEIVED",
+              "attempts": 1,
+              "maxAttempts": 3,
+              "lockedUntil": null,
+              "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+              "createdAt": "2026-10-19T16:24:05.837Z",
+              "processedAt": null
+            }
+          },
+          "redisAfterNodeId": "q4_goal",
+          "accumulatedAnswersCount": 3
+        },
+        {
+          "substep": "quiz_node_q4_goal",
+          "callbackData": "lc:ans:52a6f47c082a:~50b82ee45841:~3327460ba377",
+          "redisBeforeNodeId": "q4_goal",
+          "webhook": {
+            "httpStatus": 200,
+            "httpBody": {
+              "ok": true
+            },
+            "inbox": {
+              "id": "7ed0ef79-bccf-42a3-a393-0955b0e0d837",
+              "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+              "updateId": "920009",
+              "payload": {
+                "update_id": 920009,
+                "callback_query": {
+                  "id": "cb_c1_q4_goal",
+                  "data": "lc:ans:52a6f47c082a:~50b82ee45841:~3327460ba377",
+                  "from": {
+                    "id": 700002001,
+                    "is_bot": false,
+                    "username": "aziz_student",
+                    "first_name": "Азиз"
+                  },
+                  "message": {
+                    "chat": {
+                      "id": 700002001,
+                      "type": "private",
+                      "first_name": "Азиз"
+                    },
+                    "date": 1792427046,
+                    "text": "Ваша главная цель обучения?",
+                    "message_id": 1009
+                  },
+                  "chat_instance": "ci_c1"
+                }
+              },
+              "status": "RECEIVED",
+              "attempts": 1,
+              "maxAttempts": 3,
+              "lockedUntil": null,
+              "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+              "createdAt": "2026-10-19T16:24:06.384Z",
+              "processedAt": null
+            }
+          },
+          "redisAfterNodeId": "q5_phone",
+          "accumulatedAnswersCount": 4
+        },
+        {
+          "substep": "quiz_node_q5_phone",
+          "callbackData": "lc:ans:52a6f47c082a:~4f469561cc9e:~dd6d48795521",
+          "redisBeforeNodeId": "q5_phone",
+          "webhook": {
+            "httpStatus": 200,
+            "httpBody": {
+              "ok": true
+            },
+            "inbox": {
+              "id": "64fffdd1-8049-4b56-8bdc-67a4c787d94a",
+              "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+              "updateId": "920010",
+              "payload": {
+                "update_id": 920010,
+                "callback_query": {
+                  "id": "cb_c1_q5_phone",
+                  "data": "lc:ans:52a6f47c082a:~4f469561cc9e:~dd6d48795521",
+                  "from": {
+                    "id": 700002001,
+                    "is_bot": false,
+                    "username": "aziz_student",
+                    "first_name": "Азиз"
+                  },
+                  "message": {
+                    "chat": {
+                      "id": 700002001,
+                      "type": "private",
+                      "first_name": "Азиз"
+                    },
+                    "date": 1792427046,
+                    "text": "Оставьте контактный номер для связи с куратором:",
+                    "message_id": 1010
+                  },
+                  "chat_instance": "ci_c1"
+                }
+              },
+              "status": "RECEIVED",
+              "attempts": 1,
+              "maxAttempts": 3,
+              "lockedUntil": null,
+              "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+              "createdAt": "2026-10-19T16:24:06.924Z",
+              "processedAt": null
+            }
+          },
+          "redisAfterNodeId": "__contact__",
+          "accumulatedAnswersCount": 5
+        }
+      ],
+      "phoneSubmissionWebhook": {
+        "httpStatus": 200,
+        "httpBody": {
+          "ok": true
+        },
+        "inbox": {
+          "id": "c575c1f2-4481-47ef-9b8e-9145bf609739",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "updateId": "920011",
+          "payload": {
+            "message": {
+              "chat": {
+                "id": 700002001,
+                "type": "private",
+                "first_name": "Азиз"
+              },
+              "date": 1792427047,
+              "from": {
+                "id": 700002001,
+                "is_bot": false,
+                "username": "aziz_student",
+                "first_name": "Азиз"
+              },
+              "text": "+998901234567",
+              "message_id": 1011
+            },
+            "update_id": 920011
+          },
+          "status": "RECEIVED",
+          "attempts": 1,
+          "maxAttempts": 3,
+          "lockedUntil": null,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+          "createdAt": "2026-10-19T16:24:07.784Z",
+          "processedAt": null
+        }
+      },
+      "createdLeadInPostgres": {
+        "id": "55b69942-f5f6-40d5-a19f-ed9ebfda3709",
+        "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+        "customerTgId": "700002001",
+        "customerName": "Азиз",
+        "customerUsername": "aziz_student",
+        "phoneRaw": "+998901234567",
+        "answers": {
+          "q4_goal": {
+            "answer": "💼 Трудоустройство / Карьера",
+            "optionId": "opt_job",
+            "question": "Ваша главная цель обучения?"
+          },
+          "q2_level": {
+            "answer": "🌱 Начинающий (с нуля)",
+            "optionId": "opt_beginner",
+            "question": "Ваш текущий уровень знаний?"
+          },
+          "q5_phone": {
+            "answer": "📱 Отправить заявку",
+            "optionId": "opt_phone_finish",
+            "question": "Оставьте контактный номер для связи с куратором:"
+          },
+          "q1_subject": {
+            "answer": "💻 Программирование / IT",
+            "optionId": "opt_it",
+            "question": "Какое направление вас интересует?"
+          },
+          "q3_schedule": {
+            "answer": "🌙 Вечер (18:00 - 21:00)",
+            "optionId": "opt_evening",
+            "question": "В какое время вам удобно учиться?"
+          }
+        },
+        "isMasked": false,
+        "createdAt": "2026-10-19T16:24:07.791Z"
+      },
+      "verifiedLeadCreatedByLiveServer": true
+    },
+    "stepG_parallel_invalid_phone_idempotency": {
+      "parallelInit": {
+        "c2Start": {
+          "httpStatus": 200,
+          "httpBody": {
+            "ok": true
+          },
+          "inbox": {
+            "id": "b9ab5ebd-2c23-4e8e-9166-6b8cbf516532",
+            "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+            "updateId": "920012",
+            "payload": {
+              "message": {
+                "chat": {
+                  "id": 700002002,
+                  "type": "private",
+                  "first_name": "Мадина"
+                },
+                "date": 1792427048,
+                "from": {
+                  "id": 700002002,
+                  "is_bot": false,
+                  "username": "madina_c2",
+                  "first_name": "Мадина"
+                },
+                "text": "/start",
+                "entities": [
+                  {
+                    "type": "bot_command",
+                    "length": 6,
+                    "offset": 0
+                  }
+                ],
+                "message_id": 1012
+              },
+              "update_id": 920012
+            },
+            "status": "RECEIVED",
+            "attempts": 1,
+            "maxAttempts": 3,
+            "lockedUntil": null,
+            "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+            "createdAt": "2026-10-19T16:24:08.712Z",
+            "processedAt": null
+          }
+        },
+        "c3Start": {
+          "httpStatus": 200,
+          "httpBody": {
+            "ok": true
+          },
+          "inbox": {
+            "id": "84bc4354-b2fa-45a7-a65c-676ea9dba3f2",
+            "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+            "updateId": "920013",
+            "payload": {
+              "message": {
+                "chat": {
+                  "id": 700002003,
+                  "type": "private",
+                  "first_name": "Сардор"
+                },
+                "date": 1792427048,
+                "from": {
+                  "id": 700002003,
+                  "is_bot": false,
+                  "username": "sardor_c3",
+                  "first_name": "Сардор"
+                },
+                "text": "/start",
+                "entities": [
+                  {
+                    "type": "bot_command",
+                    "length": 6,
+                    "offset": 0
+                  }
+                ],
+                "message_id": 1013
+              },
+              "update_id": 920013
+            },
+            "status": "RECEIVED",
+            "attempts": 1,
+            "maxAttempts": 3,
+            "lockedUntil": null,
+            "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+            "createdAt": "2026-10-19T16:24:08.779Z",
+            "processedAt": null
+          }
+        },
+        "c2Lang": {
+          "httpStatus": 200,
+          "httpBody": {
+            "ok": true
+          },
+          "inbox": {
+            "id": "2900a8d2-3d68-4da0-8a4f-4e312f0656f1",
+            "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+            "updateId": "920014",
+            "payload": {
+              "update_id": 920014,
+              "callback_query": {
+                "id": "cb_c2_lang",
+                "data": "set_lang:RU",
+                "from": {
+                  "id": 700002002,
+                  "is_bot": false,
+                  "username": "madina_c2",
+                  "first_name": "Мадина"
+                },
+                "message": {
+                  "chat": {
+                    "id": 700002002,
+                    "type": "private",
+                    "first_name": "Мадина"
+                  },
+                  "date": 1792427049,
+                  "text": "Пожалуйста, выберите язык",
+                  "message_id": 1014
+                },
+                "chat_instance": "ci_c2"
+              }
+            },
+            "status": "RECEIVED",
+            "attempts": 1,
+            "maxAttempts": 3,
+            "lockedUntil": null,
+            "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+            "createdAt": "2026-10-19T16:24:09.428Z",
+            "processedAt": null
+          }
+        },
+        "c3Lang": {
+          "httpStatus": 200,
+          "httpBody": {
+            "ok": true
+          },
+          "inbox": {
+            "id": "352e76a4-3daf-4aeb-b9c6-12b24458a616",
+            "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+            "updateId": "920015",
+            "payload": {
+              "update_id": 920015,
+              "callback_query": {
+                "id": "cb_c3_lang",
+                "data": "set_lang:UZ",
+                "from": {
+                  "id": 700002003,
+                  "is_bot": false,
+                  "username": "sardor_c3",
+                  "first_name": "Сардор"
+                },
+                "message": {
+                  "chat": {
+                    "id": 700002003,
+                    "type": "private",
+                    "first_name": "Сардор"
+                  },
+                  "date": 1792427049,
+                  "text": "Iltimos, tilni tanlang",
+                  "message_id": 1015
+                },
+                "chat_instance": "ci_c3"
+              }
+            },
+            "status": "RECEIVED",
+            "attempts": 1,
+            "maxAttempts": 3,
+            "lockedUntil": null,
+            "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+            "createdAt": "2026-10-19T16:24:09.428Z",
+            "processedAt": null
+          }
+        }
+      },
+      "parallelStepSnapshots": [
+        {
+          "nodeId": "q1_subject",
+          "nextNodeId": "q2_level",
+          "c2Option": "opt_lang",
+          "c3Option": "opt_math",
+          "c2HttpStatus": 200,
+          "c3HttpStatus": 200,
+          "c2RedisAnswerForNode": {
+            "question": "Какое направление вас интересует?",
+            "answer": "🇬🇧 Английский язык",
+            "optionId": "opt_lang"
+          },
+          "c3RedisAnswerForNode": {
+            "question": "Qaysi yo'nalish sizni qiziqtiradi?",
+            "answer": "📐 Aniq fanlar",
+            "optionId": "opt_math"
+          },
+          "sessionsIsolated": true
+        },
+        {
+          "nodeId": "q2_level",
+          "nextNodeId": "q3_schedule",
+          "c2Option": "opt_middle",
+          "c3Option": "opt_beginner",
+          "c2HttpStatus": 200,
+          "c3HttpStatus": 200,
+          "c2RedisAnswerForNode": {
+            "question": "Ваш текущий уровень знаний?",
+            "answer": "⚡️ Есть базовые знания",
+            "optionId": "opt_middle"
+          },
+          "c3RedisAnswerForNode": {
+            "question": "Hozirgi bilim darajangiz qanday?",
+            "answer": "🌱 Boshlang'ich (noldan)",
+            "optionId": "opt_beginner"
+          },
+          "sessionsIsolated": true
+        },
+        {
+          "nodeId": "q3_schedule",
+          "nextNodeId": "q4_goal",
+          "c2Option": "opt_morning",
+          "c3Option": "opt_evening",
+          "c2HttpStatus": 200,
+          "c3HttpStatus": 200,
+          "c2RedisAnswerForNode": {
+            "question": "В какое время вам удобно учиться?",
+            "answer": "☀️ Утро (09:00 - 13:00)",
+            "optionId": "opt_morning"
+          },
+          "c3RedisAnswerForNode": {
+            "question": "Qaysi vaqtda o'qish qulay?",
+            "answer": "🌙 Kechki payt (18:00 - 21:00)",
+            "optionId": "opt_evening"
+          },
+          "sessionsIsolated": true
+        },
+        {
+          "nodeId": "q4_goal",
+          "nextNodeId": "q5_phone",
+          "c2Option": "opt_hobby",
+          "c3Option": "opt_job",
+          "c2HttpStatus": 200,
+          "c3HttpStatus": 200,
+          "c2RedisAnswerForNode": {
+            "question": "Ваша главная цель обучения?",
+            "answer": "🎨 Для себя / Хобби",
+            "optionId": "opt_hobby"
+          },
+          "c3RedisAnswerForNode": {
+            "question": "O'qishdan asosiy maqsadingiz?",
+            "answer": "💼 Ishga joylashish",
+            "optionId": "opt_job"
+          },
+          "sessionsIsolated": true
+        },
+        {
+          "nodeId": "q5_phone",
+          "nextNodeId": "__contact__",
+          "c2Option": "opt_phone_finish",
+          "c3Option": "opt_phone_finish",
+          "c2HttpStatus": 200,
+          "c3HttpStatus": 200,
+          "c2RedisAnswerForNode": {
+            "question": "Оставьте контактный номер для связи с куратором:",
+            "answer": "📱 Отправить заявку",
+            "optionId": "opt_phone_finish"
+          },
+          "c3RedisAnswerForNode": {
+            "question": "Kurator siz bilan bog'lanishi uchun telefon raqamingizni qoldiring:",
+            "answer": "📱 Ariza yuborish",
+            "optionId": "opt_phone_finish"
+          },
+          "sessionsIsolated": true
+        }
+      ],
+      "invalidPhoneCheck": {
+        "inputSent": "не телефон",
+        "webhook": {
+          "httpStatus": 200,
+          "httpBody": {
+            "ok": true
+          },
+          "inbox": {
+            "id": "ccdc08fc-5feb-490f-8ce5-af90f7ae86ad",
+            "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+            "updateId": "920026",
+            "payload": {
+              "message": {
+                "chat": {
+                  "id": 700002002,
+                  "type": "private",
+                  "first_name": "Мадина"
+                },
+                "date": 1792427052,
+                "from": {
+                  "id": 700002002,
+                  "is_bot": false,
+                  "username": "madina_c2",
+                  "first_name": "Мадина"
+                },
+                "text": "не телефон",
+                "message_id": 1026
+              },
+              "update_id": 920026
+            },
+            "status": "RECEIVED",
+            "attempts": 1,
+            "maxAttempts": 3,
+            "lockedUntil": null,
+            "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+            "createdAt": "2026-10-19T16:24:12.733Z",
+            "processedAt": null
+          }
+        },
+        "leadInDbAfterInvalidInput": null,
+        "redisStillOnContactStep": true,
+        "verifiedRejectedWithoutCreatingLead": true
+      },
+      "validPhoneSubmissions": {
+        "client2Webhook": {
+          "httpStatus": 200,
+          "httpBody": {
+            "ok": true
+          },
+          "inbox": {
+            "id": "f624859a-1ef0-455a-abcb-3e8628938b8e",
+            "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+            "updateId": "920027",
+            "payload": {
+              "message": {
+                "chat": {
+                  "id": 700002002,
+                  "type": "private",
+                  "first_name": "Мадина"
+                },
+                "date": 1792427052,
+                "from": {
+                  "id": 700002002,
+                  "is_bot": false,
+                  "username": "madina_c2",
+                  "first_name": "Мадина"
+                },
+                "text": "+998907776655",
+                "message_id": 1027
+              },
+              "update_id": 920027
+            },
+            "status": "RECEIVED",
+            "attempts": 1,
+            "maxAttempts": 3,
+            "lockedUntil": null,
+            "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+            "createdAt": "2026-10-19T16:24:13.010Z",
+            "processedAt": null
+          }
+        },
+        "client3Webhook": {
+          "httpStatus": 200,
+          "httpBody": {
+            "ok": true
+          },
+          "inbox": {
+            "id": "a622d5de-4f4c-497c-82d7-ad517e4f4464",
+            "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+            "updateId": "920028",
+            "payload": {
+              "message": {
+                "chat": {
+                  "id": 700002003,
+                  "type": "private",
+                  "first_name": "Сардор"
+                },
+                "date": 1792427052,
+                "from": {
+                  "id": 700002003,
+                  "is_bot": false,
+                  "username": "sardor_c3",
+                  "first_name": "Сардор"
+                },
+                "text": "+998903334455",
+                "message_id": 1028
+              },
+              "update_id": 920028
+            },
+            "status": "RECEIVED",
+            "attempts": 1,
+            "maxAttempts": 3,
+            "lockedUntil": null,
+            "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+            "createdAt": "2026-10-19T16:24:13.013Z",
+            "processedAt": null
+          }
+        },
+        "client2Lead": {
+          "id": "50ca5bfb-45b4-422d-b8c3-0dea040b6dd2",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "customerTgId": "700002002",
+          "customerName": "Мадина",
+          "customerUsername": "madina_c2",
+          "phoneRaw": "+998907776655",
+          "answers": {
+            "q4_goal": {
+              "answer": "🎨 Для себя / Хобби",
+              "optionId": "opt_hobby",
+              "question": "Ваша главная цель обучения?"
+            },
+            "q2_level": {
+              "answer": "⚡️ Есть базовые знания",
+              "optionId": "opt_middle",
+              "question": "Ваш текущий уровень знаний?"
+            },
+            "q5_phone": {
+              "answer": "📱 Отправить заявку",
+              "optionId": "opt_phone_finish",
+              "question": "Оставьте контактный номер для связи с куратором:"
+            },
+            "q1_subject": {
+              "answer": "🇬🇧 Английский язык",
+              "optionId": "opt_lang",
+              "question": "Какое направление вас интересует?"
+            },
+            "q3_schedule": {
+              "answer": "☀️ Утро (09:00 - 13:00)",
+              "optionId": "opt_morning",
+              "question": "В какое время вам удобно учиться?"
+            }
+          },
+          "isMasked": false,
+          "createdAt": "2026-10-19T16:24:13.029Z"
+        },
+        "client3Lead": {
+          "id": "833906ce-3d20-456f-bd0d-f18045d178e6",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "customerTgId": "700002003",
+          "customerName": "Сардор",
+          "customerUsername": "sardor_c3",
+          "phoneRaw": "+998903334455",
+          "answers": {
+            "q4_goal": {
+              "answer": "💼 Ishga joylashish",
+              "optionId": "opt_job",
+              "question": "O'qishdan asosiy maqsadingiz?"
+            },
+            "q2_level": {
+              "answer": "🌱 Boshlang'ich (noldan)",
+              "optionId": "opt_beginner",
+              "question": "Hozirgi bilim darajangiz qanday?"
+            },
+            "q5_phone": {
+              "answer": "📱 Ariza yuborish",
+              "optionId": "opt_phone_finish",
+              "question": "Kurator siz bilan bog'lanishi uchun telefon raqamingizni qoldiring:"
+            },
+            "q1_subject": {
+              "answer": "📐 Aniq fanlar",
+              "optionId": "opt_math",
+              "question": "Qaysi yo'nalish sizni qiziqtiradi?"
+            },
+            "q3_schedule": {
+              "answer": "🌙 Kechki payt (18:00 - 21:00)",
+              "optionId": "opt_evening",
+              "question": "Qaysi vaqtda o'qish qulay?"
+            }
+          },
+          "isMasked": false,
+          "createdAt": "2026-10-19T16:24:13.030Z"
+        }
+      },
+      "duplicateUpdateIdCheck": {
+        "replayedUpdateId": 920027,
+        "httpStatus": 200,
+        "httpBody": {
+          "ok": true,
+          "duplicate": true
+        },
+        "leadsCountBeforeDup": 3,
+        "leadsCountAfterDup": 3,
+        "verifiedDuplicateBlocked": true
+      }
+    },
+    "stepD_admin_cabinet": {
+      "admStartWebhook": {
+        "httpStatus": 200,
+        "httpBody": {
+          "ok": true
+        },
+        "inbox": {
+          "id": "f554fd94-1fd0-4445-8c78-4df8c777bc15",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "updateId": "920029",
+          "payload": {
+            "message": {
+              "chat": {
+                "id": 700001001,
+                "type": "private",
+                "first_name": "Тимур Админ А"
+              },
+              "date": 1792427053,
+              "from": {
+                "id": 700001001,
+                "is_bot": false,
+                "username": "leadpro_owner",
+                "first_name": "Тимур Админ А"
+              },
+              "text": "/start",
+              "entities": [
+                {
+                  "type": "bot_command",
+                  "length": 6,
+                  "offset": 0
+                }
+              ],
+              "message_id": 1029
+            },
+            "update_id": 920029
+          },
+          "status": "RECEIVED",
+          "attempts": 1,
+          "maxAttempts": 3,
+          "lockedUntil": null,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+          "createdAt": "2026-10-19T16:24:13.595Z",
+          "processedAt": null
+        }
+      },
+      "admReplyKeyboardLeadsWebhook": {
+        "httpStatus": 200,
+        "httpBody": {
+          "ok": true
+        },
+        "inbox": {
+          "id": "30599564-c664-4b24-bee5-3dc9636dedf2",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "updateId": "920030",
+          "payload": {
+            "message": {
+              "chat": {
+                "id": 700001001,
+                "type": "private",
+                "first_name": "Тимур Админ А"
+              },
+              "date": 1792427053,
+              "from": {
+                "id": 700001001,
+                "is_bot": false,
+                "username": "leadpro_owner",
+                "first_name": "Тимур Админ А"
+              },
+              "text": "📋 Заявки/Записи",
+              "message_id": 1030
+            },
+            "update_id": 920030
+          },
+          "status": "RECEIVED",
+          "attempts": 1,
+          "maxAttempts": 3,
+          "lockedUntil": null,
+          "lastError": "GrammyError in middleware: Call to 'sendMessage' failed! (400: Bad Request: chat not found)",
+          "createdAt": "2026-10-19T16:24:13.865Z",
+          "processedAt": null
+        }
+      },
+      "admCallbackLeadsWebhook": {
+        "httpStatus": 200,
+        "httpBody": {
+          "ok": true
+        },
+        "inbox": {
+          "id": "cf4b46d7-c7d4-4382-9fc7-d5c209941243",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "updateId": "920031",
+          "payload": {
+            "update_id": 920031,
+            "callback_query": {
+              "id": "cb_adm_leads",
+              "data": "admin:leads",
+              "from": {
+                "id": 700001001,
+                "is_bot": false,
+                "username": "leadpro_owner",
+                "first_name": "Тимур Админ А"
+              },
+              "message": {
+                "chat": {
+                  "id": 700001001,
+                  "type": "private",
+                  "first_name": "Тимур Админ А"
+                },
+                "date": 1792427054,
+                "text": "Панель администратора:",
+                "message_id": 1031
+              },
+              "chat_instance": "ci_adm_1"
+            }
+          },
+          "status": "RECEIVED",
+          "attempts": 1,
+          "maxAttempts": 3,
+          "lockedUntil": null,
+          "lastError": "GrammyError in middleware: Call to 'answerCallbackQuery' failed! (400: Bad Request: query is too old and response timeout expired or query ID is invalid)",
+          "createdAt": "2026-10-19T16:24:14.142Z",
+          "processedAt": null
+        }
+      },
+      "admCallbackLegacyLeads0Webhook": {
+        "httpStatus": 200,
+        "httpBody": {
+          "ok": true
+        },
+        "inbox": {
+          "id": "9de66351-85e6-4b9f-8b68-63ee8e11c3ef",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "updateId": "920032",
+          "payload": {
+            "update_id": 920032,
+            "callback_query": {
+              "id": "cb_adm_leads_0",
+              "data": "adm:leads:0",
+              "from": {
+                "id": 700001001,
+                "is_bot": false,
+                "first_name": "Тимур Админ А"
+              },
+              "message": {
+                "chat": {
+                  "id": 700001001,
+                  "type": "private",
+                  "first_name": "Тимур Админ А"
+                },
+                "date": 1792427054,
+                "text": "Панель администратора:",
+                "message_id": 1032
+              },
+              "chat_instance": "ci_adm_1"
+            }
+          },
+          "status": "COMPLETED",
+          "attempts": 1,
+          "maxAttempts": 3,
+          "lockedUntil": null,
+          "lastError": null,
+          "createdAt": "2026-10-19T16:24:14.406Z",
+          "processedAt": "2026-10-19T16:24:14.413Z"
+        }
+      },
+      "formattedAdminLeadsView": "Последние заявки/записи (до 20):\n\n1. [19.10.2026] Сардор | +998903334455\n2. [19.10.2026] Мадина | +998907776655\n3. [19.10.2026] Азиз | +998901234567",
+      "totalLeadsForBot1": 3,
+      "allLeadsDump": [
+        {
+          "id": "833906ce-3d20-456f-bd0d-f18045d178e6",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "customerTgId": "700002003",
+          "customerName": "Сардор",
+          "customerUsername": "sardor_c3",
+          "phoneRaw": "+998903334455",
+          "answers": {
+            "q4_goal": {
+              "answer": "💼 Ishga joylashish",
+              "optionId": "opt_job",
+              "question": "O'qishdan asosiy maqsadingiz?"
+            },
+            "q2_level": {
+              "answer": "🌱 Boshlang'ich (noldan)",
+              "optionId": "opt_beginner",
+              "question": "Hozirgi bilim darajangiz qanday?"
+            },
+            "q5_phone": {
+              "answer": "📱 Ariza yuborish",
+              "optionId": "opt_phone_finish",
+              "question": "Kurator siz bilan bog'lanishi uchun telefon raqamingizni qoldiring:"
+            },
+            "q1_subject": {
+              "answer": "📐 Aniq fanlar",
+              "optionId": "opt_math",
+              "question": "Qaysi yo'nalish sizni qiziqtiradi?"
+            },
+            "q3_schedule": {
+              "answer": "🌙 Kechki payt (18:00 - 21:00)",
+              "optionId": "opt_evening",
+              "question": "Qaysi vaqtda o'qish qulay?"
+            }
+          },
+          "isMasked": false,
+          "createdAt": "2026-10-19T16:24:13.030Z"
+        },
+        {
+          "id": "50ca5bfb-45b4-422d-b8c3-0dea040b6dd2",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "customerTgId": "700002002",
+          "customerName": "Мадина",
+          "customerUsername": "madina_c2",
+          "phoneRaw": "+998907776655",
+          "answers": {
+            "q4_goal": {
+              "answer": "🎨 Для себя / Хобби",
+              "optionId": "opt_hobby",
+              "question": "Ваша главная цель обучения?"
+            },
+            "q2_level": {
+              "answer": "⚡️ Есть базовые знания",
+              "optionId": "opt_middle",
+              "question": "Ваш текущий уровень знаний?"
+            },
+            "q5_phone": {
+              "answer": "📱 Отправить заявку",
+              "optionId": "opt_phone_finish",
+              "question": "Оставьте контактный номер для связи с куратором:"
+            },
+            "q1_subject": {
+              "answer": "🇬🇧 Английский язык",
+              "optionId": "opt_lang",
+              "question": "Какое направление вас интересует?"
+            },
+            "q3_schedule": {
+              "answer": "☀️ Утро (09:00 - 13:00)",
+              "optionId": "opt_morning",
+              "question": "В какое время вам удобно учиться?"
+            }
+          },
+          "isMasked": false,
+          "createdAt": "2026-10-19T16:24:13.029Z"
+        },
+        {
+          "id": "55b69942-f5f6-40d5-a19f-ed9ebfda3709",
+          "botId": "b3462648-55a6-42d1-baac-f855448652d6",
+          "customerTgId": "700002001",
+          "customerName": "Азиз",
+          "customerUsername": "aziz_student",
+          "phoneRaw": "+998901234567",
+          "answers": {
+            "q4_goal": {
+              "answer": "💼 Трудоустройство / Карьера",
+              "optionId": "opt_job",
+              "question": "Ваша главная цель обучения?"
+            },
+            "q2_level": {
+              "answer": "🌱 Начинающий (с нуля)",
+              "optionId": "opt_beginner",
+              "question": "Ваш текущий уровень знаний?"
+            },
+            "q5_phone": {
+              "answer": "📱 Отправить заявку",
+              "optionId": "opt_phone_finish",
+              "question": "Оставьте контактный номер для связи с куратором:"
+            },
+            "q1_subject": {
+              "answer": "💻 Программирование / IT",
+              "optionId": "opt_it",
+              "question": "Какое направление вас интересует?"
+            },
+            "q3_schedule": {
+              "answer": "🌙 Вечер (18:00 - 21:00)",
+              "optionId": "opt_evening",
+              "question": "В какое время вам удобно учиться?"
+            }
+          },
+          "isMasked": false,
+          "createdAt": "2026-10-19T16:24:07.791Z"
+        }
+      ]
+    },
+    "bot2_untouched_check": {
+      "id": "f3ece32d-f484-422b-b8a2-1d545951933d",
+      "botType": "QUICKBOOK",
+      "adminInviteCode": "d84c658f4e7f0f530330bcc9267c147d",
+      "isActive": true
+    }
+  }
+}

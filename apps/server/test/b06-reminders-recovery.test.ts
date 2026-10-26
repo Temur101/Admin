@@ -264,7 +264,7 @@ describe("B06: Resilient Booking Reminders & Recovery", () => {
 
   it("Recovery from DB when Redis was down during booking creation", async () => {
     const slotTime = new Date("2026-10-22T14:00:00.000Z");
-    const reminderTime = new Date("2026-10-22T12:00:00.000Z");
+    const reminderTime = new Date("2026-10-22T13:00:00.000Z");
 
     // Booking created in DB, but Redis NEVER had this booking scheduled (simulating Redis crash during booking)
     const booking = await prisma.booking.create({

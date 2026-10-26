@@ -63,9 +63,9 @@ export async function registerAdminApi(
   await ensureSuperAdmin(prisma, logger);
 
   // 3. Register route modules under /api/v1/*
-  registerAuthRoutes(app, prisma);
+  registerAuthRoutes(app, prisma, redis);
   registerTenantRoutes(app, prisma);
-  registerBotsRoutes(app, prisma, tenantResolver, logger, transport, pollingManager);
+  registerBotsRoutes(app, prisma, tenantResolver, logger, transport, pollingManager, redis);
   registerTemplatesRoutes(app, prisma, tenantResolver);
   registerBookingsRoutes(app, prisma, redis, transport, logger);
   registerReceiptsRoutes(app, prisma, redis, transport, logger);

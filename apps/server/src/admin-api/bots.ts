@@ -15,6 +15,9 @@ import type { PollingManager } from "../gateway/polling-manager.js";
 import { InitialBotSettingsError, resolveInitialBotSettings } from "./initial-bot-settings.js";
 import { registerBotsOpsRoutes } from "./bots-ops.js";
 import { registerBotsLifecycleRoutes } from "./bots-lifecycle.js";
+import type { Redis } from "ioredis";
+import { registerBotsSubscriptionRoutes } from "./bots-subscription.js";
+import { registerBotsResetRoutes } from "./bots-reset.js";
 
 interface BotParams {
   id: string;
@@ -27,6 +30,7 @@ export function registerBotsRoutes(
   logger?: Logger,
   transport?: TelegramTransport,
   pollingManager?: PollingManager,
+  redis?: Redis,
 ): void {
   function getBotInstance(token: string, botId = "api-bot"): Bot {
     const b = new Bot(token, { client: { timeoutSeconds: 5 } });
@@ -44,14 +48,8 @@ export function registerBotsRoutes(
         include: {
           tenant: { select: { id: true, clientName: true } },
           subscription: true,
-          _count: {
-            select: {
-              leads: true,
-              bookings: true,
-              users: true,
-              receipts: true,
-            },
-          },
+          users: { where: { isAdmin: true }, select: { id: true } },
+          _count: { select: { leads: true, bookings: true, users: true, receipts: true } },
         },
         orderBy: { createdAt: "desc" },
       });
@@ -78,6 +76,7 @@ export function registerBotsRoutes(
             leadsCount: b._count.leads,
             bookingsCount: b._count.bookings,
             usersCount: b._count.users,
+            adminsCount: b.users.length,
             receiptsCount: b._count.receipts,
           },
         })),
@@ -140,6 +139,7 @@ export function registerBotsRoutes(
             leadsCount: bot._count.leads,
             bookingsCount: bot._count.bookings,
             usersCount: bot._count.users,
+            adminsCount: bot.users.length,
             receiptsCount: bot._count.receipts,
           },
         },
@@ -287,6 +287,13 @@ export function registerBotsRoutes(
 
   // Register operations and diagnostic routes (admins, extend, unblock, health, webhooks)
   registerBotsOpsRoutes(app, prisma, tenantResolver, getBotInstance, pollingManager);
+  registerBotsSubscriptionRoutes(app, prisma);
+  registerBotsResetRoutes(app, prisma, redis, {
+    tenantResolver,
+    logger,
+    getBotInstance,
+    pollingManager,
+  });
   registerBotSetupRoutes(app, prisma, {
     mode: env.BOT_MODE,
     publicBaseUrl: env.PUBLIC_BASE_URL,

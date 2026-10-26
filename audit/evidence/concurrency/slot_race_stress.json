@@ -1,0 +1,34 @@
+{
+  "testName": "SCN-E2E-02: Slot Booking Concurrency & Overbooking Prevention",
+  "timestamp": "2026-10-19T15:06:47.175Z",
+  "experiments": {
+    "exp1_exact_slot_race": {
+      "concurrency": 50,
+      "durationMs": 1054,
+      "successes": 1,
+      "conflicts": 49,
+      "unexpectedErrors": 0,
+      "validAlternativesCount": 49,
+      "dbCount": 1,
+      "passed": true
+    },
+    "exp2_overlap_race": {
+      "concurrency": 30,
+      "durationMs": 239,
+      "successes": 0,
+      "conflicts": 30,
+      "dbCount": 0,
+      "passed": true
+    },
+    "exp3_raw_db_constraints": {
+      "concurrency": 20,
+      "successes": 1,
+      "rejectedByDb": 19,
+      "persistedInDb": 1,
+      "passed": true
+    }
+  },
+  "summary": {
+    "passed": true
+  }
+}

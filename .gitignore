@@ -12,6 +12,7 @@ node_modules/
 tools/
 uploads/
 *.log
+memurai-log.txt
 *.rdb
 .agents/
 

@@ -22,6 +22,9 @@ export class BackgroundWorkerScheduler {
   private subscriptionTimer: NodeJS.Timeout | null = null;
   private reminderTimer: NodeJS.Timeout | null = null;
   private recoveryTimer: NodeJS.Timeout | null = null;
+  private activeSubscriptionTask: Promise<unknown> | null = null;
+  private activeReminderTask: Promise<unknown> | null = null;
+  private activeRecoveryTask: Promise<unknown> | null = null;
   private isRunning = false;
   private readonly inFlightTasks = new Set<Promise<unknown>>();
   private readonly opts: SchedulerOptions;
@@ -76,6 +79,7 @@ export class BackgroundWorkerScheduler {
 
   public triggerSubscriptionTick(): Promise<unknown> {
     if (!this.isRunning) return Promise.resolve();
+    if (this.activeSubscriptionTask) return this.activeSubscriptionTask;
 
     const task = runSubscriptionWorker({
       prisma: this.opts.prisma,
@@ -90,15 +94,18 @@ export class BackgroundWorkerScheduler {
         );
       })
       .finally(() => {
+        this.activeSubscriptionTask = null;
         this.inFlightTasks.delete(task);
       });
 
+    this.activeSubscriptionTask = task;
     this.inFlightTasks.add(task);
     return task;
   }
 
   public triggerReminderTick(): Promise<unknown> {
     if (!this.isRunning) return Promise.resolve();
+    if (this.activeReminderTask) return this.activeReminderTask;
 
     const task = runBookingReminderWorker({
       prisma: this.opts.prisma,
@@ -113,15 +120,18 @@ export class BackgroundWorkerScheduler {
         );
       })
       .finally(() => {
+        this.activeReminderTask = null;
         this.inFlightTasks.delete(task);
       });
 
+    this.activeReminderTask = task;
     this.inFlightTasks.add(task);
     return task;
   }
 
   public triggerRecoveryTick(): Promise<unknown> {
     if (!this.isRunning || !this.opts.inboxService) return Promise.resolve();
+    if (this.activeRecoveryTask) return this.activeRecoveryTask;
 
     const task = this.opts.inboxService
       .recoverPending(50)
@@ -137,9 +147,11 @@ export class BackgroundWorkerScheduler {
         );
       })
       .finally(() => {
+        this.activeRecoveryTask = null;
         this.inFlightTasks.delete(task);
       });
 
+    this.activeRecoveryTask = task;
     this.inFlightTasks.add(task);
     return task;
   }

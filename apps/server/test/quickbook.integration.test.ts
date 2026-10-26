@@ -340,10 +340,15 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       },
     });
 
+    const adminCalls = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === adminTgId);
+    expect(adminCalls).toHaveLength(1);
+    expect(String(adminCalls[0]?.payload.text)).toContain("Запись отменена клиентом");
+
     // Check client received cancellation response
     const calls = transport.callsOf("sendMessage");
-    expect(calls).toHaveLength(1);
-    expect(String(calls[0]?.payload.text)).toContain("отменена");
+    const clientCalls = calls.filter((c) => c.payload.chat_id === clientTgId);
+    expect(clientCalls).toHaveLength(1);
+    expect(String(clientCalls[0]?.payload.text)).toContain("отменена");
 
     // Check DB status updated to CANCELLED
     const updated = await prisma.booking.findUnique({ where: { id: booking.id } });

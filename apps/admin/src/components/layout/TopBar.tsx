@@ -1,4 +1,4 @@
-import { LogOut, ShieldCheck, User, Menu } from "lucide-react";
+import { LogOut, ShieldCheck, Menu } from "lucide-react";
 import { useAuth } from "../../context/AuthContext.js";
 
 import { useDiscardConfirmation } from "../../context/UnsavedChangesContext.js";
@@ -25,11 +25,7 @@ export function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-2.5 text-sm text-ui-secondary bg-ui-hover px-3 py-1.5 rounded-xl border border-ui-border">
           <div className="h-6 w-6 rounded-lg bg-ui-accent-soft text-ui-accent flex items-center justify-center">
-            {user?.role === "SUPERADMIN" ? (
-              <ShieldCheck className="h-3.5 w-3.5" />
-            ) : (
-              <User className="h-3.5 w-3.5" />
-            )}
+            <ShieldCheck className="h-3.5 w-3.5" />
           </div>
           <div>
             <p className="font-semibold text-ui-text leading-tight">

@@ -1,0 +1,76 @@
+{
+  "testName": "SCN-E2E-04: Webhook Idempotency & Duplicate Rejection",
+  "timestamp": "2026-10-19T15:13:02.518Z",
+  "experiments": {
+    "exp1_sequential_redelivery": {
+      "firstDelivery": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      },
+      "secondDelivery": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "duplicate": true
+        }
+      },
+      "thirdDelivery": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "duplicate": true
+        }
+      },
+      "dbInboxCount": 1,
+      "passed": true
+    },
+    "exp2_concurrent_burst": {
+      "concurrency": 50,
+      "durationMs": 1491,
+      "primaryAccepted": 1,
+      "duplicateRejections": 49,
+      "unexpectedErrors": 0,
+      "dbInboxCount": 1,
+      "passed": true
+    },
+    "exp3_callback_button_click": {
+      "click1": {
+        "status": 200,
+        "body": {
+          "ok": true
+        }
+      },
+      "click2": {
+        "status": 200,
+        "body": {
+          "ok": true,
+          "duplicate": true
+        }
+      },
+      "dbInboxCount": 1,
+      "passed": true
+    },
+    "exp4_cross_bot_namespace": {
+      "bot1": {
+        "status": 200,
+        "body": {
+          "ok": true
+        },
+        "count": 1
+      },
+      "bot2": {
+        "status": 200,
+        "body": {
+          "ok": true
+        },
+        "count": 1
+      },
+      "passed": true
+    }
+  },
+  "summary": {
+    "passed": true
+  }
+}

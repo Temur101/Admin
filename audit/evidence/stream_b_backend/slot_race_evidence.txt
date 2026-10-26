@@ -1,0 +1,37 @@
+================================================================================
+[ADVERSARIAL STRESS TEST] SCN-E2E-02: Slot Booking Race Condition & Overbooking
+Timestamp: 2026-10-19T15:06:46.750Z
+================================================================================
+
+--- Phase 0: Environment & Test Fixture Setup ---
+[+] Created test tenant (fa2a1521-3bc6-4c4e-b4a3-a47f8ac2587b) and bot (251b8514-b5d4-4407-88a0-e7d34443373d)
+
+--- Experiment 1: 50 Concurrent Requests for EXACT Same Slot (10:00:00) ---
+[i] Total requests dispatched: 50
+[i] Wall-clock time: 1054 ms (Avg 21.08 ms/req)
+[i] Successes: 1
+[i] Slot Conflicts (SLOT_TAKEN): 49
+[i] Unexpected Errors: 0
+[i] Conflicts with valid alternative slots: 49/49
+[i] Database active booking count for slot: 1
+[Verdict Exp 1]: PASS
+
+--- Experiment 2: 30 Concurrent Requests for Overlapping Slot (10:30:00) ---
+[i] Total requests dispatched: 30
+[i] Wall-clock time: 239 ms
+[i] Successes: 0 (Expected 0 due to overlap with 10:00-11:00)
+[i] Slot Conflicts: 30
+[i] Unexpected Errors: 0
+[i] Database active booking count for overlapping slot: 0
+[Verdict Exp 2]: PASS
+
+--- Experiment 3: Raw PostgreSQL Concurrent Insert Assault (GiST & Partial Index) ---
+[i] Simulating 20 direct concurrent database inserts bypassing application locks...
+[i] Raw inserts succeeded: 1 (Expected exactly 1)
+[i] Raw inserts rejected by DB constraints: 19
+[i] Total records persisted in PostgreSQL: 1
+[Verdict Exp 3]: PASS
+
+================================================================================
+FINAL ADVERSARIAL VERDICT: PASS (Race Protection Verified)
+================================================================================

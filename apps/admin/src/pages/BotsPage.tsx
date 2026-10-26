@@ -60,7 +60,7 @@ export function BotsPage() {
                 <th className="px-5 py-3">Тип</th>
                 <th className="px-5 py-3">Статус подписки</th>
                 <th className="px-5 py-3">Лиды / Записи</th>
-                <th className="px-5 py-3">Админы</th>
+                <th className="px-5 py-3">Админы / Пользователи</th>
                 <th className="px-5 py-3 text-right">Управление</th>
               </tr>
             </thead>
@@ -129,7 +129,9 @@ export function BotsPage() {
                         ? `${b.stats.leadsCount} заявок`
                         : `${b.stats.bookingsCount} записей`}
                     </td>
-                    <td className="px-5 py-3.5 text-ui-muted">{b.stats.usersCount} чел</td>
+                    <td className="px-5 py-3.5 text-ui-muted">
+                      {b.stats.adminsCount ?? 0} адм. · {b.stats.usersCount} польз.
+                    </td>
                     <td className="px-5 py-3.5 text-right">
                       <Link
                         to={`/bots/${b.id}`}

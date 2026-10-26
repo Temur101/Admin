@@ -1,0 +1,44 @@
+================================================================================
+[ADVERSARIAL STRESS TEST] SCN-E2E-01: Cross-Tenant Isolation & ID Tampering
+Timestamp: 2026-10-19T15:11:32.804Z
+================================================================================
+
+--- Phase 0: Environment Setup (2 Distinct Tenants & Bots) ---
+[+] Created Tenant Alpha (82afc960-449d-4827-a23d-ef5fb5379c37) with Bot Alpha (dc355f61-4aa8-49b2-b36b-f9b3dddccc6a)
+[+] Created Tenant Beta (6fb0f6cd-2488-4e6d-9498-df950603a738) with Bot Beta (a7602f10-a744-44c4-b7eb-95a78da3e276)
+[+] Seeded Booking Alpha (552afce1-7393-4456-bc03-e353dd5007ef) and Lead Beta (d69d91ce-a4ed-4f5b-972b-b66abac6ff2c)
+
+--- Vector 1: Cross-Tenant Booking ID Tampering ---
+[i] Attack 1A (User Beta cancels Booking Alpha): success=false, error=FORBIDDEN
+[i] Attack 1B (Bot Beta scope cancels Booking Alpha): success=false, error=FORBIDDEN
+[i] Legitimate Owner Cancel: success=true, alreadyCancelled=false
+[Verdict Vector 1]: PASS
+
+--- Vector 2: Cross-Tenant Admin Privilege & Invite Code Replay ---
+[i] Is Beta Admin an admin on Bot Alpha? -> false (Expected: false)
+[i] Replay Alpha invite code on Bot Beta -> newlyBecameAdmin=false, isAdmin=false
+[i] Legit invite code on Bot Alpha -> newlyBecameAdmin=true, isAdmin=true
+[Verdict Vector 2]: PASS
+
+--- Vector 3: Redis FSM Session Key Isolation ---
+[i] Session Alpha data: {"step":"SELECTING_SERVICE","serviceId":"srv_haircut"}
+[i] Session Beta data: {"step":"ANSWERING_QUIZ","questionIdx":2}
+[Verdict Vector 3]: PASS
+
+--- Vector 4: Webhook Routing, Secret Header & Cross-Bot Updates ---
+[i] 4A (Missing secret header) -> status=401 (Expected: 401)
+[i] 4B (Cross-tenant wrong secret) -> status=401 (Expected: 401)
+[i] 4C (Malformed hash format) -> status=400 (Expected: 400)
+[i] 4D (Valid Alpha webhook) -> status=200 (Expected: 200)
+[i] 4E (Same update_id 9004 to Bot Beta) -> status=200 (Expected: 200, no collision)
+[i] WebhookInbox: Alpha has update 9004: 1, Beta has update 9004: 1
+[Verdict Vector 4]: PASS
+
+--- Vector 5: Admin REST API Probing & Unauthorized Access ---
+[i] 5A (GET /api/v1/bots without token) -> status=401 (Expected: 401)
+[i] 5B (GET /api/v1/bots/:id with bogus JWT) -> status=401 (Expected: 401)
+[Verdict Vector 5]: PASS
+
+================================================================================
+FINAL ADVERSARIAL VERDICT: PASS (Tenant Isolation Verified)
+================================================================================

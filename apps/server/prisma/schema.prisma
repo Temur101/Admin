@@ -148,6 +148,9 @@ model Lead {
   @@index([botId, createdAt])
 }
 
+/// Enforced via SQL migrations in PostgreSQL:
+/// - Partial unique index `booking_slot_active_uq` on (botId, staffId, slotTime) WHERE status IN ('PENDING', 'CONFIRMED')
+/// - GiST exclusion constraint `booking_no_overlap_excl` on (botId WITH =, staffId WITH =, tstzrange(slotTime, endTime) WITH &&) WHERE status IN ('PENDING', 'CONFIRMED')
 model Booking {
   id            String        @id @default(uuid()) @db.Uuid
   botId         String        @db.Uuid

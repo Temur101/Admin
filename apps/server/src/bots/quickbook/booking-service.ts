@@ -10,6 +10,7 @@ import { getAlternativeSlots, type TimeSlot } from "./slot-generator.js";
 import { formatTashkentDateTime } from "../shared/payment-service.js";
 
 export const REMINDER_ZSET_KEY = "booking:reminders";
+export const REMINDER_LEAD_TIME_MS = 1 * 3600 * 1000;
 export { formatTashkentDateTime };
 
 export interface CreateBookingParams {
@@ -197,7 +198,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     }
 
     // 6. Schedule 2-hour reminder in Redis ZSET
-    const reminderScore = slotDate.getTime() - 2 * 3600 * 1000;
+    const reminderScore = slotDate.getTime() - REMINDER_LEAD_TIME_MS;
     await redis.zadd(REMINDER_ZSET_KEY, reminderScore, booking.id).catch((err) => {
       logger.warn({ err: (err as Error).message }, "Could not schedule reminder in Redis");
     });
@@ -213,6 +214,8 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
         service: serviceName,
         staff: staffName,
         time: timeFormatted,
+        serviceId,
+        staffId,
       },
       { prisma, transport, logger },
     ).catch((err) => {

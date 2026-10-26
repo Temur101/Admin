@@ -4,8 +4,11 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryRouter, Outlet, RouterProvider } from "react-router-dom";
 import { createEmptyQuizConfig, type QuizConfig, type QuickBookConfig } from "@lcqb/contracts";
 import { BotLaunchWizard } from "../src/components/bots/onboarding/BotLaunchWizard.js";
+import { BotOverviewTab } from "../src/components/bots/BotOverviewTab.js";
+import { BotsPage } from "../src/pages/BotsPage.js";
 import { UnsavedChangesProvider } from "../src/context/UnsavedChangesContext.js";
-import { checkBotSetup, launchBot, getBotHealth, type BotDetails } from "../src/api/bots.js";
+import { checkBotSetup, launchBot, getBotHealth, getBots, type BotDetails } from "../src/api/bots.js";
+import { getTenants } from "../src/api/tenants.js";
 import { updateBotSettings } from "../src/api/templates.js";
 import {
   readSetupStep,
@@ -19,6 +22,11 @@ vi.mock("../src/api/bots.js", async (original) => ({
   checkBotSetup: vi.fn(),
   launchBot: vi.fn(),
   getBotHealth: vi.fn(),
+  getBots: vi.fn(),
+}));
+vi.mock("../src/api/tenants.js", () => ({
+  getTenants: vi.fn().mockResolvedValue([]),
+  createTenant: vi.fn(),
 }));
 vi.mock("../src/api/templates.js", () => ({
   updateBotSettings: vi.fn(),
@@ -152,6 +160,8 @@ describe("Настройка → проверка → запуск", () => {
       expect(
         screen.getByRole("link", { name: "Проверить диалог в Telegram" }).getAttribute("href"),
       ).toBe("https://t.me/example_bot");
+      const checkboxes = screen.getAllByRole("checkbox");
+      expect(checkboxes).toHaveLength(1);
       fireEvent.click(screen.getByRole("checkbox", { name: "Я проверил диалог в Telegram" }));
       fireEvent.click(finish);
       expect(await screen.findByText("Карточка бота")).toBeTruthy();
@@ -219,5 +229,36 @@ describe("Настройка → проверка → запуск", () => {
     expect(await screen.findByText("Не удалось запустить")).toBeTruthy();
     expect(screen.queryByText("Бот включён")).toBeNull();
     expect(readSetupStep("admin-a", bot.id)).toBe(5);
+  });
+  it("отображает раздельные счётчики администраторов и пользователей в BotsPage и BotOverviewTab", async () => {
+    const botWithCounts: BotDetails = {
+      ...bot,
+      stats: { leadsCount: 2, bookingsCount: 5, usersCount: 3, adminsCount: 1, receiptsCount: 0 },
+    };
+    vi.mocked(getBots).mockResolvedValue([botWithCounts]);
+    vi.mocked(getTenants).mockResolvedValue([]);
+    client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const router = createMemoryRouter(
+      [
+        {
+          path: "/bots",
+          element: (
+            <div>
+              <BotsPage />
+              <BotOverviewTab bot={botWithCounts} />
+            </div>
+          ),
+        },
+      ],
+      { initialEntries: ["/bots"] },
+    );
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    expect(await screen.findByText("Админы / Пользователи")).toBeTruthy();
+    expect(await screen.findByText("1 адм. · 3 польз.")).toBeTruthy();
+    expect(await screen.findByText("1 администраторов · 3 пользователей в боте")).toBeTruthy();
   });
 });

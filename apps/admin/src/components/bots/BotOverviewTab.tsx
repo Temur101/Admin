@@ -1,13 +1,11 @@
 import { BotConnectionStatus } from "./BotConnectionStatus.js";
 import { ApiErrorAlert } from "../common/ApiErrorAlert.js";
-import { formatPlatformDate } from "../../utils/dates.js";
 import React, { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PauseCircle,
   PlayCircle,
   Trash2,
-  Clock,
   ShieldCheck,
   Check,
   Copy,
@@ -19,12 +17,11 @@ import {
   suspendBot,
   resumeBot,
   deleteBot,
-  extendBotSubscription,
   unblockBot,
 } from "../../api/bots.js";
 import { Button } from "../common/Button.js";
-import { StatusBadge } from "../common/Badge.js";
 import { Alert } from "../common/Alert.js";
+import { BotSubscriptionCard } from "./BotSubscriptionCard.js";
 
 interface BotOverviewTabProps {
   bot: BotDetails;
@@ -57,14 +54,6 @@ export function BotOverviewTab({ bot }: BotOverviewTabProps) {
     },
   });
 
-  const extendMut = useMutation({
-    mutationFn: (days: number) => extendBotSubscription(bot.id, { days }),
-    onSuccess: () => {
-      invalidate();
-      setFeedback("Подписка успешно продлена.");
-    },
-  });
-
   const unblockMut = useMutation({
     mutationFn: () => unblockBot(bot.id),
     onSuccess: () => {
@@ -94,7 +83,7 @@ export function BotOverviewTab({ bot }: BotOverviewTabProps) {
   return (
     <div className="space-y-6">
       <ApiErrorAlert
-        error={suspendMut.error || resumeMut.error || extendMut.error || unblockMut.error}
+        error={suspendMut.error || resumeMut.error || unblockMut.error}
       />
       {feedback && (
         <Alert type="success" title="Успешно">
@@ -122,28 +111,8 @@ export function BotOverviewTab({ bot }: BotOverviewTabProps) {
 
       {/* Основные карточки */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="p-5 bg-ui-surface border border-ui-border rounded-2xl space-y-2">
-          <p className="text-sm font-medium text-ui-muted">Статус подписки</p>
-          <div className="flex items-center gap-2">
-            <StatusBadge status={bot.subscription?.status || "UNKNOWN"} />
-            {!bot.isActive && <span className="text-sm text-ui-danger">(Деактивирован)</span>}
-          </div>
-          {bot.subscription?.paidUntil ? (
-            <p className="text-sm text-ui-muted">
-              Оплачен до (Ташкент):{" "}
-              <span className="font-semibold text-ui-text">
-                {formatPlatformDate(bot.subscription.paidUntil)}
-              </span>
-            </p>
-          ) : bot.subscription?.trialEndsAt ? (
-            <p className="text-sm text-ui-muted">
-              Пробный период до (Ташкент):{" "}
-              <span className="font-semibold text-ui-text">
-                {formatPlatformDate(bot.subscription.trialEndsAt)}
-              </span>
-            </p>
-          ) : null}
-        </div>
+        {/* Карточка подписки с управлением */}
+        <BotSubscriptionCard bot={bot} />
 
         <div className="p-5 bg-ui-surface border border-ui-border rounded-2xl space-y-2">
           <p className="text-sm font-medium text-ui-muted">Операционные метрики</p>
@@ -157,22 +126,15 @@ export function BotOverviewTab({ bot }: BotOverviewTabProps) {
           </div>
           <p className="text-sm text-ui-muted flex items-center gap-1.5">
             <Users className="h-3.5 w-3.5 text-ui-accent" />
-            <span>{bot.stats.usersCount} администраторов в боте</span>
+            <span>
+              {bot.stats.adminsCount ?? bot.admins.length} администраторов · {bot.stats.usersCount} пользователей в боте
+            </span>
           </p>
         </div>
 
         <div className="p-5 bg-ui-surface border border-ui-border rounded-2xl space-y-2">
           <p className="text-sm font-medium text-ui-muted">Быстрые действия</p>
           <div className="flex flex-wrap gap-2 pt-1">
-            <Button
-              variant="outline"
-              size="sm"
-              icon={<Clock className="h-3.5 w-3.5" />}
-              onClick={() => extendMut.mutate(30)}
-              isLoading={extendMut.isPending}
-            >
-              +30 дней
-            </Button>
             {bot.subscription?.status === "BLOCKED" && (
               <Button
                 variant="primary"

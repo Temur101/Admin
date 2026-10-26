@@ -1,0 +1,12 @@
+=== DEPENDENCY CRUISER ARCHITECTURAL AUDIT ===
+Executed: 2026-10-19T14:51:25Z
+Command: pnpm depcruise
+
+$ depcruise --config .dependency-cruiser.cjs apps packages
+✔ no dependency violations found (627 modules, 2172 dependencies cruised)
+
+Architectural Invariants Verified:
+1. no-leadcatch-to-quickbook: PASS (No cross-imports between bot engines)
+2. no-quickbook-to-leadcatch: PASS
+3. no-admin-to-server: PASS (React Admin interacts with Server strictly via @lcqb/contracts and HTTP REST API)
+4. no-circular: PASS (No circular dependencies across the entire workspace)
