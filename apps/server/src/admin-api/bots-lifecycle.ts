@@ -1,11 +1,11 @@
 import { activateBot } from "./bot-activation.js";
 import type { FastifyInstance } from "fastify";
-import { randomBytes } from "node:crypto";
 import type { Bot } from "grammy";
-import type { PrismaClient } from "@prisma/client";
+import type { BotAdminRole, PrismaClient } from "@prisma/client";
 import { authenticateAdmin } from "./auth.js";
 import { decryptSecret } from "../core/crypto.js";
 import { env } from "../core/env.js";
+import { createBotAdminInvite } from "../bots/shared/permissions.js";
 import type { TenantResolver } from "../gateway/tenant-resolver.js";
 import type { Logger } from "../core/logger.js";
 import type { PollingManager } from "../gateway/polling-manager.js";
@@ -18,6 +18,10 @@ interface BotQuery {
   purge?: string;
 }
 
+interface CreateInviteBody {
+  role?: BotAdminRole;
+}
+
 export function registerBotsLifecycleRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
@@ -26,7 +30,6 @@ export function registerBotsLifecycleRoutes(
   getBotInstance?: (token: string, botId?: string) => Bot,
   pollingManager?: PollingManager,
 ): void {
-  // POST /api/v1/bots/:id/suspend - Deactivate bot (Preserves leads, bookings, receipts)
   app.post<{ Params: BotParams }>(
     "/api/v1/bots/:id/suspend",
     { preHandler: [authenticateAdmin] },
@@ -66,7 +69,6 @@ export function registerBotsLifecycleRoutes(
     },
   );
 
-  // POST /api/v1/bots/:id/resume - Resume bot
   app.post<{ Params: BotParams }>(
     "/api/v1/bots/:id/resume",
     { preHandler: [authenticateAdmin] },
@@ -102,7 +104,6 @@ export function registerBotsLifecycleRoutes(
     },
   );
 
-  // DELETE /api/v1/bots/:id - Permanent destruction ONLY with ?purge=true
   app.delete<{ Params: BotParams; Querystring: BotQuery }>(
     "/api/v1/bots/:id",
     { preHandler: [authenticateAdmin] },
@@ -147,25 +148,67 @@ export function registerBotsLifecycleRoutes(
     },
   );
 
-  // POST /api/v1/bots/:id/reissue-invite - Reissue admin invite code
-  app.post<{ Params: BotParams }>(
+  const handleCreateInvite = async (
+    id: string,
+    roleInput: BotAdminRole | undefined,
+  ) => {
+    const bot = await prisma.bot.findUnique({ where: { id } });
+    if (!bot) return null;
+    const role: BotAdminRole = roleInput === "STAFF" ? "STAFF" : "OWNER";
+    const { rawCode, invite } = await createBotAdminInvite(prisma, {
+      botId: id,
+      role,
+    });
+    tenantResolver?.invalidate(bot.botTokenHash, bot.id);
+    return {
+      ok: true,
+      role: invite.role,
+      adminInviteCode: rawCode,
+      expiresAt: invite.expiresAt.toISOString(),
+      inviteLink: bot.botUsername ? `https://t.me/${bot.botUsername}?start=adm_${rawCode}` : null,
+    };
+  };
+
+  app.post<{ Params: BotParams; Body: CreateInviteBody }>(
     "/api/v1/bots/:id/reissue-invite",
     { preHandler: [authenticateAdmin] },
     async (req, reply) => {
-      const { id } = req.params;
-      const newCode = randomBytes(16).toString("hex");
+      const res = await handleCreateInvite(req.params.id, req.body?.role);
+      if (!res) return reply.code(404).send({ ok: false, error: "Bot not found" });
+      return reply.send(res);
+    },
+  );
 
-      const bot = await prisma.bot.update({
-        where: { id },
-        data: { adminInviteCode: newCode },
+  app.post<{ Params: BotParams; Body: CreateInviteBody }>(
+    "/api/v1/bots/:id/invites",
+    { preHandler: [authenticateAdmin] },
+    async (req, reply) => {
+      const res = await handleCreateInvite(req.params.id, req.body?.role);
+      if (!res) return reply.code(404).send({ ok: false, error: "Bot not found" });
+      return reply.code(201).send(res);
+    },
+  );
+
+  app.get<{ Params: BotParams }>(
+    "/api/v1/bots/:id/invites",
+    { preHandler: [authenticateAdmin] },
+    async (req, reply) => {
+      const invites = await prisma.adminInvite.findMany({
+        where: { botId: req.params.id },
+        orderBy: { createdAt: "desc" },
+        take: 20,
       });
-
-      tenantResolver?.invalidate(bot.botTokenHash, bot.id);
-
       return reply.send({
         ok: true,
-        adminInviteCode: newCode,
-        inviteLink: bot.botUsername ? `https://t.me/${bot.botUsername}?start=adm_${newCode}` : null,
+        invites: invites.map((inv) => ({
+          id: inv.id,
+          role: inv.role,
+          expiresAt: inv.expiresAt.toISOString(),
+          usedAt: inv.usedAt?.toISOString() ?? null,
+          usedByTgId: inv.usedByTgId?.toString() ?? null,
+          revokedAt: inv.revokedAt?.toISOString() ?? null,
+          createdAt: inv.createdAt.toISOString(),
+        })),
       });
     },
   );

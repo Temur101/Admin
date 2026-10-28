@@ -84,7 +84,6 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
         botTokenEnc,
         botTokenHash,
         webhookSecret: "secret_actions",
-        adminInviteCode: "actions_adm",
         settings: botSettings,
         subscription: {
           create: {
@@ -126,7 +125,6 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
       botTokenHash,
       webhookSecret: bot.webhookSecret,
       botUsername: "barber_actions_bot",
-      adminInviteCode: bot.adminInviteCode,
       settings: botSettings,
       subscriptionStatus: "ACTIVE",
       trialEndsAt: new Date(Date.now() + 86400000 * 30).toISOString(),

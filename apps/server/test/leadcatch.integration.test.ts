@@ -49,12 +49,24 @@ function answerButton(
   optionId: string,
 ): string {
   const markup = getLastMessageTo(transport, chatId)?.reply_markup as
-    { inline_keyboard?: { callback_data?: string }[][] } | undefined;
+    | { inline_keyboard?: { callback_data?: string }[][] }
+    | undefined;
   const suffix = `:${callbackId(nodeId)}:${callbackId(optionId)}`;
   const button = markup?.inline_keyboard
     ?.flat()
     .find((item) => item.callback_data?.endsWith(suffix));
   if (!button?.callback_data) throw new Error(`Answer button not found for ${nodeId}/${optionId}`);
+  return button.callback_data;
+}
+
+function confirmButton(transport: MockTelegramTransport, chatId: number): string {
+  const markup = getLastMessageTo(transport, chatId)?.reply_markup as
+    | { inline_keyboard?: { callback_data?: string }[][] }
+    | undefined;
+  const button = markup?.inline_keyboard
+    ?.flat()
+    .find((item) => item.callback_data?.startsWith("lc:confirm:"));
+  if (!button?.callback_data) throw new Error("Confirm button not found");
   return button.callback_data;
 }
 
@@ -65,7 +77,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
   let resolvedBot: ResolvedBot;
 
   const BOT_TOKEN = "111222333:LeadCatchTestToken";
-  const ADMIN_INVITE_CODE = "lc_adm_code_777";
   const ADMIN_TG_ID = 5550001;
   const CLIENT_TG_ID = 9990001;
 
@@ -100,7 +111,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         botTokenEnc,
         botTokenHash: sha256Hex(BOT_TOKEN),
         webhookSecret: "secret_leadcatch",
-        adminInviteCode: ADMIN_INVITE_CODE,
         subscription: {
           create: {
             status: "TRIAL",
@@ -112,7 +122,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     });
     botId = bot.id;
 
-    // Register admin user for this bot
     await prisma.botUser.create({
       data: {
         botId,
@@ -132,7 +141,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       botTokenHash: bot.botTokenHash,
       webhookSecret: bot.webhookSecret,
       botUsername: "leadcatch_test_bot",
-      adminInviteCode: bot.adminInviteCode,
       settings: {},
       subscriptionStatus: "TRIAL",
       trialEndsAt: bot.subscription!.trialEndsAt.toISOString(),
@@ -150,10 +158,9 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     });
   });
 
-  it("1. Happy path: TRIAL status, Telegram contact button -> full unmasked lead delivered to admin", async () => {
+  it("1. Happy path: TRIAL status, Telegram contact button -> summary -> full unmasked lead delivered to admin", async () => {
     const botInstance = botPool.getOrCreateBot(resolvedBot);
 
-    // Step 1: Client initiates /start
     await botInstance.handleUpdate({
       update_id: 1,
       message: {
@@ -170,12 +177,10 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Language selection is offered
     const langMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(langMsg).toBeDefined();
     expect(langMsg?.text).toContain("выберите язык");
 
-    // Step 2: Client selects Russian language
     await botInstance.handleUpdate({
       update_id: 2,
       callback_query: {
@@ -191,11 +196,9 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Question 1 of DAG quiz is presented
     const q1Msg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q1Msg?.text).toContain("Какая услуга вас интересует?");
 
-    // Step 3: Client clicks Option 1 ("Консультация") -> transitions to Q2
     await botInstance.handleUpdate({
       update_id: 3,
       callback_query: {
@@ -209,7 +212,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     const q2Msg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q2Msg?.text).toContain("Когда вам удобно обсудить детали?");
 
-    // Step 4: Client clicks Option 2 ("В первой половине дня") -> transitions to Q3
     await botInstance.handleUpdate({
       update_id: 4,
       callback_query: {
@@ -223,7 +225,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     const q3Msg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q3Msg?.text).toContain("Укажите ориентировочный бюджет:");
 
-    // Step 5: Client clicks Option 1 ("Базовый") -> terminal node reached, contact requested
     await botInstance.handleUpdate({
       update_id: 5,
       callback_query: {
@@ -237,7 +238,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     const contactPromptMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(contactPromptMsg?.text).toContain("отправьте ваш номер телефона");
 
-    // Step 6: Client sends contact via Telegram native button
+    // Step 6: Client sends own contact via Telegram native button
     await botInstance.handleUpdate({
       update_id: 6,
       message: {
@@ -253,24 +254,44 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         contact: {
           phone_number: "+998 90 123 45 67",
           first_name: "John Client",
+          user_id: CLIENT_TG_ID,
         },
       },
     });
 
-    // Client receives polite thank-you message
+    // Summary screen is shown before saving
+    const summaryMsg = getLastMessageTo(transport, CLIENT_TG_ID);
+    expect(summaryMsg?.text).toContain("Проверьте данные вашей заявки");
+    expect(await prisma.lead.count({ where: { botId } })).toBe(0);
+
+    // Step 7: Client confirms on summary screen
+    await botInstance.handleUpdate({
+      update_id: 7,
+      callback_query: {
+        id: "cb_confirm_1",
+        from: {
+          id: CLIENT_TG_ID,
+          is_bot: false,
+          first_name: "John Client",
+          username: "john_client",
+        },
+        chat_instance: "inst_1",
+        data: confirmButton(transport, CLIENT_TG_ID),
+      },
+    });
+
     const thankYouMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(thankYouMsg?.text).toContain("Спасибо! Ваша заявка успешно принята");
 
-    // Database verification: Lead is saved with full normalized phone
     const leadsInDb = await prisma.lead.findMany({ where: { botId } });
     expect(leadsInDb).toHaveLength(1);
     const lead = leadsInDb[0]!;
     expect(lead.phoneRaw).toBe("+998901234567");
+    expect(lead.phoneVerified).toBe(true);
     expect(lead.customerName).toBe("John Client");
     expect(lead.customerUsername).toBe("john_client");
     expect(lead.isMasked).toBe(false);
 
-    // Admin notification verification: unmasked phone and answers delivered to admin
     const adminMsg = getLastMessageTo(transport, ADMIN_TG_ID);
     expect(adminMsg).toBeDefined();
     expect(adminMsg?.text).toContain("🔔 Новая заявка:");
@@ -280,8 +301,7 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     expect(adminMsg?.text).not.toContain("***");
   });
 
-  it("2. EXPIRED subscription: client inputs phone as text -> admin receives masked contact with payment alert", async () => {
-    // Set bot subscription to EXPIRED
+  it("2. EXPIRED subscription: client inputs phone as text -> summary -> admin receives masked contact with payment alert", async () => {
     await prisma.subscription.update({
       where: { botId },
       data: { status: "EXPIRED" },
@@ -290,7 +310,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
 
     const botInstance = botPool.getOrCreateBot(resolvedBot);
 
-    // Client has already chosen language
     await prisma.botUser.create({
       data: {
         botId,
@@ -302,7 +321,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Step 1: /start immediately presents Q1
     await botInstance.handleUpdate({
       update_id: 11,
       message: {
@@ -322,7 +340,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     const q1 = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q1?.text).toContain("Какая услуга вас интересует?");
 
-    // Step 2: Answer Q1
     await botInstance.handleUpdate({
       update_id: 12,
       callback_query: {
@@ -333,7 +350,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Step 3: Answer Q2
     await botInstance.handleUpdate({
       update_id: 13,
       callback_query: {
@@ -344,7 +360,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Step 4: Answer Q3 -> terminal
     await botInstance.handleUpdate({
       update_id: 14,
       callback_query: {
@@ -355,7 +370,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Step 5: Client types phone number as text ("90 987 65 43")
     await botInstance.handleUpdate({
       update_id: 15,
       message: {
@@ -372,16 +386,30 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Client receives identical friendly thank-you without any errors
+    // Confirm summary
+    await botInstance.handleUpdate({
+      update_id: 16,
+      callback_query: {
+        id: "cb_confirm_2",
+        from: {
+          id: CLIENT_TG_ID,
+          is_bot: false,
+          first_name: "Secret Client",
+          username: "secret_client",
+        },
+        chat_instance: "inst_1",
+        data: confirmButton(transport, CLIENT_TG_ID),
+      },
+    });
+
     const clientThankYou = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(clientThankYou?.text).toContain("Спасибо! Ваша заявка успешно принята");
 
-    // Database check: Lead is saved with full phone
     const leads = await prisma.lead.findMany({ where: { botId } });
     expect(leads).toHaveLength(1);
     expect(leads[0]!.phoneRaw).toBe("+998909876543");
+    expect(leads[0]!.phoneVerified).toBe(false);
 
-    // Admin receives MASKED notification with payment button
     const adminMsg = getLastMessageTo(transport, ADMIN_TG_ID);
     expect(adminMsg).toBeDefined();
     expect(adminMsg?.text).toContain("🔔 Новая заявка (СКРЫТА):");
@@ -389,7 +417,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     expect(adminMsg?.text).toContain("***");
     expect(adminMsg?.text).toContain("Оплатите подписку для открытия контактов!");
 
-    // Inline button to pay is attached
     const replyMarkup = adminMsg?.reply_markup as {
       inline_keyboard: Array<Array<{ text: string }>>;
     };
@@ -409,7 +436,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Advance directly to contact step
     await botInstance.handleUpdate({
       update_id: 20,
       message: {
@@ -451,7 +477,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Send invalid text
     await botInstance.handleUpdate({
       update_id: 24,
       message: {
@@ -466,11 +491,9 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
     const errorMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(errorMsg?.text).toContain("укажите корректный номер телефона");
 
-    // No lead created yet
     const leadsCount = await prisma.lead.count({ where: { botId } });
     expect(leadsCount).toBe(0);
 
-    // Now send valid phone
     await botInstance.handleUpdate({
       update_id: 25,
       message: {
@@ -479,6 +502,16 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
         chat: { id: CLIENT_TG_ID, type: "private", first_name: "Test" },
         from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Test" },
         text: "8 90 123 45 67",
+      },
+    });
+
+    await botInstance.handleUpdate({
+      update_id: 26,
+      callback_query: {
+        id: "cb_confirm_3",
+        from: { id: CLIENT_TG_ID, is_bot: false, first_name: "Test" },
+        chat_instance: "inst_1",
+        data: confirmButton(transport, CLIENT_TG_ID),
       },
     });
 
@@ -503,7 +536,6 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Start quiz and answer Q1
     await botInstance.handleUpdate({
       update_id: 30,
       message: {
@@ -525,14 +557,11 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Verify client is at Q2
     const q2Msg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(q2Msg?.text).toContain("Когда вам удобно обсудить детали?");
 
-    // Simulate 1 hour session expiration in Redis
     await redis.del(`sess:${botId}:${CLIENT_TG_ID}`);
 
-    // Client returns and types /start
     await botInstance.handleUpdate({
       update_id: 32,
       message: {
@@ -544,10 +573,10 @@ describe("Stage 4: LeadCatch E2E Integration (Real Postgres + Redis)", () => {
       },
     });
 
-    // Quiz starts cleanly from Q1
     const restartMsg = getLastMessageTo(transport, CLIENT_TG_ID);
     expect(restartMsg?.text).toContain("Какая услуга вас интересует?");
   });
+
   it("повторные и параллельные отправки создают одну заявку на прохождение в PostgreSQL", async () => {
     const attemptId = randomUUID();
     const api = botPool.getOrCreateBot(resolvedBot).api;

@@ -14,6 +14,8 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
   const queryClient = useQueryClient();
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [inviteRole, setInviteRole] = useState<"OWNER" | "STAFF">("OWNER");
+  const [generatedLink, setGeneratedLink] = useState<string | null>(bot.inviteLink);
 
   const { data: admins = [], isLoading } = useQuery({
     queryKey: ["bot-admins", bot.id],
@@ -21,10 +23,12 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
   });
 
   const reissueMut = useMutation({
-    mutationFn: () => reissueBotInvite(bot.id),
+    mutationFn: (role: "OWNER" | "STAFF") => reissueBotInvite(bot.id, role),
     onSuccess: (data) => {
       void queryClient.invalidateQueries({ queryKey: ["bot", bot.id] });
-      setFeedback(`Инвайт-код перевыпущен: ${data.adminInviteCode}`);
+      if (data.inviteLink) setGeneratedLink(data.inviteLink);
+      const roleLabel = data.role === "STAFF" ? "Сотрудник" : "Владелец";
+      setFeedback(`Инвайт-код (${roleLabel}, 24ч, одноразовый) создан: ${data.adminInviteCode}`);
     },
   });
 
@@ -42,24 +46,37 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const activeLink = generatedLink ?? bot.inviteLink;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 className="text-sm font-semibold text-ui-text">Администраторы Telegram-бота</h3>
           <p className="text-sm text-ui-muted mt-1">
-            Пользователи, имеющие доступ к просмотру лидов/записей и биллингу внутри Telegram
+            Владелец управляет настройками и подпиской; сотрудник обрабатывает заявки и записи
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          icon={<RefreshCw className="h-3.5 w-3.5" />}
-          onClick={() => reissueMut.mutate()}
-          isLoading={reissueMut.isPending}
-        >
-          Перевыпустить ссылку
-        </Button>
+        <div className="flex items-center gap-2">
+          <select
+            aria-label="Роль приглашения"
+            value={inviteRole}
+            onChange={(e) => setInviteRole(e.target.value as "OWNER" | "STAFF")}
+            className="px-3 py-1.5 bg-ui-surface border border-ui-border rounded-lg text-sm text-ui-text"
+          >
+            <option value="OWNER">Владелец (OWNER)</option>
+            <option value="STAFF">Сотрудник (STAFF)</option>
+          </select>
+          <Button
+            variant="outline"
+            size="sm"
+            icon={<RefreshCw className="h-3.5 w-3.5" />}
+            onClick={() => reissueMut.mutate(inviteRole)}
+            isLoading={reissueMut.isPending}
+          >
+            Перевыпустить ссылку
+          </Button>
+        </div>
       </div>
 
       {feedback && (
@@ -68,22 +85,21 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
         </Alert>
       )}
 
-      {/* Инвайт ссылка */}
-      {bot.inviteLink && (
+      {activeLink && (
         <div className="p-4 bg-ui-surface border border-ui-border rounded-xl space-y-2">
           <label className="text-sm font-medium text-ui-secondary">
-            Актуальная ссылка для приглашения новых администраторов:
+            Одноразовая ссылка-приглашение (действует 24 часа):
           </label>
           <div className="flex gap-2">
             <input
               readOnly
-              value={bot.inviteLink}
+              value={activeLink}
               className="flex-1 px-3 py-1.5 bg-ui-subtle border border-ui-border rounded-lg text-sm font-mono text-ui-secondary"
             />
             <Button
               variant="secondary"
               size="sm"
-              onClick={() => handleCopy(bot.inviteLink!)}
+              onClick={() => handleCopy(activeLink)}
               icon={
                 copied ? (
                   <Check className="h-3.5 w-3.5 text-ui-success" />
@@ -98,13 +114,13 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
         </div>
       )}
 
-      {/* Список админов */}
       <div className="bg-ui-surface border border-ui-border rounded-2xl overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="bg-ui-subtle text-ui-muted border-b border-ui-border font-medium">
               <tr>
                 <th className="px-5 py-3">Имя / Telegram</th>
+                <th className="px-5 py-3">Роль</th>
                 <th className="px-5 py-3">Telegram ID</th>
                 <th className="px-5 py-3">Дата назначения</th>
                 <th className="px-5 py-3 text-right">Действия</th>
@@ -113,14 +129,14 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
             <tbody className="divide-y divide-ui-border text-ui-secondary">
               {isLoading ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-ui-muted">
+                  <td colSpan={5} className="px-5 py-8 text-center text-ui-muted">
                     Загрузка администраторов...
                   </td>
                 </tr>
               ) : admins.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-5 py-8 text-center text-ui-muted">
-                    Администраторы пока не подключились. Отправьте клиенту ссылку-приглашение выше.
+                  <td colSpan={5} className="px-5 py-8 text-center text-ui-muted">
+                    Администраторы пока не подключились. Создайте одноразовую ссылку-приглашение выше.
                   </td>
                 </tr>
               ) : (
@@ -134,6 +150,11 @@ export function BotAdminsTab({ bot }: BotAdminsTabProps) {
                         </span>
                         {a.username && <span className="text-ui-muted">@{a.username}</span>}
                       </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-medium bg-ui-subtle border border-ui-border">
+                        {a.role === "STAFF" ? "Сотрудник" : "Владелец"}
+                      </span>
                     </td>
                     <td className="px-5 py-3.5 font-mono text-ui-muted">{a.tgId}</td>
                     <td className="px-5 py-3.5 text-ui-muted">

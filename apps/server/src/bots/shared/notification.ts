@@ -8,11 +8,20 @@ import { t } from "./i18n.js";
 import { maskName, maskPhone, maskUsername } from "./masking.js";
 import { isMaskedStatus } from "./subscription.js";
 import { getQuickBookConfig } from "../quickbook/config-resolver.js";
+import { safeTelegramCall } from "./telegram-errors.js";
+
+export interface LeadNotificationRef {
+  chatId: number;
+  messageId: number;
+  lang: "RU" | "UZ";
+}
 
 export interface LeadNotifyPayload {
   kind: "LEAD";
+  leadId?: string;
   name?: string | null;
   phone: string;
+  phoneVerified?: boolean;
   username?: string | null;
   answers: Record<string, unknown>;
 }
@@ -21,6 +30,7 @@ export interface BookingNotifyPayload {
   kind: "BOOKING";
   name?: string | null;
   phone: string;
+  phoneVerified?: boolean;
   service: string;
   staff: string;
   time: string;
@@ -32,6 +42,7 @@ export interface BookingConfirmedNotifyPayload {
   kind: "BOOKING_CONFIRMED";
   name?: string | null;
   phone: string;
+  phoneVerified?: boolean;
   service: string;
   staff: string;
   time: string;
@@ -43,6 +54,7 @@ export interface BookingCancelledNotifyPayload {
   kind: "BOOKING_CANCELLED";
   name?: string | null;
   phone: string;
+  phoneVerified?: boolean;
   service: string;
   staff: string;
   time: string;
@@ -62,7 +74,6 @@ export interface NotifyAdminsOptions {
   logger: Logger;
 }
 
-// Telegram limits plain text messages to 4096 characters. Preserve full answers and Unicode.
 function textChunks(text: string): string[] {
   const chunks: string[] = [];
   let chunk = "";
@@ -77,10 +88,49 @@ function textChunks(text: string): string[] {
   return chunks;
 }
 
-/**
- * Sends a new lead or booking notification to all registered administrators of the bot.
- * Automatically masks sensitive customer data if the subscription is EXPIRED, GRACE_PERIOD, or BLOCKED.
- */
+export function formatLeadNotificationText(params: {
+  lang: "RU" | "UZ";
+  masked: boolean;
+  name?: string | null;
+  phone: string;
+  phoneVerified?: boolean;
+  username?: string | null;
+  answers: Record<string, unknown>;
+  statusLine?: string;
+  assigneeLine?: string;
+}): string {
+  const { lang, masked, name, phone, phoneVerified, username, answers, statusLine, assigneeLine } =
+    params;
+  const answersStr = Object.entries(answers)
+    .map(([q, a]) => `• ${q}: ${String(a)}`)
+    .join("\n");
+
+  const verifiedBadge =
+    phoneVerified === undefined
+      ? ""
+      : ` (${t(lang, phoneVerified ? "phone_verified_badge" : "phone_unverified_badge")})`;
+
+  let base: string;
+  if (masked) {
+    base = t(lang, "lead_notification_masked", {
+      name: maskName(name),
+      phone: maskPhone(phone),
+      username: maskUsername(username),
+      answers: answersStr,
+    });
+  } else {
+    base = t(lang, "lead_notification_open", {
+      name: name || "—",
+      phone: `${phone}${verifiedBadge}`,
+      username: username ? `@${username}` : "—",
+      answers: answersStr,
+    });
+  }
+
+  const extras = [statusLine, assigneeLine].filter(Boolean);
+  return extras.length > 0 ? `${base}\n\n${extras.join("\n")}` : base;
+}
+
 export async function notifyAdmins(
   botId: string,
   payload: AdminNotifyPayload,
@@ -100,6 +150,16 @@ export async function notifyAdmins(
     return 0;
   }
 
+  const eligibleUsers = bot.users.filter((u) => {
+    if (u.unreachableAt) return false;
+    if (payload.kind === "LEAD" && u.receivesLeads === false) return false;
+    return true;
+  });
+
+  if (eligibleUsers.length === 0) {
+    return 0;
+  }
+
   const subStatus = bot.subscription?.status ?? "TRIAL";
   const masked = isMaskedStatus(subStatus);
 
@@ -107,36 +167,30 @@ export async function notifyAdmins(
   const api = createBotApi(token, bot.id, transport);
 
   let sentCount = 0;
+  const leadRefs: LeadNotificationRef[] = [];
 
-  for (const admin of bot.users) {
-    const lang = admin.lang ?? "RU";
+  for (const admin of eligibleUsers) {
+    const lang = (admin.lang ?? "RU") as "RU" | "UZ";
     let text: string;
 
     if (payload.kind === "LEAD") {
-      const answersStr = Object.entries(payload.answers)
-        .map(([q, a]) => `• ${q}: ${String(a)}`)
-        .join("\n");
-
-      if (masked) {
-        text = t(lang, "lead_notification_masked", {
-          name: maskName(payload.name),
-          phone: maskPhone(payload.phone),
-          username: maskUsername(payload.username),
-          answers: answersStr,
-        });
-      } else {
-        text = t(lang, "lead_notification_open", {
-          name: payload.name || "—",
-          phone: payload.phone,
-          username: payload.username ? `@${payload.username}` : "—",
-          answers: answersStr,
-        });
-      }
+      text = formatLeadNotificationText({
+        lang,
+        masked,
+        name: payload.name,
+        phone: payload.phone,
+        phoneVerified: payload.phoneVerified,
+        username: payload.username,
+        answers: payload.answers,
+        statusLine: payload.leadId ? `Статус: ${t(lang, "lead_status_new")}` : undefined,
+      });
     } else {
       let serviceDisplay = payload.service;
       let staffDisplay = payload.staff;
       if (bot.settings && (payload.serviceId || payload.staffId)) {
-        const config = getQuickBookConfig(bot.settings as Record<string, unknown> | null | undefined);
+        const config = getQuickBookConfig(
+          bot.settings as Record<string, unknown> | null | undefined,
+        );
         const loc = lang === "UZ" ? "uz" : "ru";
         if (payload.serviceId) {
           const srv = config.services.find((s) => s.id === payload.serviceId);
@@ -161,6 +215,11 @@ export async function notifyAdmins(
             ? "booking_cancelled_notification_masked"
             : "booking_notification_masked";
 
+      const verifiedSuffix =
+        payload.phoneVerified === undefined
+          ? ""
+          : ` (${t(lang, payload.phoneVerified ? "phone_verified_badge" : "phone_unverified_badge")})`;
+
       if (masked) {
         text = t(lang, maskedKey, {
           name: maskName(payload.name),
@@ -172,7 +231,7 @@ export async function notifyAdmins(
       } else {
         text = t(lang, openKey, {
           name: payload.name || "—",
-          phone: payload.phone,
+          phone: `${payload.phone}${verifiedSuffix}`,
           service: serviceDisplay,
           staff: staffDisplay,
           time: payload.time,
@@ -181,27 +240,70 @@ export async function notifyAdmins(
     }
 
     const keyboard = new InlineKeyboard();
-    if (masked && subStatus !== "BLOCKED") {
+    if (payload.kind === "LEAD" && payload.leadId && !masked) {
+      keyboard.text(t(lang, "btn_take_lead"), `lead:take:${payload.leadId}`).row();
+    }
+    if (masked && subStatus !== "BLOCKED" && admin.role !== "STAFF") {
       keyboard.text(t(lang, "btn_pay"), "admin:pay");
     }
 
-    try {
-      const chunks = textChunks(text);
-      for (let index = 0; index < chunks.length; index++) {
-        await api.sendMessage(Number(admin.tgId), chunks[index]!, {
-          reply_markup:
-            index === chunks.length - 1 && keyboard.inline_keyboard.length > 0
-              ? keyboard
-              : undefined,
+    const chunks = textChunks(text);
+    let lastMsgId: number | undefined;
+    let adminDelivered = true;
+
+    for (let index = 0; index < chunks.length; index++) {
+      const callRes = await safeTelegramCall(
+        () =>
+          api.sendMessage(Number(admin.tgId), chunks[index]!, {
+            reply_markup:
+              index === chunks.length - 1 && keyboard.inline_keyboard.length > 0
+                ? keyboard
+                : undefined,
+          }),
+        {
+          prisma,
+          botId,
+          chatId: admin.tgId,
+          logger,
+          transport,
+        },
+      );
+
+      if (!callRes.ok) {
+        adminDelivered = false;
+        logger.error(
+          {
+            err: callRes.error.description,
+            errorKind: callRes.error.kind,
+            botId,
+            adminTgId: String(admin.tgId),
+          },
+          "Failed to send admin notification",
+        );
+        break;
+      }
+      lastMsgId = callRes.result.message_id;
+    }
+
+    if (adminDelivered) {
+      sentCount++;
+      if (payload.kind === "LEAD" && payload.leadId && lastMsgId !== undefined) {
+        leadRefs.push({
+          chatId: Number(admin.tgId),
+          messageId: lastMsgId,
+          lang,
         });
       }
-      sentCount++;
-    } catch (err) {
-      logger.error(
-        { err: (err as Error).message, botId, adminTgId: String(admin.tgId) },
-        "Failed to send admin notification",
-      );
     }
+  }
+
+  if (payload.kind === "LEAD" && payload.leadId && leadRefs.length > 0 && prisma.lead?.update) {
+    await prisma.lead
+      .update({
+        where: { id: payload.leadId },
+        data: { notificationRefs: leadRefs as unknown as object },
+      })
+      .catch(() => {});
   }
 
   return sentCount;

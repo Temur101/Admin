@@ -22,6 +22,7 @@ import {
   safeCleanTestDb,
   safeCleanTestRedis,
 } from "./helpers/test-env.js";
+
 const prisma = getTestPrismaClient();
 let redis: Redis;
 let app: FastifyInstance;
@@ -35,6 +36,7 @@ let auth: { authorization: string };
 let update = 0;
 const client = 42,
   owner = 99;
+
 async function fixture(
   type: "LEADCATCH" | "QUICKBOOK",
   settings: QuizConfig | QuickBookConfig,
@@ -51,7 +53,6 @@ async function fixture(
       botTokenEnc: encryptSecret(token, env.TOKEN_ENCRYPTION_KEY),
       botTokenHash: sha256Hex(token),
       webhookSecret: "stage5-secret",
-      adminInviteCode: `${type}-stage5-invite`,
       subscription: {
         create: { status: "TRIAL", trialEndsAt: new Date(Date.now() + 3 * 86400000) },
       },
@@ -78,14 +79,14 @@ async function fixture(
     botTokenEnc: bot.botTokenEnc,
     botTokenHash: bot.botTokenHash,
     webhookSecret: bot.webhookSecret,
-    botUsername: `${type.toLowerCase()}_stage5_bot`,
-    adminInviteCode: bot.adminInviteCode,
+    botUsername: `${type.toLowerCase}_stage5_bot`,
     settings,
     subscriptionStatus: "TRIAL",
     trialEndsAt: bot.subscription!.trialEndsAt.toISOString(),
     paidUntil: null,
   };
 }
+
 const message = (bot: ResolvedBot, text: string, user = client) =>
   pool.handleUpdate(bot, {
     update_id: ++update,
@@ -97,6 +98,7 @@ const message = (bot: ResolvedBot, text: string, user = client) =>
       text,
     },
   });
+
 const click = (bot: ResolvedBot, data: string, user = client) =>
   pool.handleUpdate(bot, {
     update_id: ++update,
@@ -113,18 +115,22 @@ const click = (bot: ResolvedBot, data: string, user = client) =>
       },
     },
   });
+
 const sent = (user = client) =>
   transport
     .callsOf("sendMessage")
     .filter((call) => Number(call.payload.chat_id) === user)
     .at(-1)!.payload;
+
 function buttons() {
   return (
     sent().reply_markup as { inline_keyboard: { text: string; callback_data: string }[][] }
   ).inline_keyboard.flat();
 }
+
 const session = async (bot: ResolvedBot): Promise<PlatformBotSession> =>
   JSON.parse((await redis.get(`sess:${bot.id}:${client}`)) ?? "{}");
+
 async function maintenance(enabled: boolean) {
   const response = await app.inject({
     method: "PUT",
@@ -135,6 +141,7 @@ async function maintenance(enabled: boolean) {
   expect(response.statusCode).toBe(200);
   expect(response.json().settings.maintenanceMode).toBe(enabled);
 }
+
 async function chooseHeldSlot() {
   const dateStr = tashkentDateString(new Date(Date.now() + 86400000));
   const slots = await generateAvailableSlots({
@@ -152,15 +159,18 @@ async function chooseHeldSlot() {
   expect((await session(bookingBot)).quickbook?.lockToken).toBeTruthy();
   return slot;
 }
+
 beforeAll(async () => {
   await prisma.$connect();
   redis = createTestRedisClient("stage5-flows");
   await connectRedis(redis);
 });
+
 afterAll(async () => {
   await redis.quit();
   await prisma.$disconnect();
 });
+
 beforeEach(async () => {
   await safeCleanTestDb(prisma);
   await safeCleanTestRedis(redis);
@@ -212,9 +222,11 @@ beforeEach(async () => {
     authorization: `Bearer ${app.jwt.sign({ adminId: admin.id, email: admin.email, tokenType: "access" })}`,
   };
 });
+
 afterEach(async () => {
   await app?.close();
 });
+
 describe("Все сценарии с настоящими PostgreSQL и Redis", () => {
   it("техперерыв включается из API сразу; сохраняет свой ответ и позволяет закончить опрос после выключения", async () => {
     await message(leadBot, "/start");
@@ -234,6 +246,7 @@ describe("Все сценарии с настоящими PostgreSQL и Redis", 
     await click(leadBot, buttons()[0]!.callback_data);
     await click(leadBot, buttons()[0]!.callback_data);
     await message(leadBot, "+998901234567");
+    await click(leadBot, buttons().find((b) => b.callback_data.startsWith("lc:confirm:"))!.callback_data);
     const leads = await prisma.lead.findMany({ where: { botId: leadBot.id } });
     expect(leads).toHaveLength(1);
     expect(leads[0]!.answers).toHaveProperty(
@@ -245,6 +258,7 @@ describe("Все сценарии с настоящими PostgreSQL и Redis", 
     await message(leadBot, "🔄 Пройти опрос ещё раз");
     expect((await session(leadBot)).quiz?.attemptId).not.toBe(saved?.attemptId);
   });
+
   it("владелец оплачивает подписку во время перерыва; текст виден и одобрение без JSON-тела работает", async () => {
     await maintenance(true);
     await message(leadBot, "/start", owner);
@@ -273,6 +287,7 @@ describe("Все сценарии с настоящими PostgreSQL и Redis", 
       ).statusCode,
     ).toBe(409);
   });
+
   it("освобождает реальное удержание при техперерыве, сохраняет существующие записи и позволяет их отменить", async () => {
     const slot = await chooseHeldSlot();
     const keys = getSlotLockKeys(bookingBot.id, "staff", slot.slotTime, 90, config.slotIntervalMin);
@@ -309,6 +324,7 @@ describe("Все сценарии с настоящими PostgreSQL и Redis", 
       "CANCELLED",
     );
   });
+
   it("новая запись из меню создаёт отдельную бронь, а повтор телефона после успеха — нет", async () => {
     const held = await chooseHeldSlot();
     await message(bookingBot, "🏠 Главное меню");
@@ -318,6 +334,10 @@ describe("Все сценарии с настоящими PostgreSQL и Redis", 
     await message(bookingBot, "📅 Записаться");
     await chooseHeldSlot();
     await message(bookingBot, "+998901234567");
+    await click(
+      bookingBot,
+      buttons().find((b) => b.callback_data.startsWith("qb:confirm_book:"))!.callback_data,
+    );
     expect(sent().reply_markup).toHaveProperty("keyboard");
     expect(await prisma.booking.count()).toBe(1);
     await message(bookingBot, "+998901234567");
@@ -325,8 +345,13 @@ describe("Все сценарии с настоящими PostgreSQL и Redis", 
     await message(bookingBot, "📅 Записаться");
     await chooseHeldSlot();
     await message(bookingBot, "+998901234567");
+    await click(
+      bookingBot,
+      buttons().find((b) => b.callback_data.startsWith("qb:confirm_book:"))!.callback_data,
+    );
     expect(await prisma.booking.count()).toBe(2);
   });
+
   it("второй экземпляр обработчика видит техперерыв и язык сразу, без локального кеша", async () => {
     await prisma.botUser.create({
       data: { botId: leadBot.id, tgId: 43n, isAdmin: false, lang: "UZ" },
@@ -367,6 +392,7 @@ describe("Все сценарии с настоящими PostgreSQL и Redis", 
     });
     expect(sent(43).text).toBe(quiz.nodes[0]!.title.uz);
   });
+
   it("сохранённый срок ограничивает ручное создание, генерацию времени и старые даты бота", async () => {
     config.bookingHorizonDays = 1;
     bookingBot.settings = config;

@@ -5,9 +5,9 @@ import { decryptSecret } from "../../core/crypto.js";
 import { env } from "../../core/env.js";
 import type { Logger } from "../../core/logger.js";
 import { t } from "./i18n.js";
+import { safeTelegramCall } from "./telegram-errors.js";
 
 export function formatTashkentDateTime(date: Date): string {
-  // Format as DD.MM.YYYY HH:mm in Tashkent time (UTC+5)
   const d = new Date(date.getTime() + 5 * 3600 * 1000);
   const day = String(d.getUTCDate()).padStart(2, "0");
   const month = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -36,26 +36,32 @@ export async function sendReceiptApprovedNotification(
   const { receipt, redis, transport, logger } = params;
   if (!transport || receipt.bot.users.length === 0) return;
 
-  let shouldSend = true;
+  const notifKey = `notif:receipt:${receipt.id}:APPROVED`;
   if (redis) {
-    const notifKey = `notif:receipt:${receipt.id}:APPROVED`;
     const lockRes = await redis.set(notifKey, "1", "EX", 86400, "NX");
-    shouldSend = lockRes === "OK";
+    if (lockRes !== "OK") return;
   }
 
-  if (shouldSend) {
-    try {
-      const token = decryptSecret(receipt.bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
-      const api = createBotApi(token, receipt.bot.id, transport);
+  let delivered = 0;
+  try {
+    const token = decryptSecret(receipt.bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
+    const api = createBotApi(token, receipt.bot.id, transport);
 
-      for (const admin of receipt.bot.users) {
-        const lang = admin.lang ?? "RU";
-        const text = t(lang, "receipt_approved_push");
-        await api.sendMessage(Number(admin.tgId), text).catch(() => {});
-      }
-    } catch (err) {
-      logger?.error({ err: (err as Error).message }, "Failed to send approve notification");
+    for (const admin of receipt.bot.users) {
+      if (admin.unreachableAt) continue;
+      const lang = admin.lang ?? "RU";
+      const text = t(lang, "receipt_approved_push");
+      const res = await safeTelegramCall(
+        () => api.sendMessage(Number(admin.tgId), text),
+        { transport, logger, botId: receipt.bot.id, chatId: admin.tgId },
+      );
+      if (res.ok) delivered++;
     }
+  } catch (err) {
+    logger?.error({ err: (err as Error).message }, "Failed to send approve notification");
+  }
+  if (delivered === 0 && redis) {
+    await redis.del(notifKey).catch(() => {});
   }
 }
 
@@ -69,40 +75,46 @@ export async function sendReceiptRejectedNotification(
   const { receipt, redis, transport, logger, reason, newStatus, rolledBackPaidUntil } = params;
   if (!transport || receipt.bot.users.length === 0) return;
 
-  let shouldSend = true;
+  const notifKey = `notif:receipt:${receipt.id}:REJECTED`;
   if (redis) {
-    const notifKey = `notif:receipt:${receipt.id}:REJECTED`;
     const lockRes = await redis.set(notifKey, "1", "EX", 86400, "NX");
-    shouldSend = lockRes === "OK";
+    if (lockRes !== "OK") return;
   }
 
-  if (shouldSend) {
-    try {
-      const token = decryptSecret(receipt.bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
-      const api = createBotApi(token, receipt.bot.id, transport);
+  let delivered = 0;
+  try {
+    const token = decryptSecret(receipt.bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
+    const api = createBotApi(token, receipt.bot.id, transport);
 
-      for (const admin of receipt.bot.users) {
-        const lang = admin.lang ?? "RU";
-        let text: string;
+    for (const admin of receipt.bot.users) {
+      if (admin.unreachableAt) continue;
+      const lang = admin.lang ?? "RU";
+      let text: string;
 
-        if (newStatus === "GRACE_PERIOD") {
-          text = t(lang, "receipt_rejected_grace_push", { reason });
-        } else if (newStatus === "BLOCKED") {
-          text = t(lang, "receipt_rejected_blocked_push", {
-            reason,
-            support: env.SUPPORT_CONTACT,
-          });
-        } else {
-          text = t(lang, "receipt_rejected_active_push", {
-            reason,
-            date: rolledBackPaidUntil ? formatTashkentDateTime(rolledBackPaidUntil) : "",
-          });
-        }
-
-        await api.sendMessage(Number(admin.tgId), text).catch(() => {});
+      if (newStatus === "GRACE_PERIOD") {
+        text = t(lang, "receipt_rejected_grace_push", { reason });
+      } else if (newStatus === "BLOCKED") {
+        text = t(lang, "receipt_rejected_blocked_push", {
+          reason,
+          support: env.SUPPORT_CONTACT,
+        });
+      } else {
+        text = t(lang, "receipt_rejected_active_push", {
+          reason,
+          date: rolledBackPaidUntil ? formatTashkentDateTime(rolledBackPaidUntil) : "",
+        });
       }
-    } catch (err) {
-      logger?.error({ err: (err as Error).message }, "Failed to send reject notification");
+
+      const res = await safeTelegramCall(
+        () => api.sendMessage(Number(admin.tgId), text),
+        { transport, logger, botId: receipt.bot.id, chatId: admin.tgId },
+      );
+      if (res.ok) delivered++;
     }
+  } catch (err) {
+    logger?.error({ err: (err as Error).message }, "Failed to send reject notification");
+  }
+  if (delivered === 0 && redis) {
+    await redis.del(notifKey).catch(() => {});
   }
 }

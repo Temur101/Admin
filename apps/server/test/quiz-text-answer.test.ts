@@ -112,17 +112,32 @@ function click(data: string) {
     },
   });
 }
-function contact() {
-  return bot.handleUpdate({
-    update_id: ++update,
-    message: {
-      message_id: update,
-      date: 1,
-      from: sender,
-      chat: { id: 42, type: "private", first_name: "Клиент" },
-      contact: { phone_number: "+998901234567", first_name: "Клиент", user_id: 42 },
-    },
-  });
+async function contact() {
+  if (state.quiz?.currentNodeId !== "__summary__") {
+    await bot.handleUpdate({
+      update_id: ++update,
+      message: {
+        message_id: update,
+        date: 1,
+        from: sender,
+        chat: { id: 42, type: "private", first_name: "Клиент" },
+        contact: { phone_number: "+998901234567", first_name: "Клиент", user_id: 42 },
+      },
+    });
+  }
+  if (state.quiz?.currentNodeId === "__summary__") {
+    const summaryCall = [...transport.callsOf("sendMessage")]
+      .reverse()
+      .find((c) => (c.payload.reply_markup as { inline_keyboard?: unknown })?.inline_keyboard);
+    const confirmBtn = (
+      summaryCall?.payload.reply_markup as {
+        inline_keyboard?: { text: string; callback_data: string }[][];
+      }
+    )?.inline_keyboard
+      ?.flat()
+      .find((b) => b.callback_data.startsWith("lc:confirm:"));
+    if (confirmBtn) await click(confirmBtn.callback_data);
+  }
 }
 const last = () => transport.callsOf("sendMessage").at(-1)!.payload;
 function buttons() {
@@ -374,7 +389,8 @@ describe("Неактуальные кнопки и повторные дейст
     const saved = structuredClone(state.quiz);
     saveLead.mockRejectedValueOnce(new Error("DB unavailable"));
     await contact();
-    expect(state.quiz).toEqual(saved);
+    expect(state.quiz?.answers).toEqual(saved?.answers);
+    expect(state.quiz?.currentNodeId).toBe("__summary__");
     await contact();
     await contact();
     expect(rows.size).toBe(1);

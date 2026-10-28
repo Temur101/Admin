@@ -65,9 +65,7 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
         botType: "LEADCATCH",
         botTokenEnc,
         botTokenHash: TEST_TOKEN_HASH,
-        webhookSecret: TEST_WEBHOOK_SECRET,
-        adminInviteCode: "test_invite_001",
-        subscription: {
+        webhookSecret: TEST_WEBHOOK_SECRET,        subscription: {
           create: {
             status: "ACTIVE",
             trialEndsAt: new Date(Date.now() + 86400000 * 3),
@@ -334,9 +332,7 @@ describe("Stage 2: Webhook Gateway & Multi-Tenant Routing", () => {
         botTokenEnc: encryptSecret(plainToken, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(plainToken),
         webhookSecret: `secret_${i}`,
-        botUsername: `bot_${i}`,
-        adminInviteCode: `code_${i}`,
-        settings: {},
+        botUsername: `bot_${i}`,        settings: {},
         subscriptionStatus: "ACTIVE",
         trialEndsAt: new Date().toISOString(),
         paidUntil: new Date().toISOString(),

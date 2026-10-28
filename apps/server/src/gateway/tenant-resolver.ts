@@ -46,7 +46,6 @@ export class TenantResolver {
     botTokenHash: string;
     webhookSecret: string;
     botUsername: string | null;
-    adminInviteCode: string;
     settings: unknown;
     subscription: {
       status: ResolvedBot["subscriptionStatus"];
@@ -62,7 +61,6 @@ export class TenantResolver {
       botTokenHash: bot.botTokenHash,
       webhookSecret: bot.webhookSecret,
       botUsername: bot.botUsername,
-      adminInviteCode: bot.adminInviteCode,
       settings: (bot.settings ?? {}) as Record<string, unknown>,
       subscriptionStatus: bot.subscription?.status ?? "TRIAL",
       trialEndsAt: bot.subscription?.trialEndsAt.toISOString() ?? new Date().toISOString(),

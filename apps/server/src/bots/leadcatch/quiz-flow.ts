@@ -2,17 +2,27 @@ import { navigationKeyboard } from "../shared/client-menu.js";
 import { randomUUID } from "node:crypto";
 import { resolveCallbackId } from "../shared/callback-id.js";
 import { quizButtonTag } from "./quiz-session.js";
-export { handleLeadCatchContact, type LeadCatchContactOptions } from "./lead-submission.js";
+export {
+  handleLeadCatchContact,
+  handleQuizPhoneInput,
+  type LeadCatchContactOptions,
+} from "./lead-submission.js";
 import type { Lang, PrismaClient } from "@prisma/client";
 import type { QuizNode, QuizOption } from "@lcqb/contracts";
 import {
   getBotQuizConfig,
   sendQuizNode,
   sendQuizContactPrompt,
+  sendQuizSummaryPrompt,
   sendCustomAnswerPrompt,
   resumeQuizStep,
 } from "./quiz-prompts.js";
-export { getBotQuizConfig, sendQuizNode } from "./quiz-prompts.js";
+export {
+  getBotQuizConfig,
+  sendQuizNode,
+  sendQuizSummaryPrompt,
+  sendQuizEditMenu,
+} from "./quiz-prompts.js";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
@@ -44,11 +54,11 @@ export async function startLeadCatchQuiz(
     return;
   }
 
-  // Initialize or reset quiz FSM in session
   ctx.session.quiz = {
     attemptId: randomUUID(),
     currentNodeId: startNode.id,
     stepCount: 1,
+    path: [],
     answers: {},
     startedAt: Date.now(),
   };
@@ -66,7 +76,7 @@ export interface QuizOptionAnswerOptions {
 
 export async function handleQuizOptionAnswer(
   ctx: PlatformBotContext,
-  prisma: PrismaClient,
+  _prisma: PrismaClient,
   opts: QuizOptionAnswerOptions,
 ): Promise<void> {
   const lang = (ctx.session.lang as Lang) ?? "RU";
@@ -85,7 +95,6 @@ export async function handleQuizOptionAnswer(
   const currentNode = config.nodes.find((node) => node.id === nodeId);
   if (!currentNode || quiz.currentNodeId !== currentNode.id || quiz.answers[currentNode.id]) {
     await stale();
-    // Redelivery recovers the current step after Telegram failed to send it.
     await resumeQuizStep(ctx, config);
     return;
   }
@@ -112,6 +121,7 @@ export async function handleQuizOptionAnswer(
     lang === "UZ" ? selectedOption.text.uz : selectedOption.text.ru,
   );
 }
+
 export async function completeQuizAnswer(
   ctx: PlatformBotContext,
   node: QuizNode,
@@ -121,6 +131,16 @@ export async function completeQuizAnswer(
   const quiz = ctx.session.quiz!;
   const lang = ctx.session.lang ?? "RU";
   const config = getBotQuizConfig(ctx.botMeta.settings);
+  const path = quiz.path ?? Object.keys(quiz.answers);
+  const existingIdx = path.indexOf(node.id);
+  if (existingIdx !== -1) {
+    for (const removedId of path.slice(existingIdx)) {
+      delete quiz.answers[removedId];
+    }
+    path.splice(existingIdx);
+  }
+  path.push(node.id);
+  quiz.path = path;
   quiz.answers[node.id] = {
     question: lang === "UZ" ? node.title.uz : node.title.ru,
     answer,
@@ -131,11 +151,101 @@ export async function completeQuizAnswer(
     const nextNode = config.nodes.find((item) => item.id === option.nextNodeId);
     if (nextNode) {
       quiz.currentNodeId = nextNode.id;
-      quiz.stepCount += 1;
+      quiz.stepCount = path.length + 1;
       await sendQuizNode(ctx, nextNode, lang);
       return;
     }
   }
   quiz.currentNodeId = "__contact__";
   await sendQuizContactPrompt(ctx, lang);
+}
+
+export async function handleQuizBack(
+  ctx: PlatformBotContext,
+  attemptTag?: string,
+): Promise<boolean> {
+  const quiz = ctx.session.quiz;
+  const lang = (ctx.session.lang as Lang) ?? "RU";
+  if (!quiz) return false;
+  const config = getBotQuizConfig(ctx.botMeta.settings);
+  if (attemptTag && attemptTag !== quizButtonTag(ctx, config)) {
+    await sendReply(ctx, t(lang, "quiz_stale_answer"));
+    return true;
+  }
+  if (quiz.pendingText) {
+    delete quiz.pendingText;
+    await resumeQuizStep(ctx, config);
+    return true;
+  }
+  if (quiz.currentNodeId === "__summary__") {
+    quiz.currentNodeId = "__contact__";
+    delete quiz.phone;
+    delete quiz.phoneVerified;
+    await sendQuizContactPrompt(ctx, lang);
+    return true;
+  }
+  const path = quiz.path ?? Object.keys(quiz.answers);
+  const prevNodeId = path.pop();
+  if (!prevNodeId) {
+    await resumeQuizStep(ctx, config);
+    return true;
+  }
+  delete quiz.answers[prevNodeId];
+  quiz.path = path;
+  quiz.currentNodeId = prevNodeId;
+  quiz.stepCount = path.length + 1;
+  const prevNode = config.nodes.find((n) => n.id === prevNodeId);
+  if (prevNode) {
+    await sendQuizNode(ctx, prevNode, lang);
+  } else {
+    await resumeQuizStep(ctx, config);
+  }
+  return true;
+}
+
+export async function handleQuizJump(
+  ctx: PlatformBotContext,
+  attemptTag: string,
+  targetToken: string,
+): Promise<void> {
+  const quiz = ctx.session.quiz;
+  const lang = (ctx.session.lang as Lang) ?? "RU";
+  const config = getBotQuizConfig(ctx.botMeta.settings);
+  if (!quiz || attemptTag !== quizButtonTag(ctx, config)) {
+    await sendReply(ctx, t(lang, "quiz_stale_answer"));
+    return;
+  }
+  if (targetToken === "__summary__") {
+    quiz.currentNodeId = "__summary__";
+    await sendQuizSummaryPrompt(ctx, lang);
+    return;
+  }
+  if (targetToken === "__contact__") {
+    quiz.currentNodeId = "__contact__";
+    delete quiz.phone;
+    delete quiz.phoneVerified;
+    await sendQuizContactPrompt(ctx, lang);
+    return;
+  }
+  const nodeId = resolveCallbackId(config.nodes, targetToken);
+  const targetNode = config.nodes.find((n) => n.id === nodeId);
+  if (!targetNode) {
+    await sendReply(ctx, t(lang, "quiz_stale_answer"));
+    return;
+  }
+  const path = quiz.path ?? Object.keys(quiz.answers);
+  const idx = path.indexOf(targetNode.id);
+  if (idx !== -1) {
+    for (const removedId of path.slice(idx)) {
+      delete quiz.answers[removedId];
+    }
+    path.splice(idx);
+  }
+  quiz.path = path;
+  delete quiz.phone;
+  delete quiz.phoneVerified;
+  delete quiz.pendingText;
+  quiz.currentNodeId = targetNode.id;
+  quiz.stepCount = path.length + 1;
+  await sendQuizNode(ctx, targetNode, lang);
 }

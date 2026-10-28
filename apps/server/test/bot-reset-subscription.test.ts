@@ -1,4 +1,3 @@
-import { randomBytes } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   buildApp,
@@ -102,7 +101,6 @@ describe("Bot Reset & Advanced Subscription Management Tests", () => {
         botTokenEnc: tokenEnc,
         webhookSecret: "secret123",
         botUsername: `test_${type.toLowerCase()}_bot`,
-        adminInviteCode: randomBytes(16).toString("hex"),
         settings: initialSettings,
         isActive: true,
         subscription: {
@@ -163,7 +161,6 @@ describe("Bot Reset & Advanced Subscription Management Tests", () => {
       expect(updatedBot.isActive).toBe(false);
       expect(updatedBot.settings).toEqual(createEmptyQuizConfig());
       expect(updatedBot.botTokenHash).toBe(bot.botTokenHash);
-      expect(updatedBot.adminInviteCode).toBe(bot.adminInviteCode);
 
       // Verify Redis state
       expect(await redis.get(`sess:${bot.id}:11111`)).toBeNull();

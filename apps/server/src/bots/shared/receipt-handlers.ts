@@ -11,6 +11,8 @@ import { formatTashkentDateTime, submitPaymentReceipt } from "./payment-service.
 import { saveReceiptImage, validateImageBuffer } from "./receipt-storage.js";
 import { notifyPlatformOwner } from "../../core/platform-notifier.js";
 import type { Logger } from "../../core/logger.js";
+import { can } from "./permissions.js";
+import { getBotAdminUser } from "./user-service.js";
 
 export interface ReceiptHandlersOptions {
   redis?: Redis;
@@ -31,6 +33,12 @@ async function sendReply(
   await ctx.api.sendMessage(chatId, text, extra);
 }
 
+function pendingReceiptText(lang: Lang): string {
+  return lang === "UZ"
+    ? "Sizning oldingi chekingiz tekshirilmoqda. Iltimos, administrator qarorini kuting."
+    : "Ваш предыдущий чек уже находится на проверке. Пожалуйста, дождитесь решения администратора.";
+}
+
 async function processFileReceipt(
   ctx: PlatformBotContext,
   fileId: string,
@@ -40,17 +48,11 @@ async function processFileReceipt(
 ): Promise<void> {
   if (!ctx.session.payment || !ctx.from) return;
 
-  const user = await prisma.botUser.findUnique({
-    where: {
-      botId_tgId: {
-        botId: ctx.botMeta.id,
-        tgId: BigInt(ctx.from.id),
-      },
-    },
-  });
-  if (!user?.isAdmin) return;
+  const user = await getBotAdminUser(prisma, ctx.botMeta.id, ctx.from.id);
+  if (!user || !can(user, "PAY_SUBSCRIPTION")) return;
   const lang = user.lang ?? (ctx.session.lang as Lang) ?? "RU";
   ctx.session.isAdmin = true;
+  ctx.session.adminRole = user.role;
   ctx.session.lang = lang;
 
   if (fileSize && fileSize > 5 * 1024 * 1024) {
@@ -121,16 +123,12 @@ async function processFileReceipt(
       { prisma, transport: opts?.transport, logger: opts?.logger },
     ).catch(() => {});
   } catch (err) {
-    if ((err as Error)?.message === "PENDING_RECEIPT_EXISTS") {
-      await sendReply(
-        ctx,
-        lang === "UZ"
-          ? "Sizning oldingi chekingiz tekshirilmoqda. Iltimos, administrator qarorini kuting."
-          : "Ваш предыдущий чек уже находится на проверке. Пожалуйста, дождитесь решения администратора.",
-      );
-    } else {
-      await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
-    }
+    await sendReply(
+      ctx,
+      (err as Error)?.message === "PENDING_RECEIPT_EXISTS"
+        ? pendingReceiptText(lang)
+        : t(lang, "receipt_invalid_file_type"),
+    );
   }
 }
 
@@ -141,19 +139,20 @@ export function registerReceiptHandlers(
 ): void {
   bot.callbackQuery("admin:pay", async (ctx) => {
     if (!ctx.from) return;
+    const user = await getBotAdminUser(prisma, ctx.botMeta.id, ctx.from.id);
+    if (!user || !can(user, "PAY_SUBSCRIPTION")) {
+      await ctx
+        .answerCallbackQuery({
+          text: user ? t(ctx.session.lang, "owner_only_action") : "Доступ запрещен / Ruxsat yo'q",
+          show_alert: true,
+        })
+        .catch(() => {});
+      return;
+    }
     await ctx.answerCallbackQuery().catch(() => {});
-
-    const user = await prisma.botUser.findUnique({
-      where: {
-        botId_tgId: {
-          botId: ctx.botMeta.id,
-          tgId: BigInt(ctx.from.id),
-        },
-      },
-    });
-    if (!user?.isAdmin) return;
     const lang = user.lang ?? (ctx.session.lang as Lang) ?? "RU";
     ctx.session.isAdmin = true;
+    ctx.session.adminRole = user.role;
     ctx.session.lang = lang;
 
     if (ctx.botMeta.subscriptionStatus === "BLOCKED") {
@@ -171,19 +170,20 @@ export function registerReceiptHandlers(
 
   bot.callbackQuery(/^pay:tariff:(\d+)$/, async (ctx) => {
     if (!ctx.from) return;
+    const user = await getBotAdminUser(prisma, ctx.botMeta.id, ctx.from.id);
+    if (!user || !can(user, "PAY_SUBSCRIPTION")) {
+      await ctx
+        .answerCallbackQuery({
+          text: user ? t(ctx.session.lang, "owner_only_action") : "Доступ запрещен / Ruxsat yo'q",
+          show_alert: true,
+        })
+        .catch(() => {});
+      return;
+    }
     await ctx.answerCallbackQuery().catch(() => {});
-
-    const user = await prisma.botUser.findUnique({
-      where: {
-        botId_tgId: {
-          botId: ctx.botMeta.id,
-          tgId: BigInt(ctx.from.id),
-        },
-      },
-    });
-    if (!user?.isAdmin) return;
     const lang = user.lang ?? (ctx.session.lang as Lang) ?? "RU";
     ctx.session.isAdmin = true;
+    ctx.session.adminRole = user.role;
     ctx.session.lang = lang;
 
     if (ctx.botMeta.subscriptionStatus === "BLOCKED") {
@@ -193,39 +193,30 @@ export function registerReceiptHandlers(
 
     const matchStr = Array.isArray(ctx.match) ? ctx.match[1] : "1";
     const months = Number(matchStr ?? 1);
+    const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
+    const tariffs = resolveTariffPrices(settings);
     if (![1, 6, 12].includes(months)) {
       ctx.session.payment = undefined;
       await sendReply(ctx, t(lang, "pay_select_tariff"), {
-        reply_markup: buildTariffInlineKeyboard(
-          lang,
-          resolveTariffPrices(await prisma.platformSettings.findUnique({ where: { id: 1 } })),
-        ),
+        reply_markup: buildTariffInlineKeyboard(lang, tariffs),
       });
       return;
     }
 
-    const settings = await prisma.platformSettings.findUnique({ where: { id: 1 } });
-    const tariffs = resolveTariffPrices(settings);
     const amount =
       months === 1 ? tariffs.tariff1m : months === 6 ? tariffs.tariff6m : tariffs.tariff12m;
     const details = settings?.paymentDetails || "8600 0000 0000 0000 (Platform)";
 
-    ctx.session.payment = {
-      months,
-      amountUzs: amount,
-    };
-
-    const text = t(lang, "pay_details_prompt", {
-      amount: amount.toLocaleString("ru-RU"),
-      details,
-    });
-    await sendReply(ctx, text);
+    ctx.session.payment = { months, amountUzs: amount };
+    await sendReply(
+      ctx,
+      t(lang, "pay_details_prompt", { amount: amount.toLocaleString("ru-RU"), details }),
+    );
   });
 
   bot.on("message:photo", async (ctx, next) => {
     if (!ctx.session.payment || !ctx.from) return next();
-    const photos = ctx.message.photo;
-    const photo = photos[photos.length - 1];
+    const photo = ctx.message.photo[ctx.message.photo.length - 1];
     if (!photo) return;
     await processFileReceipt(ctx, photo.file_id, photo.file_size, prisma, opts);
   });
@@ -240,17 +231,11 @@ export function registerReceiptHandlers(
   bot.on("message:text", async (ctx, next) => {
     if (!ctx.session.payment || !ctx.from) return next();
 
-    const user = await prisma.botUser.findUnique({
-      where: {
-        botId_tgId: {
-          botId: ctx.botMeta.id,
-          tgId: BigInt(ctx.from.id),
-        },
-      },
-    });
-    if (!user?.isAdmin) return next();
+    const user = await getBotAdminUser(prisma, ctx.botMeta.id, ctx.from.id);
+    if (!user || !can(user, "PAY_SUBSCRIPTION")) return next();
     const lang = user.lang ?? (ctx.session.lang as Lang) ?? "RU";
     ctx.session.isAdmin = true;
+    ctx.session.adminRole = user.role;
     ctx.session.lang = lang;
 
     const text = (ctx.message.text ?? "").trim();
@@ -258,7 +243,6 @@ export function registerReceiptHandlers(
       ctx.session.payment = undefined;
       return next();
     }
-
     if (text.length < 10) {
       await sendReply(ctx, t(lang, "receipt_text_too_short"));
       return;
@@ -267,7 +251,6 @@ export function registerReceiptHandlers(
       await sendReply(ctx, t(lang, "receipt_text_too_long"));
       return;
     }
-
     if (!opts?.redis) return;
 
     try {
@@ -288,9 +271,7 @@ export function registerReceiptHandlers(
 
       await sendReply(
         ctx,
-        t(lang, "receipt_submitted_success", {
-          date: formatTashkentDateTime(res.newPaidUntil),
-        }),
+        t(lang, "receipt_submitted_success", { date: formatTashkentDateTime(res.newPaidUntil) }),
       );
 
       notifyPlatformOwner(
@@ -307,16 +288,12 @@ export function registerReceiptHandlers(
         { prisma, transport: opts?.transport, logger: opts?.logger },
       ).catch(() => {});
     } catch (err) {
-      if ((err as Error)?.message === "PENDING_RECEIPT_EXISTS") {
-        await sendReply(
-          ctx,
-          lang === "UZ"
-            ? "Sizning oldingi chekingiz tekshirilmoqda. Iltimos, administrator qarorini kuting."
-            : "Ваш предыдущий чек уже находится на проверке. Пожалуйста, дождитесь решения администратора.",
-        );
-      } else {
-        await sendReply(ctx, t(lang, "receipt_invalid_file_type"));
-      }
+      await sendReply(
+        ctx,
+        (err as Error)?.message === "PENDING_RECEIPT_EXISTS"
+          ? pendingReceiptText(lang)
+          : t(lang, "receipt_invalid_file_type"),
+      );
     }
   });
 }

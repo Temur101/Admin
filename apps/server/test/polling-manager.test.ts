@@ -91,7 +91,6 @@ describe("Stage 8.5 Wave 1: PollingManager, Settings Parsing & Admin Links", () 
           botTokenEnc: encryptSecret(token1, env.TOKEN_ENCRYPTION_KEY),
           botTokenHash: sha256Hex(token1),
           webhookSecret: "secret_1",
-          adminInviteCode: "code_active",
           botUsername: "test_active_bot",
           isActive: true,
           subscription: {
@@ -110,7 +109,6 @@ describe("Stage 8.5 Wave 1: PollingManager, Settings Parsing & Admin Links", () 
           botTokenEnc: encryptSecret(token2, env.TOKEN_ENCRYPTION_KEY),
           botTokenHash: sha256Hex(token2),
           webhookSecret: "secret_2",
-          adminInviteCode: "code_inactive",
           botUsername: "test_inactive_bot",
           isActive: false,
           subscription: {
@@ -170,7 +168,6 @@ describe("Stage 8.5 Wave 1: PollingManager, Settings Parsing & Admin Links", () 
           botTokenEnc: encryptSecret(token, env.TOKEN_ENCRYPTION_KEY),
           botTokenHash: sha256Hex(token),
           webhookSecret: "secret_3",
-          adminInviteCode: "code_3",
           isActive: true,
         },
       });
@@ -223,7 +220,6 @@ describe("Stage 8.5 Wave 1: PollingManager, Settings Parsing & Admin Links", () 
           botTokenEnc: encryptSecret(token, env.TOKEN_ENCRYPTION_KEY),
           botTokenHash: sha256Hex(token),
           webhookSecret: "secret_4",
-          adminInviteCode: "code_4",
           botUsername: "resilient_qb_bot",
           isActive: true,
           subscription: {
@@ -552,7 +548,7 @@ describe("Stage 8.5 Wave 1: PollingManager, Settings Parsing & Admin Links", () 
         env.BOT_MODE = origMode;
       }
 
-      // Check details endpoint returns adm_ link
+      // Details endpoint does not expose plaintext inviteLink (only one-time hashed invites exist)
       const detailsRes = await app.inject({
         method: "GET",
         url: `/api/v1/bots/${createBody.bot.id}`,
@@ -561,7 +557,7 @@ describe("Stage 8.5 Wave 1: PollingManager, Settings Parsing & Admin Links", () 
       const detailsBody = detailsRes.json() as {
         bot: { inviteLink: string | null };
       };
-      expect(detailsBody.bot.inviteLink).toMatch(/\?start=adm_[a-f0-9]{32}$/);
+      expect(detailsBody.bot.inviteLink).toBeNull();
 
       // Check reissue invite returns adm_ link
       const reissueRes = await app.inject({

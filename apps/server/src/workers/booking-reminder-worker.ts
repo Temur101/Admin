@@ -8,7 +8,15 @@ import { decryptSecret } from "../core/crypto.js";
 import { env } from "../core/env.js";
 import type { Logger } from "../core/logger.js";
 import { t } from "../bots/shared/i18n.js";
-import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS, formatTashkentDateTime } from "../bots/quickbook/booking-service.js";
+import {
+  classifyTelegramError,
+  handleBotTelegramError,
+} from "../bots/shared/telegram-errors.js";
+import {
+  REMINDER_ZSET_KEY,
+  REMINDER_LEAD_TIME_MS,
+  formatTashkentDateTime,
+} from "../bots/quickbook/booking-service.js";
 import { getQuickBookConfig } from "../bots/quickbook/config-resolver.js";
 
 export interface BookingReminderWorkerOptions {
@@ -42,20 +50,6 @@ else
 end
 `;
 
-/**
- * Background worker checking for upcoming bookings to send a reminder 1 hour before the slot.
- * Ensures resilient processing:
- * 1. Redis ZSET + DB recovery (handles Redis crashes / downtime during booking).
- * 2. Atomic row-level claim/lease preventing race conditions between multiple workers.
- * 3. Success (reminderSent=true) marked strictly AFTER Telegram delivery confirmation.
- * 4. Bounded retries with exponential backoff and dead-letter classification.
- * 5. Expired/overdue tasks after long downtime are safely skipped without user spam.
- *
- * NOTE on external push delivery:
- * Telegram Bot API sendMessage does not provide request idempotency tokens. If a worker
- * process crashes or network drops after Telegram accepts the message but before HTTP 200
- * is acknowledged, subsequent recovery will re-send (at-least-once external delivery guarantee).
- */
 export async function runBookingReminderWorker(
   opts: BookingReminderWorkerOptions,
 ): Promise<BookingReminderWorkerResult> {
@@ -71,7 +65,6 @@ export async function runBookingReminderWorker(
   let acquired = false;
   let pgLockAcquired = false;
 
-  // 1. Acquire distributed lock (Redis with PX/NX, fallback to PG advisory lock)
   try {
     const lockRes = await redis.set(LOCK_KEY, lockToken, "EX", lockTtl, "NX");
     acquired = lockRes === "OK";
@@ -80,7 +73,6 @@ export async function runBookingReminderWorker(
   }
 
   if (!acquired) {
-    // If Redis is unreachable or errored, try PG advisory lock to allow worker execution
     const isRedisReady = redis.status === "ready" || redis.status === "connect";
     if (!isRedisReady) {
       try {
@@ -103,16 +95,23 @@ export async function runBookingReminderWorker(
   }
 
   try {
-    // 2. Fetch candidate booking IDs
-    // Source A: Redis ZSET (scores <= now)
     let redisDueIds: string[] = [];
     try {
-      redisDueIds = await redis.zrangebyscore(REMINDER_ZSET_KEY, 0, now.getTime(), "LIMIT", 0, batchSize);
+      redisDueIds = await redis.zrangebyscore(
+        REMINDER_ZSET_KEY,
+        0,
+        now.getTime(),
+        "LIMIT",
+        0,
+        batchSize,
+      );
     } catch (err) {
-      logger.warn({ err: (err as Error).message }, "Redis error querying reminder ZSET; relying on DB query");
+      logger.warn(
+        { err: (err as Error).message },
+        "Redis error querying reminder ZSET; relying on DB query",
+      );
     }
 
-    // Source B: Database query (Recovery for bookings created when Redis was down or evicted)
     let dbDueIds: string[] = [];
     if (enableDbRecovery) {
       try {
@@ -131,13 +130,14 @@ export async function runBookingReminderWorker(
         });
         dbDueIds = dbDueBookings.map((b) => b.id);
       } catch (err) {
-        logger.error({ err: (err as Error).message }, "Failed to query database for due reminder bookings");
+        logger.error(
+          { err: (err as Error).message },
+          "Failed to query database for due reminder bookings",
+        );
       }
     }
 
-    // Deduplicate and apply batch size
     const dueBookingIds = Array.from(new Set([...redisDueIds, ...dbDueIds])).slice(0, batchSize);
-
     if (dueBookingIds.length === 0) {
       return { executed: true, sentCount: 0, skippedCount: 0, failedCount: 0 };
     }
@@ -147,9 +147,7 @@ export async function runBookingReminderWorker(
     let failedCount = 0;
 
     for (const bookingId of dueBookingIds) {
-      // 3. Atomically claim/lease the booking in DB to prevent concurrent workers from sending duplicate
       const leaseUntil = new Date(now.getTime() + leaseDurationMs);
-
       const claimResult = await prisma.booking.updateMany({
         where: {
           id: bookingId,
@@ -165,20 +163,21 @@ export async function runBookingReminderWorker(
       });
 
       if (claimResult.count === 0) {
-        // Could not claim: either locked by another worker, cancelled, already sent, or max attempts reached
         const check = await prisma.booking.findUnique({
           where: { id: bookingId },
           select: { status: true, reminderSent: true, reminderAttempts: true },
         });
-
-        // Clean up from Redis if terminal
-        if (!check || check.status !== "CONFIRMED" || check.reminderSent || check.reminderAttempts >= maxAttempts) {
+        if (
+          !check ||
+          check.status !== "CONFIRMED" ||
+          check.reminderSent ||
+          check.reminderAttempts >= maxAttempts
+        ) {
           await redis.zrem(REMINDER_ZSET_KEY, bookingId).catch(() => {});
         }
         continue;
       }
 
-      // 4. Fetch full booking details
       const booking = await prisma.booking.findUnique({
         where: { id: bookingId },
         include: { bot: true },
@@ -190,13 +189,7 @@ export async function runBookingReminderWorker(
         continue;
       }
 
-      // Check for overdue / expired task (server downtime recovery):
-      // If slotTime has already started or passed, sending a "2 hours before" reminder is obsolete.
       if (booking.slotTime.getTime() <= now.getTime()) {
-        logger.info(
-          { bookingId, slotTime: booking.slotTime.toISOString(), now: now.toISOString() },
-          "Booking slot already passed; marking reminder as expired/skipped without sending",
-        );
         await prisma.booking.update({
           where: { id: bookingId },
           data: {
@@ -210,9 +203,7 @@ export async function runBookingReminderWorker(
         continue;
       }
 
-      // 5. Check if booking is manual / has no customerTgId
       if (!booking.customerTgId || booking.source === "MANUAL") {
-        logger.info({ bookingId }, "Booking is manual or has no customerTgId; skipping Telegram push");
         await prisma.booking.update({
           where: { id: bookingId },
           data: { reminderSent: true, reminderLockedUntil: null, reminderLastError: null },
@@ -222,23 +213,24 @@ export async function runBookingReminderWorker(
         continue;
       }
 
-      // 6. Send reminder via Telegram API
       try {
         const token = decryptSecret(booking.bot.botTokenEnc, env.TOKEN_ENCRYPTION_KEY);
         const api = createBotApi(token, booking.bot.id, transport);
 
-        // Find customer language
         const user = await prisma.botUser.findUnique({
           where: { botId_tgId: { botId: booking.bot.id, tgId: booking.customerTgId } },
         });
         const lang = user?.lang ?? "RU";
         const loc = lang === "UZ" ? "uz" : "ru";
-        const config = getQuickBookConfig(booking.bot.settings as Record<string, unknown> | null | undefined);
+        const config = getQuickBookConfig(
+          booking.bot.settings as Record<string, unknown> | null | undefined,
+        );
         const service = config.services.find((s) => s.id === booking.serviceId);
         const resource = config.resources.find((r) => r.id === booking.staffId);
         const serviceName = service?.name[loc] || booking.serviceName;
         const resourceName = resource?.name[loc] || booking.staffId;
-        const resourceLabel = config.resourceLabel?.[loc] || RESOURCE_LABELS[config.resourceType][loc];
+        const resourceLabel =
+          config.resourceLabel?.[loc] || RESOURCE_LABELS[config.resourceType][loc];
 
         const text = t(lang, "qb_reminder_text", {
           time: formatTashkentDateTime(booking.slotTime),
@@ -255,7 +247,6 @@ export async function runBookingReminderWorker(
           reply_markup: keyboard,
         });
 
-        // 6. Mark success strictly AFTER Telegram delivery confirmation
         await prisma.booking.update({
           where: { id: bookingId },
           data: {
@@ -265,10 +256,19 @@ export async function runBookingReminderWorker(
           },
         });
 
-        // Remove from Redis ZSET on success
         await redis.zrem(REMINDER_ZSET_KEY, bookingId).catch(() => {});
         sentCount++;
       } catch (err: unknown) {
+        const classified = classifyTelegramError(err);
+        await handleBotTelegramError({
+          prisma,
+          transport,
+          logger,
+          botId: booking.bot.id,
+          recipientTgId: booking.customerTgId,
+          classified,
+        });
+
         const errorMsg = (err as Error).message || String(err);
         const currentAttempts = booking.reminderAttempts;
 
@@ -278,11 +278,6 @@ export async function runBookingReminderWorker(
         );
 
         if (currentAttempts >= maxAttempts) {
-          // Dead-letter: maximum attempts exhausted
-          logger.error(
-            { bookingId, attempts: currentAttempts, err: errorMsg },
-            "Booking reminder reached max attempts; moved to dead-letter",
-          );
           await prisma.booking.update({
             where: { id: bookingId },
             data: {
@@ -292,11 +287,11 @@ export async function runBookingReminderWorker(
           });
           await redis.zrem(REMINDER_ZSET_KEY, bookingId).catch(() => {});
         } else {
-          // Bounded retry with exponential backoff
-          const backoffDelay =
+          const defaultBackoff =
             typeof opts.backoffMs === "function"
               ? opts.backoffMs(currentAttempts)
               : (opts.backoffMs ?? Math.min(300_000, Math.pow(2, currentAttempts - 1) * 5_000));
+          const backoffDelay = classified.retryAfterMs ?? defaultBackoff;
           const nextRetryAt = new Date(now.getTime() + backoffDelay);
 
           await prisma.booking.update({
@@ -315,9 +310,10 @@ export async function runBookingReminderWorker(
 
     return { executed: true, sentCount, skippedCount, failedCount };
   } finally {
-    // Release locks
     if (pgLockAcquired) {
-      await prisma.$executeRaw`SELECT pg_advisory_unlock(hashtext('booking-reminder-worker'))`.catch(() => {});
+      await prisma.$executeRaw`SELECT pg_advisory_unlock(hashtext('booking-reminder-worker'))`.catch(
+        () => {},
+      );
     }
     await redis.eval(RELEASE_LOCK_LUA, 1, LOCK_KEY, lockToken).catch(() => {});
   }

@@ -2,7 +2,7 @@ import { BotLaunchWizard } from "../components/bots/onboarding/BotLaunchWizard.j
 import { useState } from "react";
 import { useParams, Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Bot, Layout, Settings, Users, Activity, Sparkles } from "lucide-react";
+import { ArrowLeft, Bot, Layout, Settings, Users, Activity, Sparkles, Inbox } from "lucide-react";
 import { getBot } from "../api/bots.js";
 import { StatusBadge } from "../components/common/Badge.js";
 import { Alert } from "../components/common/Alert.js";
@@ -12,9 +12,10 @@ import { BotQuizEditorTab } from "../components/bots/BotQuizEditorTab.js";
 import { BotScheduleEditorTab } from "../components/bots/BotScheduleEditorTab.js";
 import { BotAdminsTab } from "../components/bots/BotAdminsTab.js";
 import { BotDiagnosticsTab } from "../components/bots/BotDiagnosticsTab.js";
+import { BotLeadsTab } from "../components/bots/BotLeadsTab.js";
 import { BotResetSection } from "../components/bots/BotResetSection.js";
 
-type TabId = "overview" | "templates" | "config" | "admins" | "diagnostics";
+type TabId = "overview" | "leads" | "templates" | "config" | "admins" | "diagnostics";
 
 export function BotDetailsPage() {
   const { id } = useParams<{ id: string }>();
@@ -62,6 +63,9 @@ export function BotDetailsPage() {
 
   const tabs: Array<{ id: TabId; label: string; icon: typeof Layout }> = [
     { id: "overview", label: "Обзор", icon: Layout },
+    ...(bot.botType === "LEADCATCH"
+      ? [{ id: "leads" as const, label: "Заявки", icon: Inbox }]
+      : []),
     { id: "templates", label: "Шаблоны", icon: Sparkles },
     { id: "config", label: "Настройка бота", icon: Settings },
     { id: "admins", label: "Администраторы", icon: Users },
@@ -70,7 +74,6 @@ export function BotDetailsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Шапка страницы */}
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <Link
@@ -114,7 +117,6 @@ export function BotDetailsPage() {
         </div>
       </div>
 
-      {/* Навигация по табам */}
       <div className="flex border-b border-ui-border overflow-x-auto gap-1">
         {tabs.map((tab) => {
           const Icon = tab.icon;
@@ -136,9 +138,9 @@ export function BotDetailsPage() {
         })}
       </div>
 
-      {/* Содержимое активного таба */}
       <div className="pt-2">
         {activeTab === "overview" && <BotOverviewTab bot={bot} />}
+        {activeTab === "leads" && <BotLeadsTab bot={bot} />}
         {activeTab === "templates" && (
           <BotTemplatesTab bot={bot} onApplied={() => setEditorRevision((value) => value + 1)} />
         )}

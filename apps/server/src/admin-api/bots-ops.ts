@@ -1,11 +1,13 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { randomBytes } from "node:crypto";
 import type { Bot } from "grammy";
-import type { PrismaClient } from "@prisma/client";
+import type { LeadStatus, PrismaClient } from "@prisma/client";
+import type { Redis } from "ioredis";
 import { authenticateAdmin } from "./auth.js";
 import { decryptSecret } from "../core/crypto.js";
 import { env } from "../core/env.js";
 import { checkBotConnection } from "./bot-connection.js";
+import { revokeBotAdminRights } from "../bots/shared/permissions.js";
 import type { PollingManager } from "../gateway/polling-manager.js";
 import type { TenantResolver } from "../gateway/tenant-resolver.js";
 
@@ -18,14 +20,20 @@ interface AdminParams {
   tgId: string;
 }
 
+interface LeadsQuery {
+  status?: string;
+}
+
+const VALID_LEAD_STATUSES: LeadStatus[] = ["NEW", "IN_PROGRESS", "DONE", "REJECTED"];
+
 export function registerBotsOpsRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
   tenantResolver?: TenantResolver,
   getBotInstance?: (token: string, botId?: string) => Bot,
   pollingManager?: PollingManager,
+  redis?: Redis,
 ): void {
-  // GET /api/v1/bots/:id/admins - List bot administrators
   app.get<{ Params: BotParams }>(
     "/api/v1/bots/:id/admins",
     { preHandler: [authenticateAdmin] },
@@ -42,6 +50,9 @@ export function registerBotsOpsRoutes(
           tgId: a.tgId.toString(),
           firstName: a.firstName,
           username: a.username,
+          role: a.role ?? "OWNER",
+          receivesLeads: a.receivesLeads,
+          unreachableAt: a.unreachableAt?.toISOString() ?? null,
           lang: a.lang,
           createdAt: a.createdAt.toISOString(),
         })),
@@ -49,7 +60,6 @@ export function registerBotsOpsRoutes(
     },
   );
 
-  // DELETE /api/v1/bots/:id/admins/:tgId - Revoke admin rights
   app.delete<{ Params: AdminParams }>(
     "/api/v1/bots/:id/admins/:tgId",
     { preHandler: [authenticateAdmin] },
@@ -57,11 +67,11 @@ export function registerBotsOpsRoutes(
       const { id, tgId } = req.params;
       try {
         const tgIdBig = BigInt(tgId);
-        await prisma.botUser.update({
-          where: { botId_tgId: { botId: id, tgId: tgIdBig } },
-          data: { isAdmin: false },
+        await revokeBotAdminRights(prisma, {
+          botId: id,
+          tgId: tgIdBig,
+          redis,
         });
-
         return reply.send({ ok: true, message: "Admin role revoked" });
       } catch {
         return reply.code(404).send({ ok: false, error: "Admin not found" });
@@ -69,7 +79,59 @@ export function registerBotsOpsRoutes(
     },
   );
 
-  // GET /api/v1/bots/:id/webhook-info - Telegram webhook diagnostics
+  app.get<{ Params: BotParams; Querystring: LeadsQuery }>(
+    "/api/v1/bots/:id/leads",
+    { preHandler: [authenticateAdmin] },
+    async (req, reply) => {
+      const { id } = req.params;
+      const statusParam = req.query.status as LeadStatus | undefined;
+      const statusFilter =
+        statusParam && VALID_LEAD_STATUSES.includes(statusParam) ? statusParam : undefined;
+
+      const [leads, admins] = await Promise.all([
+        prisma.lead.findMany({
+          where: {
+            botId: id,
+            ...(statusFilter ? { status: statusFilter } : {}),
+          },
+          orderBy: { createdAt: "desc" },
+          take: 100,
+        }),
+        prisma.botUser.findMany({
+          where: { botId: id, isAdmin: true },
+        }),
+      ]);
+
+      const adminMap = new Map(
+        admins.map((a) => [
+          a.tgId.toString(),
+          a.firstName ?? (a.username ? `@${a.username}` : a.tgId.toString()),
+        ]),
+      );
+
+      return reply.send({
+        ok: true,
+        leads: leads.map((l) => ({
+          id: l.id,
+          customerTgId: l.customerTgId.toString(),
+          customerName: l.customerName,
+          customerUsername: l.customerUsername,
+          phoneRaw: l.phoneRaw,
+          phoneVerified: l.phoneVerified,
+          status: l.status,
+          assigneeTgId: l.assigneeTgId?.toString() ?? null,
+          assigneeName: l.assigneeTgId
+            ? (adminMap.get(l.assigneeTgId.toString()) ?? l.assigneeTgId.toString())
+            : null,
+          assignedAt: l.assignedAt?.toISOString() ?? null,
+          statusChangedAt: l.statusChangedAt?.toISOString() ?? null,
+          answers: l.answers,
+          createdAt: l.createdAt.toISOString(),
+        })),
+      });
+    },
+  );
+
   app.get<{ Params: BotParams }>(
     "/api/v1/bots/:id/webhook-info",
     { preHandler: [authenticateAdmin] },
@@ -99,7 +161,6 @@ export function registerBotsOpsRoutes(
     },
   );
 
-  // POST /api/v1/bots/:id/sync-webhook - Rotate secret and re-set webhook
   app.post<{ Params: BotParams }>(
     "/api/v1/bots/:id/sync-webhook",
     { preHandler: [authenticateAdmin] },
@@ -142,7 +203,6 @@ export function registerBotsOpsRoutes(
     },
   );
 
-  // GET /api/v1/bots/:id/health - Health check per bot
   app.get<{ Params: BotParams }>(
     "/api/v1/bots/:id/health",
     { preHandler: [authenticateAdmin] },
@@ -174,6 +234,10 @@ export function registerBotsOpsRoutes(
         health: {
           botId: bot.id,
           isActive: bot.isActive,
+          healthStatus: bot.healthStatus,
+          lastErrorCode: bot.lastErrorCode,
+          lastErrorMsg: bot.lastErrorMsg,
+          lastErrorAt: bot.lastErrorAt?.toISOString() ?? null,
           subscriptionStatus: bot.subscription?.status ?? "UNKNOWN",
           failedInboxCount,
           connection,
@@ -182,7 +246,6 @@ export function registerBotsOpsRoutes(
     },
   );
 
-  // GET /api/v1/system/inbox-errors - System-wide inbox failures
   app.get(
     "/api/v1/system/inbox-errors",
     { preHandler: [authenticateAdmin] },

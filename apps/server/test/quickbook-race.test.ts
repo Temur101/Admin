@@ -52,9 +52,7 @@ describe("QuickBook Race Condition Test (50 Parallel Bookings)", () => {
         botType: "QUICKBOOK",
         botTokenEnc: encryptSecret(botToken, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(botToken),
-        webhookSecret: "secret_race",
-        adminInviteCode: "race_invite",
-        subscription: {
+        webhookSecret: "secret_race",        subscription: {
           create: {
             status: "TRIAL",
             trialEndsAt: new Date(Date.now() + 86400000 * 7),

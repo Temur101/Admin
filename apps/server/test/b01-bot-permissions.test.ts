@@ -23,7 +23,6 @@ describe("B01: Bot Permissions & Action Security", () => {
   let resolvedBot: ResolvedBot;
 
   const BOT_TOKEN = "111222333:PermTestBotToken";
-  const ADMIN_INVITE_CODE = "perm_adm_code_123";
   const REGULAR_USER_ID = 5001;
   const REVOKED_ADMIN_ID = 5002;
   const ACTIVE_ADMIN_ID = 5003;
@@ -61,7 +60,6 @@ describe("B01: Bot Permissions & Action Security", () => {
         botTokenEnc,
         botTokenHash: "hash_perm_bot_1",
         webhookSecret: "secret_perm_1",
-        adminInviteCode: ADMIN_INVITE_CODE,
         subscription: {
           create: {
             status: "ACTIVE",
@@ -81,7 +79,6 @@ describe("B01: Bot Permissions & Action Security", () => {
         botTokenEnc,
         botTokenHash: "hash_perm_bot_other",
         webhookSecret: "secret_perm_other",
-        adminInviteCode: "other_adm_code",
         subscription: {
           create: {
             status: "ACTIVE",
@@ -141,7 +138,6 @@ describe("B01: Bot Permissions & Action Security", () => {
       botTokenHash: bot.botTokenHash,
       webhookSecret: bot.webhookSecret,
       botUsername: "perm_test_bot",
-      adminInviteCode: bot.adminInviteCode,
       settings: {},
       subscriptionStatus: "ACTIVE",
       trialEndsAt: new Date(Date.now() + 86400000 * 30).toISOString(),

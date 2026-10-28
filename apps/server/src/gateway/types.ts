@@ -1,4 +1,4 @@
-import type { BotType, SubStatus } from "@prisma/client";
+import type { BotAdminRole, BotType, SubStatus } from "@prisma/client";
 import type { Context, SessionFlavor } from "grammy";
 
 export interface ResolvedBot {
@@ -9,7 +9,8 @@ export interface ResolvedBot {
   botTokenHash: string;
   webhookSecret: string;
   botUsername: string | null;
-  adminInviteCode: string;
+  adminInviteCode?: string;
+  healthStatus?: string;
   settings: Record<string, unknown>;
   subscriptionStatus: SubStatus;
   trialEndsAt: string;
@@ -28,15 +29,23 @@ export interface QuizSessionState {
   pendingText?: { nodeId: string; optionId: string; buttonTag: string };
   currentNodeId: string;
   stepCount: number;
+  path?: string[];
   answers: Record<string, QuizSessionAnswer>;
+  phone?: string;
+  phoneVerified?: boolean;
   startedAt: number;
 }
 
 export interface QuickBookSessionState {
+  runId?: string;
   serviceId?: string;
   resourceId?: string;
   dateStr?: string;
   slotTimeIso?: string;
+  customerName?: string;
+  phone?: string;
+  phoneVerified?: boolean;
+  step?: "service" | "resource" | "date" | "slot" | "phone" | "summary" | "edit";
   lockedUntil?: number;
   lockToken?: string;
   lockDurationMin?: number;
@@ -52,6 +61,8 @@ export interface PlatformBotSession {
   languageNextAction?: "start" | "menu";
   lang?: "RU" | "UZ";
   isAdmin?: boolean;
+  adminRole?: BotAdminRole | null;
+  receivesLeads?: boolean;
   quiz?: QuizSessionState;
   quickbook?: QuickBookSessionState;
   payment?: PaymentSessionState;

@@ -86,9 +86,7 @@ export function BotDiagnosticsTab({ bot }: BotDiagnosticsTabProps) {
 
       <BotConnectionStatus botId={bot.id} isActive={bot.isActive} />
 
-      {/* Диагностические панели */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Telegram Webhook Info */}
         <div className="p-5 bg-ui-surface border border-ui-border rounded-2xl space-y-3">
           <h4 className="text-sm font-semibold text-ui-secondary flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-ui-success" />
@@ -125,7 +123,6 @@ export function BotDiagnosticsTab({ bot }: BotDiagnosticsTabProps) {
           )}
         </div>
 
-        {/* Платформенный Health Probe */}
         <div className="p-5 bg-ui-surface border border-ui-border rounded-2xl space-y-3">
           <h4 className="text-sm font-semibold text-ui-secondary flex items-center gap-2">
             <Activity className="h-4 w-4 text-ui-accent" />
@@ -145,6 +142,18 @@ export function BotDiagnosticsTab({ bot }: BotDiagnosticsTabProps) {
                 </span>
               </div>
               <div className="flex justify-between p-2.5 rounded-xl bg-ui-subtle border border-ui-border">
+                <span className="text-ui-muted">Статус здоровья токена:</span>
+                <span
+                  className={`font-semibold ${
+                    health.healthStatus === "NEEDS_ATTENTION"
+                      ? "text-ui-danger"
+                      : "text-ui-success"
+                  }`}
+                >
+                  {health.healthStatus === "NEEDS_ATTENTION" ? "Требует внимания" : "В норме (OK)"}
+                </span>
+              </div>
+              <div className="flex justify-between p-2.5 rounded-xl bg-ui-subtle border border-ui-border">
                 <span className="text-ui-muted">Необработанные ошибки инбокса:</span>
                 <span
                   className={`font-semibold font-mono ${
@@ -154,6 +163,14 @@ export function BotDiagnosticsTab({ bot }: BotDiagnosticsTabProps) {
                   {health.failedInboxCount}
                 </span>
               </div>
+              {health.lastErrorMsg && (
+                <div className="p-2.5 rounded-xl bg-ui-danger-soft border border-ui-danger-border text-ui-danger">
+                  <span className="text-xs text-ui-danger block font-semibold">
+                    Последняя ошибка ({health.lastErrorCode ?? "UNKNOWN"}):
+                  </span>
+                  <p className="mt-0.5 break-all">{health.lastErrorMsg}</p>
+                </div>
+              )}
             </div>
           ) : (
             <p className="text-sm text-ui-muted">Нет данных о здоровье</p>

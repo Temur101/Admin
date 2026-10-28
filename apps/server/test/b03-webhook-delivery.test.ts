@@ -78,9 +78,7 @@ describe("B03: Webhook Reception Without Message Loss", () => {
         botTokenEnc: encryptSecret("1001:BotAToken", env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: botTokenHashA,
         webhookSecret: SECRET_TOKEN,
-        botUsername: "@b03_bot_a",
-        adminInviteCode: "b03_adm_code_a",
-        subscription: {
+        botUsername: "@b03_bot_a",        subscription: {
           create: {
             status: "ACTIVE",
             trialEndsAt: new Date(Date.now() + 86400000 * 30),
@@ -98,9 +96,7 @@ describe("B03: Webhook Reception Without Message Loss", () => {
         botTokenEnc: encryptSecret("1002:BotBToken", env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: botTokenHashB,
         webhookSecret: SECRET_TOKEN,
-        botUsername: "@b03_bot_b",
-        adminInviteCode: "b03_adm_code_b",
-        subscription: {
+        botUsername: "@b03_bot_b",        subscription: {
           create: {
             status: "ACTIVE",
             trialEndsAt: new Date(Date.now() + 86400000 * 30),
@@ -184,7 +180,7 @@ describe("B03: Webhook Reception Without Message Loss", () => {
         message: {
           message_id: 1,
           date: Math.floor(Date.now() / 1000),
-          chat: { id: USER_ID, type: "private" },
+          chat: { id: USER_ID, type: "private", first_name: "LeadCustomer" },
           from: { id: USER_ID, is_bot: false, first_name: "TestUser" },
           text: "/start",
         },
@@ -523,6 +519,27 @@ describe("B03: Webhook Reception Without Message Loss", () => {
         },
       });
     }
+    await pool.handleUpdate(resolved!, {
+      update_id: 50004,
+      message: {
+        message_id: 98,
+        date: Math.floor(Date.now() / 1000),
+        chat,
+        from: user,
+        contact: {
+          phone_number: "+998901234567",
+          first_name: "LeadCustomer",
+          user_id: USER_ID,
+        },
+      },
+    });
+    const summaryMarkup = transport.callsOf("sendMessage").at(-1)?.payload.reply_markup as {
+      inline_keyboard: { callback_data: string }[][];
+    };
+    const confirmCallbackData = summaryMarkup.inline_keyboard
+      .flat()
+      .find((b) => b.callback_data.startsWith("lc:confirm:"))!.callback_data;
+
     let fail = true;
     pool.getOrCreateBot(resolved!).api.config.use(async (previous, method, body, signal) => {
       if (method === "sendMessage" && fail) {
@@ -533,15 +550,11 @@ describe("B03: Webhook Reception Without Message Loss", () => {
     });
     const payload = {
       update_id: 50005,
-      message: {
-        message_id: 99,
-        date: Math.floor(Date.now() / 1000),
-        chat: { id: USER_ID, type: "private" },
+      callback_query: {
+        id: "cb_confirm_50005",
         from: { id: USER_ID, is_bot: false, first_name: "LeadCustomer" },
-        contact: {
-          phone_number: "+998901234567",
-          first_name: "LeadCustomer",
-        },
+        chat_instance: "test",
+        data: confirmCallbackData,
       },
     };
 

@@ -54,7 +54,6 @@ describe("B08: Dynamic Tariffs, Typings & Production Build Conformance", () => {
         botTokenEnc: encryptSecret(botToken, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(botToken),
         webhookSecret: "secret_b08",
-        adminInviteCode: "b08_invite",
         subscription: {
           create: {
             status: "TRIAL",

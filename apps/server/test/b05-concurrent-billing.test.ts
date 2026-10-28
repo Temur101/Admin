@@ -60,7 +60,6 @@ describe("B05: Concurrent Billing & Rollback", () => {
         botTokenEnc: encryptSecret(botToken, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash,
         webhookSecret: "secret_b05",
-        adminInviteCode: "b05_invite",
         subscription: {
           create: {
             status: "TRIAL",

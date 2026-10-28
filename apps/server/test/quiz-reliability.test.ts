@@ -85,17 +85,33 @@ const click = (data: string) =>
       },
     },
   });
-const contact = () =>
-  bot.handleUpdate({
-    update_id: ++updateId,
-    message: {
-      message_id: 1,
-      date: 1,
-      from: sender,
-      chat: { id: 42, type: "private", first_name: "Клиент" },
-      contact: { phone_number: "+998901234567", first_name: "Клиент", user_id: 42 },
-    },
-  });
+async function contact() {
+  if (state.quiz?.currentNodeId !== "__summary__") {
+    await bot.handleUpdate({
+      update_id: ++updateId,
+      message: {
+        message_id: 1,
+        date: 1,
+        from: sender,
+        chat: { id: 42, type: "private", first_name: "Клиент" },
+        contact: { phone_number: "+998901234567", first_name: "Клиент", user_id: 42 },
+      },
+    });
+  }
+  if (state.quiz?.currentNodeId === "__summary__") {
+    const summaryCall = [...transport.callsOf("sendMessage")]
+      .reverse()
+      .find((c) => (c.payload.reply_markup as { inline_keyboard?: unknown })?.inline_keyboard);
+    const confirmBtn = (
+      summaryCall?.payload.reply_markup as {
+        inline_keyboard?: { callback_data: string }[][];
+      }
+    )?.inline_keyboard
+      ?.flat()
+      .find((b) => b.callback_data.startsWith("lc:confirm:"));
+    if (confirmBtn) await click(confirmBtn.callback_data);
+  }
+}
 function failNextSend() {
   let fail = true;
   bot.api.config.use(async (previous, method, payload, signal) => {
@@ -202,7 +218,8 @@ describe("Сохранение заявки", () => {
     const saved = structuredClone(state.quiz);
     upsert.mockRejectedValueOnce(new Error("DB unavailable"));
     await contact();
-    expect(state.quiz).toEqual(saved);
+    expect(state.quiz?.answers).toEqual(saved?.answers);
+    expect(state.quiz?.currentNodeId).toBe("__summary__");
     expect(rows.size).toBe(0);
     expect(lastText()).toContain("Не удалось сохранить заявку");
     expect(notifyAdmins).not.toHaveBeenCalled();

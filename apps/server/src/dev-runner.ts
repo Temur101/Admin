@@ -1,4 +1,7 @@
-import { createRealTelegramTransport, type TelegramTransport } from "./adapters/telegram/transport.js";
+import {
+  createRealTelegramTransport,
+  type TelegramTransport,
+} from "./adapters/telegram/transport.js";
 import { encryptSecret, sha256Hex } from "./core/crypto.js";
 import { env } from "./core/env.js";
 import { logger } from "./core/logger.js";
@@ -24,7 +27,10 @@ async function setupAndStartBot(opts: LaunchOptions): Promise<string> {
   let botUsername = defaultUsername;
   try {
     const res = await fetch(`https://api.telegram.org/bot${token}/getMe`);
-    const data = (await res.json()) as { ok: boolean; result?: { username?: string; first_name?: string } };
+    const data = (await res.json()) as {
+      ok: boolean;
+      result?: { username?: string; first_name?: string };
+    };
     if (data.ok && data.result?.username) {
       botUsername = data.result.username;
       logger.info({ username: botUsername, botType }, "Telegram getMe succeeded");
@@ -50,7 +56,6 @@ async function setupAndStartBot(opts: LaunchOptions): Promise<string> {
         botTokenHash: tokenHash,
         webhookSecret: `secret_${botType.toLowerCase()}`,
         botUsername,
-        adminInviteCode,
         subscription: {
           create: {
             status: "TRIAL",
@@ -67,11 +72,28 @@ async function setupAndStartBot(opts: LaunchOptions): Promise<string> {
         botType,
         botUsername,
         botTokenEnc: tokenEnc,
-        adminInviteCode,
       },
       include: { subscription: true },
     });
   }
+
+  const codeHash = sha256Hex(adminInviteCode);
+  await prisma.adminInvite.upsert({
+    where: { codeHash },
+    update: {
+      botId: botRecord.id,
+      role: "OWNER",
+      expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+      usedAt: null,
+      revokedAt: null,
+    },
+    create: {
+      botId: botRecord.id,
+      role: "OWNER",
+      codeHash,
+      expiresAt: new Date(Date.now() + 24 * 3600 * 1000),
+    },
+  });
 
   const resolved: ResolvedBot = {
     id: botRecord.id,
@@ -81,7 +103,7 @@ async function setupAndStartBot(opts: LaunchOptions): Promise<string> {
     botTokenHash: botRecord.botTokenHash,
     webhookSecret: botRecord.webhookSecret,
     botUsername: botRecord.botUsername,
-    adminInviteCode: botRecord.adminInviteCode,
+    healthStatus: botRecord.healthStatus,
     settings: (botRecord.settings ?? {}) as Record<string, unknown>,
     subscriptionStatus: botRecord.subscription?.status ?? "TRIAL",
     trialEndsAt: botRecord.subscription?.trialEndsAt.toISOString() ?? new Date().toISOString(),
@@ -184,7 +206,9 @@ async function runDevBots() {
   // eslint-disable-next-line no-console
   console.log("===========================================================\n");
   // eslint-disable-next-line no-console
-  console.log("ℹ️ Боты зарегистрированы в БД. Запустите основной сервер (pnpm dev:server) для polling.");
+  console.log(
+    "ℹ️ Боты зарегистрированы в БД. Запустите основной сервер (pnpm dev:server) для polling.",
+  );
   await redis.quit();
   await prisma.$disconnect();
 }

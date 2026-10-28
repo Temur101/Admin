@@ -15,6 +15,8 @@ import { startQuickBookFlow } from "../src/bots/quickbook/quickbook-handlers.js"
 import { getSlotLockKeys } from "../src/bots/quickbook/slot-lock.js";
 import { t } from "../src/bots/shared/i18n.js";
 import { createBooking } from "../src/bots/quickbook/booking-service.js";
+import { sha256Hex } from "../src/core/crypto.js";
+
 vi.mock("../src/bots/quickbook/booking-service.js", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../src/bots/quickbook/booking-service.js")>()),
   createBooking: vi.fn(),
@@ -28,6 +30,7 @@ vi.mock("../src/core/env.js", () => ({
   },
 }));
 vi.mock("../src/bots/shared/notification.js", () => ({ notifyAdmins: vi.fn(async () => 1) }));
+
 let bot: Bot<PlatformBotContext>;
 let state: PlatformBotSession;
 let transport: MockTelegramTransport;
@@ -41,6 +44,7 @@ const updateUser = vi.fn();
 const release = vi.fn();
 const sender = { id: 42, is_bot: false, first_name: "Клиент" };
 let updateId = 0;
+
 const config = () => ({
   ...createEmptyQuickBookConfig(),
   services: [
@@ -55,6 +59,7 @@ const config = () => ({
     },
   ],
 });
+
 beforeEach(async () => {
   vi.clearAllMocks();
   state = {};
@@ -65,6 +70,9 @@ beforeEach(async () => {
     tgId: 42n,
     lang: "RU",
     isAdmin: false,
+    role: null,
+    receivesLeads: true,
+    unreachableAt: null,
     firstName: "Клиент",
     username: null,
     createdAt: new Date(),
@@ -78,7 +86,6 @@ beforeEach(async () => {
     botUsername: "test_bot",
     paidUntil: null,
     botType: "LEADCATCH",
-    adminInviteCode: "invite",
     settings: createQuizChain(),
     subscriptionStatus: "ACTIVE",
     trialEndsAt: new Date().toISOString(),
@@ -105,6 +112,22 @@ beforeEach(async () => {
       findUnique: vi.fn(async () => ({ ...user })),
       update: updateUser,
     },
+    adminInvite: {
+      findUnique: vi.fn(async ({ where }: { where: { codeHash: string } }) =>
+        where.codeHash === sha256Hex("invite")
+          ? {
+              id: "inv1",
+              botId: "b1",
+              role: "OWNER",
+              codeHash: where.codeHash,
+              expiresAt: new Date(Date.now() + 86400000),
+              usedAt: null,
+              revokedAt: null,
+            }
+          : null,
+      ),
+      updateMany: vi.fn(async () => ({ count: 1 })),
+    },
     lead: { upsert: saveLead },
   } as unknown as PrismaClient;
   transport = new MockTelegramTransport();
@@ -130,6 +153,7 @@ beforeEach(async () => {
   registerNavigationFallback(bot, controls);
   await bot.init();
 });
+
 function message(text: string) {
   const command = text.startsWith("/") ? text.split(" ")[0]! : null;
   return bot.handleUpdate({
@@ -146,6 +170,7 @@ function message(text: string) {
     },
   });
 }
+
 function click(data: string) {
   return bot.handleUpdate({
     update_id: ++updateId,
@@ -163,6 +188,7 @@ function click(data: string) {
     },
   });
 }
+
 const last = () => transport.callsOf("sendMessage").at(-1)!.payload;
 const keyboard = () =>
   last().reply_markup as {
@@ -173,6 +199,7 @@ const labels = () =>
   keyboard()
     .keyboard.flat()
     .map((button) => button.text);
+
 function hold() {
   state.quickbook = {
     serviceId: "service",
@@ -186,6 +213,7 @@ function hold() {
   keys.forEach((key) => locks.set(key, "42:captured-token"));
   return keys;
 }
+
 describe("Постоянная навигация клиента", () => {
   it.each(["LEADCATCH", "QUICKBOOK"] as const)(
     "%s: меню доступно на обоих языках",
@@ -231,6 +259,8 @@ describe("Постоянная навигация клиента", () => {
     ).toBe(true);
     expect(labels()).toContain(t("RU", "client_menu"));
     await message("+998901234567");
+    const summaryMarkup = last().reply_markup as { inline_keyboard: { callback_data: string }[][] };
+    await click(summaryMarkup.inline_keyboard[0]![0]!.callback_data);
     expect(saveLead).toHaveBeenCalledOnce();
     expect(state.quiz).toBeUndefined();
     expect(keyboard().is_persistent).toBe(true);
@@ -274,10 +304,13 @@ describe("Постоянная навигация клиента", () => {
         },
       } as never);
       await message("+998901234567");
+      const summaryMarkup = last().reply_markup as {
+        inline_keyboard: { callback_data: string }[][];
+      };
+      await click(summaryMarkup.inline_keyboard[0]![0]!.callback_data);
       expect(state.quickbook).toBeUndefined();
       expect(keyboard().is_persistent).toBe(true);
       expect(labels()).toContain(t(lang, "client_book"));
-      // The successful booking is persisted by the service; navigation must not cancel it.
       await message(t(lang, "client_book"));
       expect(state.quickbook).toEqual({});
       expect(release).not.toHaveBeenCalled();
@@ -291,6 +324,7 @@ describe("Постоянная навигация клиента", () => {
     expect(last().text).toBe(t("RU", "qb_choose_service"));
   });
 });
+
 describe("Язык и права владельца", () => {
   it("смена языка завершает опрос и возвращает локализованное меню", async () => {
     await message("/start");
@@ -319,7 +353,6 @@ describe("Язык и права владельца", () => {
   });
   it("ошибка сохранения языка объясняется и допускает повтор", async () => {
     await message(t("RU", "client_language"));
-    // profile also updates the user; fail the actual language write, not the profile update.
     updateUser.mockReset().mockImplementation(async ({ data }) => {
       if (data.lang) throw new Error("DB unavailable");
       Object.assign(user, data);
@@ -374,6 +407,7 @@ describe("Язык и права владельца", () => {
     expect(labels()).toContain(t("RU", "client_quiz"));
   });
 });
+
 describe("Выход из удерживаемой записи", () => {
   it.each(["menu", "repeat", "language", "start"])(
     "%s освобождает все интервалы до очистки состояния",

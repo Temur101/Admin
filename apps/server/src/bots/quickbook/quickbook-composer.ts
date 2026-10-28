@@ -1,19 +1,23 @@
 import { registerBookingSelectionHandlers } from "./booking-selection.js";
+import { showBookingDates } from "./booking-dates.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
 import { isActualBotAdmin } from "../shared/user-service.js";
 import { cancelBooking, formatTashkentDateTime } from "./booking-service.js";
 import { notifyAdmins } from "../shared/notification.js";
 import { getQuickBookConfig } from "./config-resolver.js";
+import { contactKeyboard } from "../shared/client-menu.js";
+import { resetClientFlow } from "../shared/flow-reset.js";
 
 export {
   type QuickBookComposerOptions,
   startQuickBookFlow,
   handleQuickBookContact,
+  promptQuickBookSummary,
   renderAlternativeSlots,
 } from "./quickbook-handlers.js";
 import {
-  handleQuickBookContact,
+  promptQuickBookSummary,
   startQuickBookFlow,
   type QuickBookComposerOptions,
 } from "./quickbook-handlers.js";
@@ -50,7 +54,28 @@ export function registerQuickBookHandlers(
 
   registerBookingSelectionHandlers(bot, opts);
 
-  // Admin menu shortcuts for QuickBook
+  bot.hears([t("RU", "btn_back"), t("UZ", "btn_back")], async (ctx, next) => {
+    const session = ctx.session.quickbook;
+    if (!session) return next();
+    if (session.step === "summary") {
+      delete session.phone;
+      delete session.phoneVerified;
+      session.step = "phone";
+      await ctx.reply(t(ctx.session.lang, "qb_prompt_phone"), {
+        reply_markup: contactKeyboard(ctx),
+      });
+      return;
+    }
+    if (session.slotTimeIso && session.serviceId && session.resourceId) {
+      const { serviceId, resourceId } = session;
+      if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
+      ctx.session.quickbook = { serviceId, resourceId };
+      await showBookingDates(ctx, serviceId, resourceId, 0);
+      return;
+    }
+    await startQuickBookFlow(ctx, prisma, redis);
+  });
+
   bot.hears(/^(➕ Записать клиента|➕ Mijozni yozish)$/, async (ctx) => {
     if (!ctx.from) return;
     const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
@@ -103,31 +128,57 @@ export function registerQuickBookHandlers(
     });
   });
 
-  // 5. Native Telegram contact received
   bot.on("message:contact", async (ctx, next) => {
-    if (ctx.session.quickbook?.slotTimeIso) {
-      const phone = ctx.message.contact?.phone_number;
+    const session = ctx.session.quickbook;
+    if (session?.slotTimeIso && session.step !== "summary") {
+      const contact = ctx.message.contact;
+      const phone = contact?.phone_number;
       if (phone) {
-        await handleQuickBookContact(ctx, phone, opts);
+        if (contact.user_id === undefined || contact.user_id !== ctx.from?.id) {
+          await ctx.reply(t(ctx.session.lang, "contact_not_own"));
+          return;
+        }
+        await promptQuickBookSummary(ctx, phone, true, opts);
         return;
       }
     }
     return next();
   });
 
-  // 6. Text message received (for manual phone entry)
   bot.on("message:text", async (ctx, next) => {
-    if (ctx.session.quickbook?.slotTimeIso) {
+    const session = ctx.session.quickbook;
+    if (session?.slotTimeIso && session.step !== "summary") {
       const text = ctx.message.text.trim();
-      if (!text.startsWith("/")) {
-        await handleQuickBookContact(ctx, text, opts);
+      if (
+        !text.startsWith("/") &&
+        !text.startsWith("📋") &&
+        !text.startsWith("💳") &&
+        !text.startsWith("🌐") &&
+        !text.startsWith("🏠") &&
+        !text.startsWith("📝") &&
+        !text.startsWith("📅") &&
+        !text.startsWith("➕") &&
+        !text.startsWith("🔄") &&
+        !text.startsWith("⬅️") &&
+        !text.startsWith("🔔") &&
+        !text.startsWith("🔕")
+      ) {
+        await promptQuickBookSummary(ctx, text, false, opts);
         return;
       }
     }
     return next();
   });
 
-  // 7. Booking reminder actions: Confirm and Cancel
+  bot.on("message", async (ctx, next) => {
+    const session = ctx.session.quickbook;
+    if (session?.slotTimeIso && session.step !== "summary") {
+      await ctx.reply(t(ctx.session.lang, "unexpected_input_booking"));
+      return;
+    }
+    return next();
+  });
+
   bot.callbackQuery(/^book:confirm:(.+)$/, async (ctx) => {
     const bookingId = ctx.match[1];
     if (!bookingId || !ctx.from) return;
@@ -235,7 +286,10 @@ export function registerQuickBookHandlers(
         },
         { prisma, transport: opts.transport, logger: opts.logger },
       ).catch((err) => {
-        opts.logger.error({ err: (err as Error).message }, "Failed to notify admins of booking cancellation");
+        opts.logger.error(
+          { err: (err as Error).message },
+          "Failed to notify admins of booking cancellation",
+        );
       });
     }
 

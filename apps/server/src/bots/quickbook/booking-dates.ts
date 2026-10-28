@@ -4,7 +4,9 @@ import { callbackId } from "../shared/callback-id.js";
 import { t } from "../shared/i18n.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import { bookingWindow, tashkentDateString } from "./booking-horizon.js";
+
 export const BOOKING_DATES_PAGE_SIZE = 7;
+
 export async function showBookingDates(
   ctx: PlatformBotContext,
   serviceId: string,
@@ -34,6 +36,10 @@ export async function showBookingDates(
   keyboard.row();
   if (page > 0) keyboard.text(t(lang, "qb_dates_previous"), `qb:days:${ids}:${page - 1}`);
   if (page + 1 < pages) keyboard.text(t(lang, "qb_dates_next"), `qb:days:${ids}:${page + 1}`);
+  keyboard
+    .row()
+    .text(t(lang, "btn_back"), `qb:back:res:${callbackId(serviceId)}`)
+    .text(t(lang, "btn_restart"), "qb:restart");
   const title =
     pages > 1 ? t(lang, "qb_date_page", { page: page + 1, pages }) : t(lang, "qb_choose_date");
   await ctx.reply(title, { reply_markup: keyboard });

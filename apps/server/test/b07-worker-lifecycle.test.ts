@@ -53,7 +53,6 @@ describe("B07: Background Worker Lifecycle, Scheduler & Health Probes", () => {
         botTokenEnc: encryptSecret(botToken, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(botToken),
         webhookSecret: "secret_b07",
-        adminInviteCode: "b07_invite",
         subscription: {
           create: {
             status: "TRIAL",

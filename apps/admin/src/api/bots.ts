@@ -13,7 +13,11 @@ export interface BotListItem {
   botType: "LEADCATCH" | "QUICKBOOK";
   botUsername: string | null;
   isActive: boolean;
-  adminInviteCode: string;
+  adminInviteCode?: string;
+  healthStatus?: string;
+  lastErrorCode?: string | null;
+  lastErrorMsg?: string | null;
+  lastErrorAt?: string | null;
   createdAt: string;
   subscription: {
     status: string;
@@ -33,6 +37,25 @@ export interface BotAdmin {
   tgId: string;
   firstName?: string | null;
   username?: string | null;
+  role?: "OWNER" | "STAFF";
+  receivesLeads?: boolean;
+  unreachableAt?: string | null;
+  createdAt: string;
+}
+
+export interface BotLead {
+  id: string;
+  customerTgId: string;
+  customerName: string | null;
+  customerUsername: string | null;
+  phoneRaw: string;
+  phoneVerified: boolean;
+  status: "NEW" | "IN_PROGRESS" | "DONE" | "REJECTED";
+  assigneeTgId: string | null;
+  assigneeName: string | null;
+  assignedAt: string | null;
+  statusChangedAt: string | null;
+  answers: Record<string, { question: string; answer: string }>;
   createdAt: string;
 }
 
@@ -53,6 +76,10 @@ export interface WebhookInfo {
 export interface BotHealth {
   botId: string;
   isActive: boolean;
+  healthStatus?: string;
+  lastErrorCode?: string | null;
+  lastErrorMsg?: string | null;
+  lastErrorAt?: string | null;
   subscriptionStatus: string;
   failedInboxCount: number;
   connection?: {
@@ -78,6 +105,7 @@ export interface CreateBotResult {
   botUsername?: string | null;
   inviteLink: string | null;
   adminInviteCode?: string;
+  inviteExpiresAt?: string;
   warning?: string;
   trialEndsAt: string;
 }
@@ -104,8 +132,23 @@ export async function deleteBot(id: string, purge = false): Promise<void> {
 
 export async function reissueBotInvite(
   id: string,
-): Promise<{ adminInviteCode: string; inviteLink: string | null }> {
-  return apiRequest(`/api/v1/bots/${id}/reissue-invite`, { method: "POST" });
+  role: "OWNER" | "STAFF" = "OWNER",
+): Promise<{
+  role?: "OWNER" | "STAFF";
+  adminInviteCode: string;
+  expiresAt?: string;
+  inviteLink: string | null;
+}> {
+  return apiRequest(`/api/v1/bots/${id}/reissue-invite`, {
+    method: "POST",
+    body: JSON.stringify({ role }),
+  });
+}
+
+export async function getBotLeads(id: string, status?: string): Promise<BotLead[]> {
+  const qs = status && status !== "ALL" ? `?status=${encodeURIComponent(status)}` : "";
+  const data = await apiRequest<{ ok: true; leads: BotLead[] }>(`/api/v1/bots/${id}/leads${qs}`);
+  return data.leads;
 }
 
 export async function extendBotSubscription(
@@ -182,12 +225,14 @@ export interface BotSetupCheck {
   errors: string[];
   checkedAt: string;
 }
+
 export async function checkBotSetup(id: string): Promise<BotSetupCheck> {
   const data = await apiRequest<{ ok: true; check: BotSetupCheck }>(
     `/api/v1/bots/${id}/setup-check`,
   );
   return data.check;
 }
+
 export async function launchBot(id: string): Promise<void> {
   await apiRequest(`/api/v1/bots/${id}/launch`, { method: "POST" });
 }

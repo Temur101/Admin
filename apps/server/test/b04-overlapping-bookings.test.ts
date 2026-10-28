@@ -119,7 +119,6 @@ describe("B04: Overlapping Bookings Prevention", () => {
         botTokenEnc: encryptSecret(botToken, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash,
         webhookSecret: "secret_b04",
-        adminInviteCode: "b04_invite",
         settings: { quickbook: customConfig },
         subscription: {
           create: {
@@ -321,7 +320,6 @@ describe("B04: Overlapping Bookings Prevention", () => {
         botTokenEnc: encryptSecret(botToken2, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(botToken2),
         webhookSecret: "secret_other",
-        adminInviteCode: "other_invite",
       },
     });
 

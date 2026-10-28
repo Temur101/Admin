@@ -228,7 +228,6 @@ describe("Wave 2 Security, Recovery and Memory Audits", () => {
           botTokenEnc: "dummy_enc",
           botTokenHash: "dummy_hash_receipt",
           webhookSecret: "secret_rcpt",
-          adminInviteCode: "adm_rcpt_1",
         },
       });
       const receipt = await prisma.paymentReceipt.create({
@@ -303,7 +302,6 @@ describe("Wave 2 Security, Recovery and Memory Audits", () => {
           botTokenEnc: "dummy_enc_webp",
           botTokenHash: "dummy_hash_webp",
           webhookSecret: "secret_webp",
-          adminInviteCode: "adm_rcpt_2",
         },
       });
       const receipt = await prisma.paymentReceipt.create({
@@ -343,7 +341,6 @@ describe("Wave 2 Security, Recovery and Memory Audits", () => {
           botTokenEnc: "dummy_enc_trav",
           botTokenHash: "dummy_hash_trav",
           webhookSecret: "secret_trav",
-          adminInviteCode: "adm_rcpt_3",
         },
       });
       const maliciousReceipt = await prisma.paymentReceipt.create({
@@ -428,7 +425,6 @@ describe("Wave 2 Security, Recovery and Memory Audits", () => {
         botTokenHash: "hash_token_1",
         webhookSecret: "s1",
         botUsername: "bot_111",
-        adminInviteCode: "adm_111",
         settings: {},
         subscriptionStatus: "TRIAL",
         paidUntil: null,
@@ -443,7 +439,6 @@ describe("Wave 2 Security, Recovery and Memory Audits", () => {
         botTokenHash: "hash_token_2",
         webhookSecret: "s2",
         botUsername: "bot_222",
-        adminInviteCode: "adm_222",
         settings: {},
         subscriptionStatus: "TRIAL",
         paidUntil: null,

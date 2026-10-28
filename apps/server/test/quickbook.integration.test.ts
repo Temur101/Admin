@@ -22,6 +22,18 @@ const prisma = getTestPrismaClient();
 
 let redis: Redis;
 
+function findConfirmCallback(transport: MockTelegramTransport, chatId: number): string {
+  const calls = transport.callsOf("sendMessage").filter((c) => Number(c.payload.chat_id) === chatId);
+  const last = calls.at(-1)?.payload.reply_markup as
+    | { inline_keyboard?: { callback_data?: string }[][] }
+    | undefined;
+  const btn = last?.inline_keyboard
+    ?.flat()
+    .find((b) => b.callback_data?.startsWith("qb:confirm_book:"));
+  if (!btn?.callback_data) throw new Error("qb:confirm_book button not found");
+  return btn.callback_data;
+}
+
 describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
   let transport: MockTelegramTransport;
   let botPool: BotPool;
@@ -62,7 +74,6 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
         botTokenEnc: encryptSecret(BOT_TOKEN, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(BOT_TOKEN),
         webhookSecret: "secret_qb_e2e",
-        adminInviteCode: "qb_invite_123",
         subscription: {
           create: {
             status: "TRIAL",
@@ -74,7 +85,6 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
     });
     botId = bot.id;
 
-    // Create admin user
     await prisma.botUser.create({
       data: {
         botId,
@@ -93,7 +103,6 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       botTokenHash: bot.botTokenHash,
       webhookSecret: bot.webhookSecret,
       botUsername: "qb_test_bot",
-      adminInviteCode: bot.adminInviteCode,
       settings: QUICKBOOK_TEST_CONFIG,
       subscriptionStatus: "TRIAL",
       trialEndsAt: bot.subscription?.trialEndsAt.toISOString() ?? new Date().toISOString(),
@@ -111,10 +120,9 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
     });
   });
 
-  it("1. Happy path on TRIAL: client books slot -> confirmed in DB -> admin gets open notification", async () => {
+  it("1. Happy path on TRIAL: client books slot -> summary -> confirmed in DB -> admin gets open notification", async () => {
     const bot = botPool.getOrCreateBot(resolvedBot);
 
-    // 1. Client starts bot with RU language
     await prisma.botUser.create({
       data: {
         botId,
@@ -136,12 +144,10 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       },
     });
 
-    // Client receives services menu
     let calls = transport.callsOf("sendMessage");
     expect(calls.length).toBeGreaterThanOrEqual(1);
     expect(String(calls[calls.length - 1]?.payload.text)).toContain("Выберите услугу");
 
-    // 2. Client selects service: srv_haircut
     transport.clear();
     await bot.handleUpdate({
       update_id: 2,
@@ -159,11 +165,9 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       },
     });
 
-    // Client receives resource selection
     calls = transport.callsOf("sendMessage");
     expect(String(calls[0]?.payload.text)).toContain("Выберите");
 
-    // 3. Client selects slot date & time
     transport.clear();
     const slotDate1 = new Date();
     slotDate1.setDate(slotDate1.getDate() + 2);
@@ -185,11 +189,9 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       },
     });
 
-    // Client prompted for phone number
     calls = transport.callsOf("sendMessage");
     expect(String(calls[0]?.payload.text)).toContain("номер телефона");
 
-    // 4. Client sends phone number via text
     transport.clear();
     await bot.handleUpdate({
       update_id: 4,
@@ -202,13 +204,30 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       },
     });
 
-    // 5. Client receives confirmation
+    // Summary screen is shown before booking creation
+    const confirmData = findConfirmCallback(transport, clientTgId);
+    transport.clear();
+    await bot.handleUpdate({
+      update_id: 5,
+      callback_query: {
+        id: "cb_confirm_1",
+        from: { id: clientTgId, is_bot: false, first_name: "Азиз" },
+        message: {
+          message_id: 14,
+          date: 1700000000,
+          chat: { id: clientTgId, type: "private", first_name: "Азиз" },
+          text: "Сводка",
+        },
+        chat_instance: "ci_3",
+        data: confirmData,
+      },
+    });
+
     calls = transport.callsOf("sendMessage");
     const clientMsg = calls.find((c) => c.payload.chat_id === clientTgId);
     expect(clientMsg).toBeDefined();
     expect(String(clientMsg?.payload.text)).toContain("Вы успешно записаны");
 
-    // 6. Admin receives OPEN notification
     const adminMsg = calls.find((c) => c.payload.chat_id === adminTgId);
     expect(adminMsg).toBeDefined();
     const adminText = String(adminMsg?.payload.text);
@@ -217,17 +236,16 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
     expect(adminText).toContain("Азиз");
     expect(adminText).not.toContain("***");
 
-    // 7. Verify booking in PostgreSQL
     const bookingInDb = await prisma.booking.findFirst({
       where: { botId, customerTgId: BigInt(clientTgId) },
     });
     expect(bookingInDb).toBeDefined();
     expect(bookingInDb?.customerPhone).toBe("+998901234567");
+    expect(bookingInDb?.phoneVerified).toBe(false);
     expect(bookingInDb?.status).toBe("CONFIRMED");
   });
 
-  it("2. EXPIRED subscription scenario: client books -> admin receives MASKED notification with payment button", async () => {
-    // Set bot subscription to EXPIRED
+  it("2. EXPIRED subscription scenario: client books -> summary -> admin receives MASKED notification with payment button", async () => {
     await prisma.subscription.update({
       where: { botId },
       data: { status: "EXPIRED" },
@@ -236,7 +254,6 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
 
     const bot = botPool.getOrCreateBot(resolvedBot);
 
-    // Client has language RU
     await prisma.botUser.create({
       data: {
         botId,
@@ -247,7 +264,6 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       },
     });
 
-    // Select slot directly
     const slotDate2 = new Date();
     slotDate2.setDate(slotDate2.getDate() + 3);
     slotDate2.setHours(12, 0, 0, 0);
@@ -268,7 +284,6 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       },
     });
 
-    // Client sends phone number
     transport.clear();
     await bot.handleUpdate({
       update_id: 11,
@@ -281,13 +296,29 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       },
     });
 
-    // Client receives standard polite confirmation (NOT affected by subscription!)
+    const confirmData = findConfirmCallback(transport, clientTgId);
+    transport.clear();
+    await bot.handleUpdate({
+      update_id: 12,
+      callback_query: {
+        id: "cb_confirm_exp",
+        from: { id: clientTgId, is_bot: false, first_name: "Сардор" },
+        message: {
+          message_id: 22,
+          date: 1700000000,
+          chat: { id: clientTgId, type: "private", first_name: "Сардор" },
+          text: "Сводка",
+        },
+        chat_instance: "ci_exp",
+        data: confirmData,
+      },
+    });
+
     const calls = transport.callsOf("sendMessage");
     const clientMsg = calls.find((c) => c.payload.chat_id === clientTgId);
     expect(clientMsg).toBeDefined();
     expect(String(clientMsg?.payload.text)).toContain("Вы успешно записаны");
 
-    // Admin receives MASKED notification
     const adminMsg = calls.find((c) => c.payload.chat_id === adminTgId);
     expect(adminMsg).toBeDefined();
     const adminText = String(adminMsg?.payload.text);
@@ -297,7 +328,6 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
     expect(adminText).not.toContain("9876543");
     expect(adminText).toContain("Оплатите подписку");
 
-    // Admin message has payment button
     const replyMarkup = adminMsg?.payload.reply_markup as {
       inline_keyboard?: Array<Array<{ text: string }>>;
     };
@@ -344,13 +374,11 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
     expect(adminCalls).toHaveLength(1);
     expect(String(adminCalls[0]?.payload.text)).toContain("Запись отменена клиентом");
 
-    // Check client received cancellation response
     const calls = transport.callsOf("sendMessage");
     const clientCalls = calls.filter((c) => c.payload.chat_id === clientTgId);
     expect(clientCalls).toHaveLength(1);
     expect(String(clientCalls[0]?.payload.text)).toContain("отменена");
 
-    // Check DB status updated to CANCELLED
     const updated = await prisma.booking.findUnique({ where: { id: booking.id } });
     expect(updated?.status).toBe("CANCELLED");
   });
@@ -377,7 +405,6 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
       },
     });
 
-    // Attempting to insert an overlapping active booking (10:30 - 11:15) for the same bot & staff must fail at DB level
     const overlappingSlot = new Date("2026-11-15T10:30:00.000Z");
     await expect(
       prisma.booking.create({

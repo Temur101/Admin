@@ -62,11 +62,17 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
         botTokenEnc,
         botTokenHash: sha256Hex(BOT_TOKEN),
         webhookSecret: "secret_123",
-        adminInviteCode: ADMIN_INVITE_CODE,
         subscription: {
           create: {
             status: "TRIAL",
             trialEndsAt: new Date(Date.now() + 86400000 * 3),
+          },
+        },
+        invites: {
+          create: {
+            codeHash: sha256Hex(ADMIN_INVITE_CODE),
+            role: "OWNER",
+            expiresAt: new Date(Date.now() + 86400000),
           },
         },
       },
@@ -82,7 +88,6 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
       botTokenHash: bot.botTokenHash,
       webhookSecret: bot.webhookSecret,
       botUsername: "onboarding_test_bot",
-      adminInviteCode: bot.adminInviteCode,
       settings: {},
       subscriptionStatus: "TRIAL",
       trialEndsAt: bot.subscription?.trialEndsAt.toISOString() ?? new Date().toISOString(),
@@ -104,7 +109,6 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
     const bot = botPool.getOrCreateBot(resolvedBot);
     const tgId = 555001;
 
-    // Send /start without params
     await bot.handleUpdate({
       update_id: 1001,
       message: {
@@ -116,13 +120,11 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
       },
     });
 
-    // Check bot replied asking for language
     let calls = transport.callsOf("sendMessage");
     expect(calls).toHaveLength(2);
     expect(calls[0]?.payload.reply_markup).toHaveProperty("keyboard");
     expect(String(calls.at(-1)?.payload.text)).toContain("выберите язык / Iltimos, tilni tanlang");
 
-    // Click UZ language callback button
     transport.clear();
     await bot.handleUpdate({
       update_id: 1002,
@@ -140,14 +142,12 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
       },
     });
 
-    // Verify user in DB has lang UZ and is not admin
     const userInDb = await prisma.botUser.findUnique({
       where: { botId_tgId: { botId, tgId: BigInt(tgId) } },
     });
     expect(userInDb?.lang).toBe("UZ");
     expect(userInDb?.isAdmin).toBe(false);
 
-    // Verify messages in Uzbek
     calls = transport.callsOf("sendMessage");
     expect(calls.length).toBeGreaterThanOrEqual(1);
     const combinedTexts = calls.map((c) => String(c.payload.text)).join(" ");
@@ -161,7 +161,6 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
     const bot = botPool.getOrCreateBot(resolvedBot);
     const adminTgId = 777002;
 
-    // First, user already has language RU set
     await prisma.botUser.create({
       data: {
         botId,
@@ -172,7 +171,6 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
       },
     });
 
-    // User sends /start with valid admin invite code
     await bot.handleUpdate({
       update_id: 2001,
       message: {
@@ -184,13 +182,12 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
       },
     });
 
-    // Verify user promoted to admin in DB
     const userInDb = await prisma.botUser.findUnique({
       where: { botId_tgId: { botId, tgId: BigInt(adminTgId) } },
     });
     expect(userInDb?.isAdmin).toBe(true);
+    expect(userInDb?.role).toBe("OWNER");
 
-    // Verify admin greeting and menu sent
     const calls = transport.callsOf("sendMessage");
     expect(calls).toHaveLength(1);
     expect(String(calls[0]?.payload.text)).toContain("назначены администратором");
@@ -210,7 +207,6 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
       },
     });
 
-    // Send /start with an old/reissued code
     await bot.handleUpdate({
       update_id: 3001,
       message: {
@@ -243,11 +239,11 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
         tgId: BigInt(adminTgId),
         firstName: "AdminUser",
         isAdmin: true,
+        role: "OWNER",
         lang: "RU",
       },
     });
 
-    // 1. Admin requests subscription status (via callback admin:sub)
     await bot.handleUpdate({
       update_id: 4001,
       callback_query: {
@@ -268,7 +264,6 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
     expect(calls).toHaveLength(1);
     expect(String(calls[0]?.payload.text)).toContain("Пробный период");
 
-    // 2. Admin clicks "Оплатить" (callback admin:pay)
     transport.clear();
     await bot.handleUpdate({
       update_id: 4002,
@@ -290,7 +285,6 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
     expect(calls).toHaveLength(1);
     expect(String(calls[0]?.payload.text)).toContain("Выберите период");
 
-    // 3. Admin chooses 6 months tariff (callback pay:tariff:6)
     transport.clear();
     await bot.handleUpdate({
       update_id: 4003,
@@ -326,7 +320,6 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
       },
     });
 
-    // Case A: Subscription is TRIAL -> Notification contains raw phone
     await notifyAdmins(
       botId,
       {
@@ -345,7 +338,6 @@ describe("Bot Onboarding, Roles, i18n & Admin Menu E2E", () => {
     expect(String(calls[0]?.payload.text)).toContain("Temur");
     expect(String(calls[0]?.payload.text)).not.toContain("СКРЫТА");
 
-    // Case B: Subscription is EXPIRED -> Notification masks contact and shows alert
     transport.clear();
     await prisma.subscription.update({
       where: { botId },

@@ -3,6 +3,11 @@ import type { PrismaClient, Bot as BotModel, Subscription } from "@prisma/client
 import type { BotPool } from "./bot-pool.js";
 import type { Logger } from "../core/logger.js";
 import type { PlatformBotContext, ResolvedBot } from "./types.js";
+import {
+  classifyTelegramError,
+  handleBotTelegramError,
+  type TelegramErrorKind,
+} from "../bots/shared/telegram-errors.js";
 
 type BotWithSubscription = BotModel & {
   subscription: Subscription | null;
@@ -25,6 +30,7 @@ export class PollingManager {
   private readonly activePollers = new Map<string, Bot<PlatformBotContext>>();
   private readonly desiredBots = new Set<string>();
   private readonly failedBots = new Set<string>();
+  private readonly lastErrors = new Map<string, { kind: TelegramErrorKind; message: string }>();
   private readonly retryAttempts = new Map<string, number>();
   private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -42,6 +48,10 @@ export class PollingManager {
 
   isConnected(botId: string): boolean {
     return this.activePollers.get(botId)?.isRunning() ?? false;
+  }
+
+  getLastError(botId: string): { kind: TelegramErrorKind; message: string } | undefined {
+    return this.lastErrors.get(botId);
   }
 
   get runningCount(): number {
@@ -76,16 +86,37 @@ export class PollingManager {
     this.botPool.evict(botId);
     this.clearRetryTimer(botId);
 
+    const classified = classifyTelegramError(err);
+    this.lastErrors.set(botId, { kind: classified.kind, message: classified.description });
+    void handleBotTelegramError({
+      prisma: this.prisma,
+      botId,
+      classified,
+      logger: this.logger,
+    });
+
+    if (classified.kind === "INVALID_TOKEN") {
+      this.logger.error(
+        { botId, err: classified.description },
+        "Bot polling stopped permanently due to INVALID_TOKEN (401)",
+      );
+      return;
+    }
+
     const attempt = (this.retryAttempts.get(botId) ?? 0) + 1;
     this.retryAttempts.set(botId, attempt);
-    const delayMs = Math.min(this.retryBaseDelayMs * 2 ** (attempt - 1), this.retryMaxDelayMs);
+    const computedDelay =
+      classified.kind === "RATE_LIMITED" && classified.retryAfterMs
+        ? classified.retryAfterMs
+        : Math.min(this.retryBaseDelayMs * 2 ** (attempt - 1), this.retryMaxDelayMs);
 
     this.logger.error(
       {
         botId,
         attempt,
-        retryInMs: delayMs,
-        err: err instanceof Error ? err.message : String(err),
+        errorKind: classified.kind,
+        retryInMs: computedDelay,
+        err: classified.description,
       },
       "Bot long polling encountered fatal error or stopped; scheduling restart",
     );
@@ -96,7 +127,7 @@ export class PollingManager {
       void this.start(botId).catch((restartErr: unknown) => {
         this.scheduleRestart(botId, restartErr);
       });
-    }, delayMs);
+    }, computedDelay);
     timer.unref?.();
     this.retryTimers.set(botId, timer);
   }
@@ -133,6 +164,7 @@ export class PollingManager {
     if (!botRecord || !botRecord.isActive) {
       this.desiredBots.delete(botId);
       this.failedBots.delete(botId);
+      this.lastErrors.delete(botId);
       this.retryAttempts.delete(botId);
       this.clearRetryTimer(botId);
       this.logger.warn(
@@ -148,6 +180,7 @@ export class PollingManager {
   async stop(botId: string): Promise<boolean> {
     this.desiredBots.delete(botId);
     this.failedBots.delete(botId);
+    this.lastErrors.delete(botId);
     this.retryAttempts.delete(botId);
     this.clearRetryTimer(botId);
 
@@ -173,6 +206,7 @@ export class PollingManager {
     }
     this.desiredBots.clear();
     this.failedBots.clear();
+    this.lastErrors.clear();
     this.retryAttempts.clear();
 
     const botIds = Array.from(this.activePollers.keys());
@@ -196,7 +230,6 @@ export class PollingManager {
       botTokenHash: botRecord.botTokenHash,
       webhookSecret: botRecord.webhookSecret,
       botUsername: botRecord.botUsername,
-      adminInviteCode: botRecord.adminInviteCode,
       settings: (botRecord.settings ?? {}) as Record<string, unknown>,
       subscriptionStatus: botRecord.subscription?.status ?? "TRIAL",
       trialEndsAt: botRecord.subscription?.trialEndsAt.toISOString() ?? new Date().toISOString(),
@@ -208,6 +241,11 @@ export class PollingManager {
     try {
       await bot.api.deleteWebhook({ drop_pending_updates: false });
     } catch (err) {
+      const classified = classifyTelegramError(err);
+      if (classified.kind === "INVALID_TOKEN") {
+        this.scheduleRestart(botRecord.id, err);
+        return false;
+      }
       this.logger.warn(
         { botId: botRecord.id, err: (err as Error).message },
         "deleteWebhook failed or skipped before starting polling",
@@ -221,7 +259,14 @@ export class PollingManager {
         drop_pending_updates: false,
         onStart: (info) => {
           this.failedBots.delete(botRecord.id);
+          this.lastErrors.delete(botRecord.id);
           this.retryAttempts.delete(botRecord.id);
+          void this.prisma.bot
+            .update({
+              where: { id: botRecord.id },
+              data: { healthStatus: "OK" },
+            })
+            .catch(() => {});
           this.logger.info(
             { botId: botRecord.id, username: info.username },
             "Long polling started for bot",

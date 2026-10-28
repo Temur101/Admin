@@ -22,6 +22,7 @@ export interface CreateBookingParams {
   customerTgId?: number | bigint | null;
   customerName?: string | null;
   customerPhone: string;
+  phoneVerified?: boolean;
   serviceId: string;
   staffId: string;
   slotTime: Date | string;
@@ -50,7 +51,11 @@ export type CreateBookingResult =
   | {
       success: false;
       error:
-        "SLOT_TAKEN" | "SLOT_IN_PAST" | "OUTSIDE_HORIZON" | "NOT_IN_SCHEDULE" | "SLOT_IN_BREAK";
+        | "SLOT_TAKEN"
+        | "SLOT_IN_PAST"
+        | "OUTSIDE_HORIZON"
+        | "NOT_IN_SCHEDULE"
+        | "SLOT_IN_BREAK";
       alternativeSlots: TimeSlot[];
     };
 
@@ -67,6 +72,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     customerTgId,
     customerName,
     customerPhone,
+    phoneVerified = false,
     serviceId,
     staffId,
     slotTime,
@@ -74,14 +80,12 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     lang = "RU",
   } = params;
 
-  // 1. Normalize phone
   const parsedPhone = parseAndNormalizePhone(customerPhone);
   if (!parsedPhone.isValid || !parsedPhone.normalized) {
     return { success: false, error: "INVALID_PHONE" };
   }
   const normalizedPhone = parsedPhone.normalized;
 
-  // 2. Validate service and staff in config
   const service = config.services.find((s) => s.id === serviceId);
   if (!service) {
     return { success: false, error: "SERVICE_NOT_FOUND" };
@@ -97,7 +101,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
   const staffName = lang === "UZ" ? staff.name.uz : staff.name.ru;
   const dateStr = getTashkentTimeParts(slotDate).dateStr;
 
-  // 3. Check slot business eligibility (schedule, duration, break, past, horizon, compatibility)
   const eligibility = validateBookingSlotEligibility({
     config,
     service,
@@ -133,13 +136,10 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
   const endTime = new Date(slotDate.getTime() + service.durationMin * 60000);
 
   try {
-    // 4. Insert booking in Prisma interactive transaction with PostgreSQL resource advisory lock
     const booking = await prisma.$transaction(
       async (tx) => {
-        // Advisory transaction lock serializes concurrent bookings for this specific staff on this bot
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${staffId}`}));`;
 
-        // Check for ANY overlapping active booking: [slotDate, endTime) overlaps [b.slotTime, b.endTime)
         const existing = await tx.booking.findFirst({
           where: {
             botId,
@@ -151,7 +151,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
         });
 
         if (existing) {
-          // Idempotent retry: if same customerTgId and exact same slotTime
           if (
             customerTgId != null &&
             existing.customerTgId === BigInt(customerTgId) &&
@@ -170,6 +169,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
             customerTgId: customerTgId != null ? BigInt(customerTgId) : null,
             customerName: customerName ?? null,
             customerPhone: normalizedPhone,
+            phoneVerified,
             serviceId,
             serviceName,
             staffId,
@@ -184,7 +184,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       { maxWait: 15000, timeout: 20000 },
     );
 
-    // 5. Release Redis lock for this slot safely (if user had lock)
     if (customerTgId != null) {
       await releaseSlotLock(redis, {
         botId,
@@ -197,13 +196,11 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       }).catch(() => {});
     }
 
-    // 6. Schedule 2-hour reminder in Redis ZSET
     const reminderScore = slotDate.getTime() - REMINDER_LEAD_TIME_MS;
     await redis.zadd(REMINDER_ZSET_KEY, reminderScore, booking.id).catch((err) => {
       logger.warn({ err: (err as Error).message }, "Could not schedule reminder in Redis");
     });
 
-    // 7. Notify admins
     const timeFormatted = formatTashkentDateTime(slotDate);
     await notifyAdmins(
       botId,
@@ -211,6 +208,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
         kind: "BOOKING",
         name: customerName,
         phone: normalizedPhone,
+        phoneVerified,
         service: serviceName,
         staff: staffName,
         time: timeFormatted,
@@ -305,12 +303,10 @@ export async function cancelBooking(
     return { success: false, error: "NOT_FOUND" };
   }
 
-  // Must match current bot if botId specified
   if (opts.botId && booking.botId !== opts.botId) {
     return { success: false, error: "FORBIDDEN" };
   }
 
-  // Must match booking owner or bot admin
   if (opts.userId !== undefined && opts.userId !== null && opts.userId !== 0) {
     const isOwner = booking.customerTgId === BigInt(opts.userId);
     if (!isOwner && !opts.isAdmin) {
@@ -318,7 +314,6 @@ export async function cancelBooking(
     }
   }
 
-  // Safe idempotent return if already cancelled
   if (booking.status === "CANCELLED") {
     return { success: true, booking, alreadyCancelled: true };
   }
@@ -331,7 +326,6 @@ export async function cancelBooking(
     },
   });
 
-  // Remove from reminders ZSET
   await redis.zrem(REMINDER_ZSET_KEY, opts.bookingId).catch(() => {});
 
   return { success: true, booking: updated, alreadyCancelled: false };

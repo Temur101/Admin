@@ -39,7 +39,6 @@ export function registerBotsRoutes(
     return b;
   }
 
-  // GET /api/v1/bots - List bots with stats
   app.get(
     "/api/v1/bots",
     { preHandler: [authenticateAdmin] },
@@ -63,7 +62,10 @@ export function registerBotsRoutes(
           botType: b.botType,
           botUsername: b.botUsername,
           isActive: b.isActive,
-          adminInviteCode: b.adminInviteCode,
+          healthStatus: b.healthStatus,
+          lastErrorCode: b.lastErrorCode,
+          lastErrorMsg: b.lastErrorMsg,
+          lastErrorAt: b.lastErrorAt?.toISOString() ?? null,
           createdAt: b.createdAt.toISOString(),
           subscription: b.subscription
             ? {
@@ -84,7 +86,6 @@ export function registerBotsRoutes(
     },
   );
 
-  // GET /api/v1/bots/:id - Bot details
   app.get<{ Params: BotParams }>(
     "/api/v1/bots/:id",
     { preHandler: [authenticateAdmin] },
@@ -116,10 +117,11 @@ export function registerBotsRoutes(
           botType: bot.botType,
           botUsername: bot.botUsername,
           isActive: bot.isActive,
-          adminInviteCode: bot.adminInviteCode,
-          inviteLink: bot.botUsername
-            ? `https://t.me/${bot.botUsername}?start=adm_${bot.adminInviteCode}`
-            : null,
+          healthStatus: bot.healthStatus,
+          lastErrorCode: bot.lastErrorCode,
+          lastErrorMsg: bot.lastErrorMsg,
+          lastErrorAt: bot.lastErrorAt?.toISOString() ?? null,
+          inviteLink: null,
           settings: bot.settings,
           createdAt: bot.createdAt.toISOString(),
           subscription: bot.subscription
@@ -133,6 +135,9 @@ export function registerBotsRoutes(
             tgId: u.tgId.toString(),
             firstName: u.firstName,
             username: u.username,
+            role: u.role ?? "OWNER",
+            receivesLeads: u.receivesLeads,
+            unreachableAt: u.unreachableAt?.toISOString() ?? null,
             createdAt: u.createdAt.toISOString(),
           })),
           stats: {
@@ -147,7 +152,6 @@ export function registerBotsRoutes(
     },
   );
 
-  // POST /api/v1/bots - Register and connect bot
   app.post(
     "/api/v1/bots",
     { preHandler: [authenticateAdmin] },
@@ -195,6 +199,8 @@ export function registerBotsRoutes(
       const botTokenEnc = encryptSecret(botToken, env.TOKEN_ENCRYPTION_KEY);
       const webhookSecret = randomBytes(32).toString("hex");
       const adminInviteCode = randomBytes(16).toString("hex");
+      const inviteCodeHash = sha256Hex(adminInviteCode);
+      const inviteExpiresAt = new Date(Date.now() + 24 * 3600 * 1000);
 
       const trialDays = env.TRIAL_DAYS_DEFAULT;
       const trialEndsAt = new Date(Date.now() + trialDays * 86400 * 1000);
@@ -208,7 +214,6 @@ export function registerBotsRoutes(
             botTokenHash,
             webhookSecret,
             botUsername,
-            adminInviteCode,
             settings: initialSettings,
             isActive: !startPaused,
           },
@@ -219,6 +224,15 @@ export function registerBotsRoutes(
             botId: createdBot.id,
             status: "TRIAL",
             trialEndsAt,
+          },
+        });
+
+        await tx.adminInvite.create({
+          data: {
+            botId: createdBot.id,
+            role: "OWNER",
+            codeHash: inviteCodeHash,
+            expiresAt: inviteExpiresAt,
           },
         });
 
@@ -271,7 +285,8 @@ export function registerBotsRoutes(
           botType: bot.botType,
           botUsername: bot.botUsername,
           isActive: bot.isActive,
-          adminInviteCode: bot.adminInviteCode,
+          adminInviteCode,
+          inviteExpiresAt: inviteExpiresAt.toISOString(),
           inviteLink: botUsername
             ? `https://t.me/${botUsername}?start=adm_${adminInviteCode}`
             : null,
@@ -282,11 +297,8 @@ export function registerBotsRoutes(
     },
   );
 
-  // Register bot lifecycle routes (suspend, resume, purge, reissue-invite)
   registerBotsLifecycleRoutes(app, prisma, tenantResolver, logger, getBotInstance, pollingManager);
-
-  // Register operations and diagnostic routes (admins, extend, unblock, health, webhooks)
-  registerBotsOpsRoutes(app, prisma, tenantResolver, getBotInstance, pollingManager);
+  registerBotsOpsRoutes(app, prisma, tenantResolver, getBotInstance, pollingManager, redis);
   registerBotsSubscriptionRoutes(app, prisma, tenantResolver);
   registerBotsResetRoutes(app, prisma, redis, {
     tenantResolver,

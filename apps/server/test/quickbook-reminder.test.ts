@@ -53,7 +53,6 @@ describe("QuickBook Booking Reminder Worker Tests", () => {
         botTokenEnc: encryptSecret(botToken, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(botToken),
         webhookSecret: "secret_remind",
-        adminInviteCode: "remind_invite",
         settings: {
           resourceType: "STAFF",
           resourceLabel: { ru: "Мастер", uz: "Usta" },

@@ -72,7 +72,6 @@ describe("B06: Resilient Booking Reminders & Recovery", () => {
         botTokenEnc: encryptSecret(botToken, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(botToken),
         webhookSecret: "secret_b06_remind",
-        adminInviteCode: "b06_invite",
         subscription: {
           create: {
             status: "TRIAL",

@@ -56,7 +56,6 @@ describe("Subscription Worker Integration & Concurrency", () => {
         botTokenEnc: encryptSecret(token, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(token),
         webhookSecret: "secret_worker_1",
-        adminInviteCode: "adm_worker_1",
         subscription: {
           create: {
             status: "TRIAL",
@@ -115,7 +114,6 @@ describe("Subscription Worker Integration & Concurrency", () => {
         botTokenEnc: encryptSecret(token, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(token),
         webhookSecret: "secret_worker_2",
-        adminInviteCode: "adm_worker_2",
         subscription: {
           create: {
             status: "ACTIVE",

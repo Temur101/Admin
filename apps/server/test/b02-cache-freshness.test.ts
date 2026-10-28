@@ -1,5 +1,11 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { connectRedis, encryptSecret, MockTelegramTransport, type Redis } from "../src/index.js";
+import {
+  connectRedis,
+  encryptSecret,
+  sha256Hex,
+  MockTelegramTransport,
+  type Redis,
+} from "../src/index.js";
 import { env } from "../src/core/env.js";
 import { logger } from "../src/core/logger.js";
 import { BotPool, extractTelegramBotId, normalizeBotUsername } from "../src/gateway/bot-pool.js";
@@ -92,13 +98,19 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
         botTokenHash,
         webhookSecret: "secret_b02_test",
         botUsername: "@b02_test_bot",
-        adminInviteCode: INITIAL_INVITE_CODE,
         settings: { welcomeMessage: "Welcome v1" },
         subscription: {
           create: {
             status: "ACTIVE",
             trialEndsAt: new Date(Date.now() + 86400000 * 30),
             paidUntil: new Date(Date.now() + 86400000 * 30),
+          },
+        },
+        invites: {
+          create: {
+            codeHash: sha256Hex(INITIAL_INVITE_CODE),
+            role: "OWNER",
+            expiresAt: new Date(Date.now() + 86400000),
           },
         },
       },
@@ -167,10 +179,9 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     expect(userB).toBeNull();
   });
 
-  it("3. should invalidate and reflect regenerated adminInviteCode in the same process", async () => {
-    // Warm up cache layer 1 (Redis) and layer 2 (BotPool)
+  it("3. should invalidate single-use invite and accept newly generated invite in the same process", async () => {
     const initialMeta = await tenantResolver.resolve(botTokenHash);
-    expect(initialMeta?.adminInviteCode).toBe(INITIAL_INVITE_CODE);
+    expect(initialMeta).not.toBeNull();
 
     // User A registers with initial invite code -> becomes admin
     await botPool.handleUpdate(initialMeta!, {
@@ -189,21 +200,22 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     });
     expect(userA?.isAdmin).toBe(true);
 
-    // Admin regenerates invite code in PostgreSQL
+    // Admin creates a new invite code in PostgreSQL
     const NEW_INVITE_CODE = "regenerated_code_999";
-    await prisma.bot.update({
-      where: { id: botId },
-      data: { adminInviteCode: NEW_INVITE_CODE },
+    await prisma.adminInvite.create({
+      data: {
+        botId,
+        codeHash: sha256Hex(NEW_INVITE_CODE),
+        role: "STAFF",
+        expiresAt: new Date(Date.now() + 86400000),
+      },
     });
 
-    // Invalidate caches (Redis + BotPool) after commit
     await tenantResolver.invalidate(botTokenHash, botId);
-
-    // Fetch fresh metadata in same process
     const freshMeta = await tenantResolver.resolve(botTokenHash);
-    expect(freshMeta?.adminInviteCode).toBe(NEW_INVITE_CODE);
+    expect(freshMeta).not.toBeNull();
 
-    // User B tries OLD invite code -> MUST BE REJECTED (user created but isAdmin false)
+    // User B tries OLD used invite code -> MUST BE REJECTED (user created but isAdmin false)
     await botPool.handleUpdate(freshMeta!, {
       update_id: 202,
       message: {
@@ -237,10 +249,10 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       where: { botId_tgId: { botId, tgId: BigInt(USER_B_ID) } },
     });
     expect(userB?.isAdmin).toBe(true);
+    expect(userB?.role).toBe("STAFF");
   });
 
   it("4. should immediately reflect subscription expiration and mask leads without process restart", async () => {
-    // Create lead for this bot
     await prisma.lead.create({
       data: {
         botId,
@@ -251,7 +263,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       },
     });
 
-    // Add User A as active admin
     await prisma.botUser.create({
       data: {
         botId,
@@ -261,11 +272,9 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       },
     });
 
-    // Warm up cache: active subscription
     const activeMeta = await tenantResolver.resolve(botTokenHash);
     expect(activeMeta?.subscriptionStatus).toBe("ACTIVE");
 
-    // Admin asks for leads via admin:leads callback
     await botPool.handleUpdate(activeMeta!, {
       update_id: 301,
       callback_query: {
@@ -276,27 +285,22 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       },
     });
 
-    // Under ACTIVE subscription, data is NOT masked
     let sentMessages = getSentMessages(transport, USER_A_ID);
     expect(sentMessages.length).toBeGreaterThan(0);
     let leadsText = sentMessages[sentMessages.length - 1]!.text;
     expect(leadsText).toContain("Alexandr Petrov");
     expect(leadsText).toContain("+998901234567");
 
-    // Now subscription expires in database
     await prisma.subscription.update({
       where: { botId },
       data: { status: "EXPIRED" },
     });
 
-    // Invalidate cache after DB commit
     await tenantResolver.invalidate(botTokenHash, botId);
 
-    // Resolve in SAME process
     const expiredMeta = await tenantResolver.resolve(botTokenHash);
     expect(expiredMeta?.subscriptionStatus).toBe("EXPIRED");
 
-    // Admin requests leads again in the SAME process
     await botPool.handleUpdate(expiredMeta!, {
       update_id: 302,
       callback_query: {
@@ -307,7 +311,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       },
     });
 
-    // Under EXPIRED subscription, data MUST be masked!
     sentMessages = getSentMessages(transport, USER_A_ID);
     leadsText = sentMessages[sentMessages.length - 1]!.text;
     expect(leadsText).not.toContain("Alexandr Petrov");
@@ -315,7 +318,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     expect(leadsText).toContain("***");
     expect(leadsText).toContain("+998 90 *** ** 67");
 
-    // Now renew subscription back to ACTIVE in database
     await prisma.subscription.update({
       where: { botId },
       data: { status: "ACTIVE" },
@@ -325,7 +327,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     const renewedMeta = await tenantResolver.resolve(botTokenHash);
     expect(renewedMeta?.subscriptionStatus).toBe("ACTIVE");
 
-    // Admin requests leads again in same process -> UNMASKED
     await botPool.handleUpdate(renewedMeta!, {
       update_id: 303,
       callback_query: {
@@ -343,11 +344,9 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
   });
 
   it("5. should update bot settings and apply new quiz scenario dynamically in the same process", async () => {
-    // 1. Initial quiz update: default scenario asks default question
     const initialMeta = await tenantResolver.resolve(botTokenHash);
     expect(initialMeta).not.toBeNull();
 
-    // Set user language so flow starts directly
     await prisma.botUser.create({
       data: {
         botId,
@@ -370,10 +369,8 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
 
     let sent = getSentMessages(transport, USER_A_ID);
     expect(sent.length).toBeGreaterThan(0);
-    // Default question contains "Какая услуга вас интересует?"
     expect(sent[sent.length - 1]!.text).toContain("услуга вас интересует");
 
-    // 2. Update bot settings with custom quiz in PostgreSQL matching QuizConfig DAG (min 3 steps)
     const customQuiz = {
       startNodeId: "q_custom_1",
       nodes: [
@@ -428,14 +425,11 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       },
     });
 
-    // Invalidate cache
     await tenantResolver.invalidate(botTokenHash, botId);
 
-    // Resolve in same process
     const updatedMeta = await tenantResolver.resolve(botTokenHash);
     expect(updatedMeta?.settings).toBeDefined();
 
-    // Reset user session in Redis so quiz can start cleanly
     await redis.del(`sess:${botId}:${USER_B_ID}`);
     await prisma.botUser.create({
       data: {
@@ -446,7 +440,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       },
     });
 
-    // Start quiz for User B in SAME process
     await botPool.handleUpdate(updatedMeta!, {
       update_id: 402,
       message: {
@@ -460,7 +453,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
 
     sent = getSentMessages(transport, USER_B_ID);
     expect(sent.length).toBeGreaterThan(0);
-    // MUST display the new custom question immediately!
     expect(sent[sent.length - 1]!.text).toContain("Какой тип ремонта вам требуется?");
   });
 
@@ -468,7 +460,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     const meta = await tenantResolver.resolve(botTokenHash);
     expect(meta).not.toBeNull();
 
-    // Create 10 concurrent requests from different users
     const userIds = Array.from({ length: 10 }, (_, i) => 8000 + i);
 
     for (const uid of userIds) {
@@ -482,7 +473,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       });
     }
 
-    // Run 10 updates concurrently through botPool.handleUpdate
     const promises = userIds.map((uid, idx) =>
       botPool.handleUpdate(meta!, {
         update_id: 500 + idx,
@@ -498,7 +488,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
 
     await Promise.all(promises);
 
-    // Verify all 10 users received responses addressed strictly to their own chat IDs
     for (const uid of userIds) {
       const messages = getSentMessages(transport, uid);
       expect(messages.length).toBeGreaterThan(0);
@@ -507,7 +496,6 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
   });
 
   it("7. should gracefully handle Redis invalidation and read failures by falling back to DB", async () => {
-    // 1. Invalidation failure: Redis del throws
     const badRedis = {
       ...redis,
       del: async () => {
@@ -522,10 +510,8 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
       logger,
     });
 
-    // Invalidation failure MUST NOT crash the process
     await expect(failingResolver.invalidate(botTokenHash, botId)).resolves.not.toThrow();
 
-    // 2. Read failure: Redis get throws -> falls back to DB
     const failingReadRedis = {
       ...redis,
       get: async () => {
@@ -544,6 +530,5 @@ describe("B02: Cache Freshness & Metadata Invalidation", () => {
     const resolved = await readFailingResolver.resolve(botTokenHash);
     expect(resolved).not.toBeNull();
     expect(resolved?.id).toBe(botId);
-    expect(resolved?.adminInviteCode).toBe(INITIAL_INVITE_CODE);
   });
 });

@@ -1,4 +1,6 @@
-import type { BotUser, Lang, PrismaClient } from "@prisma/client";
+import type { BotAdminRole, BotUser, Lang, PrismaClient } from "@prisma/client";
+import { sha256Hex } from "../../core/crypto.js";
+import { can, type BotAdminAction } from "./permissions.js";
 
 export interface UpsertBotUserParams {
   botId: string;
@@ -6,21 +8,64 @@ export interface UpsertBotUserParams {
   firstName?: string | null;
   username?: string | null;
   inviteCode?: string | null;
-  expectedInviteCode?: string | null;
+}
+
+export interface UpsertBotUserResult {
+  user: BotUser;
+  newlyBecameAdmin: boolean;
+  grantedRole: BotAdminRole | null;
+  inviteRejected: boolean;
 }
 
 export async function upsertBotUser(
   prisma: PrismaClient,
   params: UpsertBotUserParams,
-): Promise<{ user: BotUser; newlyBecameAdmin: boolean }> {
+): Promise<UpsertBotUserResult> {
   const tgIdBig = BigInt(params.tgId);
-  const isInviteMatch =
-    Boolean(params.inviteCode) &&
-    Boolean(params.expectedInviteCode) &&
-    params.inviteCode === params.expectedInviteCode;
+  const rawInvite = params.inviteCode?.trim() || null;
 
-  try {
-    const existing = await prisma.botUser.findUnique({
+  const execute = async (tx: PrismaClient): Promise<UpsertBotUserResult> => {
+    let grantedRole: BotAdminRole | null = null;
+    let inviteRejected = false;
+
+    if (rawInvite) {
+      const now = new Date();
+      const codeHash = sha256Hex(rawInvite);
+      const invite = await tx.adminInvite?.findUnique({
+        where: { codeHash },
+      });
+
+      if (
+        invite &&
+        invite.botId === params.botId &&
+        !invite.revokedAt &&
+        !invite.usedAt &&
+        invite.expiresAt.getTime() > now.getTime()
+      ) {
+        const claimed = await tx.adminInvite.updateMany({
+          where: {
+            id: invite.id,
+            botId: params.botId,
+            revokedAt: null,
+            usedAt: null,
+            expiresAt: { gt: now },
+          },
+          data: {
+            usedAt: now,
+            usedByTgId: tgIdBig,
+          },
+        });
+        if (claimed.count === 1) {
+          grantedRole = invite.role;
+        } else {
+          inviteRejected = true;
+        }
+      } else {
+        inviteRejected = true;
+      }
+    }
+
+    const existing = await tx.botUser.findUnique({
       where: {
         botId_tgId: {
           botId: params.botId,
@@ -30,21 +75,32 @@ export async function upsertBotUser(
     });
 
     if (!existing) {
-      const user = await prisma.botUser.create({
+      const isAdmin = Boolean(grantedRole);
+      const user = await tx.botUser.create({
         data: {
           botId: params.botId,
           tgId: tgIdBig,
           firstName: params.firstName ?? null,
           username: params.username ?? null,
-          isAdmin: isInviteMatch,
+          isAdmin,
+          role: grantedRole,
+          receivesLeads: true,
+          unreachableAt: null,
         },
       });
-      return { user, newlyBecameAdmin: isInviteMatch };
+      return {
+        user,
+        newlyBecameAdmin: isAdmin,
+        grantedRole,
+        inviteRejected,
+      };
     }
 
-    // Update profile and promote to admin if valid invite code provided
-    const shouldPromote = isInviteMatch && !existing.isAdmin;
-    const user = await prisma.botUser.update({
+    const shouldPromote = Boolean(grantedRole);
+    const nextIsAdmin = shouldPromote ? true : existing.isAdmin;
+    const nextRole = grantedRole ?? (existing.isAdmin ? (existing.role ?? "OWNER") : null);
+
+    const user = await tx.botUser.update({
       where: {
         botId_tgId: {
           botId: params.botId,
@@ -54,13 +110,26 @@ export async function upsertBotUser(
       data: {
         firstName: params.firstName ?? existing.firstName,
         username: params.username ?? existing.username,
-        isAdmin: shouldPromote ? true : existing.isAdmin,
+        isAdmin: nextIsAdmin,
+        role: nextRole,
+        unreachableAt: null,
       },
     });
 
-    return { user, newlyBecameAdmin: shouldPromote };
+    return {
+      user,
+      newlyBecameAdmin: shouldPromote && (!existing.isAdmin || existing.role !== grantedRole),
+      grantedRole,
+      inviteRejected,
+    };
+  };
+
+  try {
+    if (typeof prisma.$transaction === "function") {
+      return await prisma.$transaction(async (tx) => execute(tx as unknown as PrismaClient));
+    }
+    return await execute(prisma);
   } catch {
-    // Graceful fallback for synthetic/unpersisted test bots
     return {
       user: {
         id: "00000000-0000-0000-0000-000000000000",
@@ -69,10 +138,15 @@ export async function upsertBotUser(
         firstName: params.firstName ?? null,
         username: params.username ?? null,
         lang: null,
-        isAdmin: isInviteMatch,
+        isAdmin: false,
+        role: null,
+        receivesLeads: true,
+        unreachableAt: null,
         createdAt: new Date(),
       },
-      newlyBecameAdmin: isInviteMatch,
+      newlyBecameAdmin: false,
+      grantedRole: null,
+      inviteRejected: Boolean(rawInvite),
     };
   }
 }
@@ -94,11 +168,11 @@ export async function setUserLanguage(
   });
 }
 
-export async function isActualBotAdmin(
+export async function getBotAdminUser(
   prisma: PrismaClient,
   botId: string,
   tgId: number | bigint,
-): Promise<boolean> {
+): Promise<BotUser | null> {
   try {
     const user = await prisma.botUser.findUnique({
       where: {
@@ -107,11 +181,26 @@ export async function isActualBotAdmin(
           tgId: BigInt(tgId),
         },
       },
-      select: { isAdmin: true },
     });
-    return Boolean(user?.isAdmin);
+    if (!user?.isAdmin) return null;
+    return {
+      ...user,
+      role: user.role ?? "OWNER",
+      receivesLeads: user.receivesLeads ?? true,
+    };
   } catch {
-    return false;
+    return null;
   }
 }
 
+export async function isActualBotAdmin(
+  prisma: PrismaClient,
+  botId: string,
+  tgId: number | bigint,
+  action?: BotAdminAction,
+): Promise<boolean> {
+  const admin = await getBotAdminUser(prisma, botId, tgId);
+  if (!admin) return false;
+  if (!action) return true;
+  return can(admin, action);
+}

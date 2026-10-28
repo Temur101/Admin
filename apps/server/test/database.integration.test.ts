@@ -31,7 +31,6 @@ describe("Database Integration & Schema Constraints", () => {
         botTokenEnc: "enc_token_1",
         botTokenHash: "duplicate_hash_test_123",
         webhookSecret: "secret_1",
-        adminInviteCode: "code_1",
       },
     });
 
@@ -43,7 +42,6 @@ describe("Database Integration & Schema Constraints", () => {
           botTokenEnc: "enc_token_2",
           botTokenHash: "duplicate_hash_test_123",
           webhookSecret: "secret_2",
-          adminInviteCode: "code_2",
         },
       }),
     ).rejects.toThrow();
@@ -64,7 +62,6 @@ describe("Database Integration & Schema Constraints", () => {
         botTokenEnc: "enc_token",
         botTokenHash: "quickbook_hash_test",
         webhookSecret: "secret",
-        adminInviteCode: "invite_code_qb",
       },
     });
 
@@ -139,7 +136,6 @@ describe("Database Integration & Schema Constraints", () => {
         botTokenEnc: "enc_token_cascade",
         botTokenHash: "cascade_hash_test",
         webhookSecret: "secret_cascade",
-        adminInviteCode: "cascade_invite",
       },
     });
 

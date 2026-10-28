@@ -28,7 +28,6 @@ let transport: MockTelegramTransport;
 let botPool: BotPool;
 
 const BOT_TOKEN = "123456789:PaymentTestBotToken";
-const ADMIN_INVITE_CODE = "adm_pay_test_code";
 const ADMIN_TG_ID = 888001;
 
 describe("Stage 6: Payment and Receipts Integration Tests", () => {
@@ -66,7 +65,6 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
         botTokenEnc,
         botTokenHash: sha256Hex(BOT_TOKEN),
         webhookSecret: "secret_payment_123",
-        adminInviteCode: ADMIN_INVITE_CODE,
         subscription: {
           create: {
             status: "TRIAL",
@@ -98,7 +96,6 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       botTokenHash: bot.botTokenHash,
       webhookSecret: bot.webhookSecret,
       botUsername: "payment_test_bot",
-      adminInviteCode: bot.adminInviteCode,
       settings: {},
       subscriptionStatus: "TRIAL",
       trialEndsAt: bot.subscription?.trialEndsAt.toISOString() ?? new Date().toISOString(),

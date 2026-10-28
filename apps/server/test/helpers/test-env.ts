@@ -90,6 +90,7 @@ export async function safeCleanTestDb(prisma: PrismaClient): Promise<void> {
   await prisma.booking.deleteMany();
   await prisma.lead.deleteMany();
   await prisma.paymentReceipt.deleteMany();
+  await prisma.adminInvite.deleteMany();
   await prisma.botUser.deleteMany();
   await prisma.subscription.deleteMany();
   await prisma.bot.deleteMany();
