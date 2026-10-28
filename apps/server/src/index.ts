@@ -1,9 +1,9 @@
-import Fastify, { type FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import sensible from "@fastify/sensible";
 import { env, type Env } from "./core/env.js";
 import { prisma } from "./core/prisma.js";
-import { logger } from "./core/logger.js";
+import { buildFastifyLoggerOptions, logger, sanitizeLogUrl } from "./core/logger.js";
 import { connectRedis, createRedisClient, type Redis } from "./core/redis.js";
 import {
   createTelegramTransport,
@@ -24,7 +24,7 @@ import {
 import { registerAdminApi } from "./admin-api/index.js";
 
 export { prisma };
-export { logger };
+export { logger, sanitizeLogUrl, buildFastifyLoggerOptions };
 export { env, type Env };
 export type { FastifyInstance };
 export * from "./core/crypto.js";
@@ -64,9 +64,7 @@ export interface AppOptions {
 
 export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: {
-      level: env.LOG_LEVEL,
-    },
+    logger: buildFastifyLoggerOptions(env.LOG_LEVEL),
   });
 
   await app.register(sensible);
@@ -166,7 +164,6 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
 
   app.decorate("pollingManager", pollingManager);
 
-  // Background workers scheduler
   const scheduler = new BackgroundWorkerScheduler({
     prisma: appPrisma,
     redis: appRedis,
@@ -187,17 +184,13 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
   app.decorate("scheduler", scheduler);
   app.decorate("inboxService", inboxService);
 
-  // Health checks:
-  // Liveness probe
-  app.get("/health/live", async () => {
-    return {
-      status: "ok" as const,
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-    };
-  });
+  app.get("/health/live", async () => ({
+    status: "ok" as const,
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  }));
 
-  const checkReadiness = async () => {
+  const handleReadiness = async (_req: FastifyRequest, reply: FastifyReply) => {
     let dbStatus: "connected" | "error" = "connected";
     let redisStatus: "connected" | "error" = "connected";
     let healthy = true;
@@ -220,60 +213,38 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
       healthy = false;
     }
 
-    return { healthy, dbStatus, redisStatus };
+    const activePm = (app as unknown as { pollingManager?: PollingManager }).pollingManager;
+    const pollingStatus: "ok" | "error" =
+      activePm && !activePm.isHealthy() ? "error" : "ok";
+    if (pollingStatus === "error") {
+      healthy = false;
+    }
+
+    const dependencies = {
+      database: dbStatus,
+      redis: redisStatus,
+      ...(activePm ? { polling: pollingStatus } : {}),
+    };
+
+    if (!healthy) {
+      return reply.status(503).send({
+        status: "unhealthy" as const,
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        dependencies,
+      });
+    }
+
+    return {
+      status: "ok" as const,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      dependencies,
+    };
   };
 
-  // Readiness probe
-  app.get("/health/ready", async (_req, reply) => {
-    const { healthy, dbStatus, redisStatus } = await checkReadiness();
-    if (!healthy) {
-      return reply.status(503).send({
-        status: "unhealthy" as const,
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        dependencies: {
-          database: dbStatus,
-          redis: redisStatus,
-        },
-      });
-    }
-
-    return {
-      status: "ok" as const,
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      dependencies: {
-        database: dbStatus,
-        redis: redisStatus,
-      },
-    };
-  });
-
-  // Standard health endpoint
-  app.get("/health", async (_req, reply) => {
-    const { healthy, dbStatus, redisStatus } = await checkReadiness();
-    if (!healthy) {
-      return reply.status(503).send({
-        status: "unhealthy" as const,
-        timestamp: new Date().toISOString(),
-        uptime: process.uptime(),
-        dependencies: {
-          database: dbStatus,
-          redis: redisStatus,
-        },
-      });
-    }
-
-    return {
-      status: "ok" as const,
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      dependencies: {
-        database: dbStatus,
-        redis: redisStatus,
-      },
-    };
-  });
+  app.get("/health/ready", handleReadiness);
+  app.get("/health", handleReadiness);
 
   app.addHook("onClose", async () => {
     if (pollingManager) {

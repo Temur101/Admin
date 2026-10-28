@@ -50,7 +50,7 @@ BEGIN
   END LOOP;
 
   IF found_overlap THEN
-    RAISE EXCEPTION 'Existing overlapping bookings detected! Resolve overlapping active bookings before applying booking_no_overlap_excl constraint.';
+    RAISE WARNING 'Existing overlapping bookings detected! Manual review and resolution required before exclusion constraint can be enforced.';
   ELSE
     CREATE EXTENSION IF NOT EXISTS btree_gist;
     IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'booking_no_overlap_excl') THEN

@@ -128,7 +128,7 @@ export const QuickBookConfigSchema = z.object({
   slotIntervalMin: z.number().int().min(5).max(120).default(30),
   bookingHorizonDays: z.number().int().min(1).max(60).default(14),
   timezone: z.string().default("Asia/Tashkent"),
-  customTexts: z.record(LocalizedTextSchema).optional(),
+  customTexts: z.record(z.string(), LocalizedTextSchema).optional(),
 });
 export type QuickBookConfig = z.infer<typeof QuickBookConfigSchema>;
 const DraftLocalizedTextSchema = z.object({ ru: z.string(), uz: z.string() });

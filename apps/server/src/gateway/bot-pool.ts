@@ -200,6 +200,18 @@ export class BotPool {
 
     registerNavigationFallback(bot, navigation);
 
+    // Prevent unhandled errors in update handlers from crashing the Grammy long polling loop
+    bot.catch((err) => {
+      this.logger.error(
+        {
+          botId: resolved.id,
+          updateId: err.ctx?.update?.update_id,
+          err: err.error instanceof Error ? err.error.message : String(err.error ?? err.message),
+        },
+        "Unhandled error in bot update handler",
+      );
+    });
+
     // Cache the bot instance
     this.cache.set(resolved.id, bot);
     this.cachedTokens.set(resolved.id, resolved.botTokenEnc);

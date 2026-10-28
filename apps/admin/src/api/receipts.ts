@@ -1,5 +1,4 @@
-import { apiRequest, getStoredToken } from "./client.js";
-import type { RejectReceiptRequest } from "@lcqb/contracts";
+import { apiRequest } from "./client.js";
 
 export interface ReceiptItem {
   id: string;
@@ -14,31 +13,32 @@ export interface ReceiptItem {
   months: number;
   amount: number;
   status: "PENDING" | "APPROVED" | "REJECTED";
-  createdAt: string;
   rejectionReason?: string | null;
   reviewedAt?: string | null;
+  createdAt: string;
 }
 
-export async function getReceipts(status = "PENDING"): Promise<ReceiptItem[]> {
-  const data = await apiRequest<{ ok: true; receipts: ReceiptItem[] }>(
-    `/api/v1/receipts?status=${status}`,
+export async function getReceipts(status?: string): Promise<ReceiptItem[]> {
+  const query = status ? `?status=${encodeURIComponent(status)}` : "";
+  const res = await apiRequest<{ ok: boolean; receipts: ReceiptItem[] }>(
+    `/api/v1/receipts${query}`,
   );
-  return data.receipts;
+  return res.receipts;
 }
 
 export async function approveReceipt(id: string): Promise<void> {
-  await apiRequest(`/api/v1/receipts/${id}/approve`, { method: "POST" });
+  await apiRequest<{ ok: boolean }>(`/api/v1/receipts/${id}/approve`, {
+    method: "POST",
+  });
 }
 
-export async function rejectReceipt(id: string, payload: RejectReceiptRequest): Promise<void> {
-  await apiRequest(`/api/v1/receipts/${id}/reject`, {
+export async function rejectReceipt(id: string, data: { reason: string }): Promise<void> {
+  await apiRequest<{ ok: boolean }>(`/api/v1/receipts/${id}/reject`, {
     method: "POST",
-    body: JSON.stringify(payload),
+    body: JSON.stringify(data),
   });
 }
 
 export function getReceiptImageUrl(id: string): string {
-  const token = getStoredToken();
-  const query = token ? `?token=${encodeURIComponent(token)}` : "";
-  return `/api/v1/receipts/${id}/image${query}`;
+  return `/api/v1/receipts/${id}/image`;
 }

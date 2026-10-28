@@ -13,6 +13,8 @@ import {
   BotPool,
   TenantResolver,
   UpdateDeduplicator,
+  sanitizeLogUrl,
+  buildFastifyLoggerOptions,
   type FastifyInstance,
   type Redis,
   type ResolvedBot,
@@ -364,6 +366,27 @@ describe("Wave 2 Security, Recovery and Memory Audits", () => {
       });
       expect(res.statusCode).toBe(404);
       expect(res.json()).toEqual({ ok: false, error: "Receipt image file not found on disk" });
+    });
+
+    it("should redact query tokens and authorization headers in Fastify HTTP log serializers", () => {
+      const secretJwt = "eyJhbGciOiJIUzI1NiJ9.secretPayload.secretSignature";
+      const rawUrl = `/api/v1/receipts/123/image?token=${secretJwt}&foo=bar`;
+      const sanitized = sanitizeLogUrl(rawUrl);
+      expect(sanitized).not.toContain(secretJwt);
+      expect(sanitized).toBe("/api/v1/receipts/123/image?token=[REDACTED]&foo=bar");
+
+      const loggerOpts = buildFastifyLoggerOptions("info");
+      const reqSerializer = loggerOpts.serializers?.req;
+      expect(reqSerializer).toBeDefined();
+      const serialized = reqSerializer!({
+        method: "GET",
+        url: rawUrl,
+        host: "127.0.0.1:8000",
+        ip: "127.0.0.1",
+        socket: { remotePort: 54321 },
+      } as never);
+      expect(serialized.url).toBe("/api/v1/receipts/123/image?token=[REDACTED]&foo=bar");
+      expect(JSON.stringify(serialized)).not.toContain(secretJwt);
     });
   });
 

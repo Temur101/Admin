@@ -354,4 +354,46 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
     const updated = await prisma.booking.findUnique({ where: { id: booking.id } });
     expect(updated?.status).toBe("CANCELLED");
   });
+
+  it("4. Database enforces booking_no_overlap_excl GiST constraint against overlapping active bookings", async () => {
+    const constraints = await prisma.$queryRaw<Array<{ conname: string }>>`
+      SELECT conname FROM pg_constraint WHERE conname = 'booking_no_overlap_excl'
+    `;
+    expect(constraints.length).toBe(1);
+
+    const baseSlot = new Date("2026-11-15T10:00:00.000Z");
+    await prisma.booking.create({
+      data: {
+        botId,
+        customerTgId: BigInt(clientTgId),
+        customerName: "Клиент 1",
+        customerPhone: "+998901111111",
+        serviceId: "srv_haircut",
+        serviceName: "Мужская стрижка",
+        staffId: "staff_alisher",
+        durationMin: 60,
+        slotTime: baseSlot,
+        status: "CONFIRMED",
+      },
+    });
+
+    // Attempting to insert an overlapping active booking (10:30 - 11:15) for the same bot & staff must fail at DB level
+    const overlappingSlot = new Date("2026-11-15T10:30:00.000Z");
+    await expect(
+      prisma.booking.create({
+        data: {
+          botId,
+          customerTgId: BigInt(clientTgId + 1),
+          customerName: "Клиент 2",
+          customerPhone: "+998902222222",
+          serviceId: "srv_haircut",
+          serviceName: "Мужская стрижка",
+          staffId: "staff_alisher",
+          durationMin: 45,
+          slotTime: overlappingSlot,
+          status: "CONFIRMED",
+        },
+      }),
+    ).rejects.toThrow();
+  });
 });

@@ -436,4 +436,86 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
     const adminMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
     expect(adminMsgs).toHaveLength(0);
   });
+
+  it("6. Retries admin notification on subsequent click if first delivery failed", async () => {
+    const booking = await prisma.booking.create({
+      data: {
+        botId,
+        customerTgId: BigInt(CLIENT_ID),
+        customerName: "Артем",
+        customerPhone: "+998901234567",
+        serviceId: "srv_fade",
+        serviceName: "Стрижка Фейд",
+        staffId: "barber_timur",
+        durationMin: 45,
+        slotTime: new Date("2026-10-28T09:00:00.000Z"),
+        status: "CONFIRMED",
+      },
+    });
+
+    // Make transport fail ONLY when sending to ADMIN_ID on the first attempt
+    let failAdminSend = true;
+    const origTransformer = transport.transformerFor.bind(transport);
+    transport.transformerFor = (bId: string) => {
+      const base = origTransformer(bId);
+      return async (prev, method, payload, signal) => {
+        const p = (payload ?? {}) as Record<string, unknown>;
+        if (failAdminSend && method === "sendMessage" && p.chat_id === ADMIN_ID) {
+          throw new Error("Simulated Telegram 500 error for admin notification");
+        }
+        return base ? base(prev, method, payload, signal) : prev(method, payload, signal);
+      };
+    };
+
+    try {
+      const grammyBot = botPool.getOrCreateBot(resolvedBot);
+
+      // 1st click: admin notification fails
+      transport.clear();
+      await grammyBot.handleUpdate({
+        update_id: 8,
+        callback_query: {
+          id: "cb_confirm_retry_1",
+          from: { id: CLIENT_ID, is_bot: false, first_name: "Артем" },
+          message: {
+            message_id: 15,
+            date: 1700000000,
+            chat: { id: CLIENT_ID, type: "private", first_name: "Артем" },
+            text: "Напоминание",
+          },
+          chat_instance: "ci_6",
+          data: `book:confirm:${booking.id}`,
+        },
+      });
+
+      // Lock key should NOT remain set since delivery failed
+      expect(await redis.get(`booking:confirm_notified:${booking.id}`)).toBeNull();
+
+      // 2nd click: Telegram recovers -> admin notification succeeds!
+      failAdminSend = false;
+      transport.clear();
+      await grammyBot.handleUpdate({
+        update_id: 9,
+        callback_query: {
+          id: "cb_confirm_retry_2",
+          from: { id: CLIENT_ID, is_bot: false, first_name: "Артем" },
+          message: {
+            message_id: 15,
+            date: 1700000000,
+            chat: { id: CLIENT_ID, type: "private", first_name: "Артем" },
+            text: "Напоминание",
+          },
+          chat_instance: "ci_6",
+          data: `book:confirm:${booking.id}`,
+        },
+      });
+
+      const adminMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
+      expect(adminMsgs).toHaveLength(1);
+      expect(String(adminMsgs[0]?.payload.text)).toContain("Клиент подтвердил запись");
+      expect(await redis.get(`booking:confirm_notified:${booking.id}`)).toBe("1");
+    } finally {
+      transport.transformerFor = origTransformer;
+    }
+  });
 });

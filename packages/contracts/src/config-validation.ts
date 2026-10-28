@@ -2,7 +2,7 @@ import { QuickBookConfigSchema, QuizConfigSchema, type QuizConfig } from "./inde
 import { validateQuizDag } from "./quiz-dag.js";
 export { validateQuizDag, type DagValidationResult } from "./quiz-dag.js";
 
-function schemaIssues(issues: { path: (string | number)[] }[], type: "quiz" | "booking"): string[] {
+function schemaIssues(issues: { path: PropertyKey[] }[], type: "quiz" | "booking"): string[] {
   return issues
     .map(({ path }) => {
       const [collection, index, field, lang] = path;

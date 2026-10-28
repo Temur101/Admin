@@ -12,22 +12,32 @@ export interface PollingManagerOptions {
   prisma: PrismaClient;
   botPool: BotPool;
   logger: Logger;
+  retryBaseDelayMs?: number;
+  retryMaxDelayMs?: number;
 }
 
 export class PollingManager {
   private readonly prisma: PrismaClient;
   private readonly botPool: BotPool;
   private readonly logger: Logger;
+  private readonly retryBaseDelayMs: number;
+  private readonly retryMaxDelayMs: number;
   private readonly activePollers = new Map<string, Bot<PlatformBotContext>>();
+  private readonly desiredBots = new Set<string>();
+  private readonly failedBots = new Set<string>();
+  private readonly retryAttempts = new Map<string, number>();
+  private readonly retryTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
   constructor(opts: PollingManagerOptions) {
     this.prisma = opts.prisma;
     this.botPool = opts.botPool;
     this.logger = opts.logger;
+    this.retryBaseDelayMs = opts.retryBaseDelayMs ?? 1000;
+    this.retryMaxDelayMs = opts.retryMaxDelayMs ?? 30_000;
   }
 
   isRunning(botId: string): boolean {
-    return this.activePollers.has(botId);
+    return this.activePollers.has(botId) && !this.failedBots.has(botId);
   }
 
   isConnected(botId: string): boolean {
@@ -36,6 +46,59 @@ export class PollingManager {
 
   get runningCount(): number {
     return this.activePollers.size;
+  }
+
+  getUnhealthyBotIds(): string[] {
+    const unhealthy: string[] = [];
+    for (const botId of this.desiredBots) {
+      if (!this.activePollers.has(botId) || this.failedBots.has(botId)) {
+        unhealthy.push(botId);
+      }
+    }
+    return unhealthy;
+  }
+
+  isHealthy(): boolean {
+    return this.getUnhealthyBotIds().length === 0;
+  }
+
+  private clearRetryTimer(botId: string): void {
+    const timer = this.retryTimers.get(botId);
+    if (timer) {
+      clearTimeout(timer);
+      this.retryTimers.delete(botId);
+    }
+  }
+
+  private scheduleRestart(botId: string, err: unknown): void {
+    if (!this.desiredBots.has(botId)) return;
+    this.failedBots.add(botId);
+    this.botPool.evict(botId);
+    this.clearRetryTimer(botId);
+
+    const attempt = (this.retryAttempts.get(botId) ?? 0) + 1;
+    this.retryAttempts.set(botId, attempt);
+    const delayMs = Math.min(this.retryBaseDelayMs * 2 ** (attempt - 1), this.retryMaxDelayMs);
+
+    this.logger.error(
+      {
+        botId,
+        attempt,
+        retryInMs: delayMs,
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "Bot long polling encountered fatal error or stopped; scheduling restart",
+    );
+
+    const timer = setTimeout(() => {
+      this.retryTimers.delete(botId);
+      if (!this.desiredBots.has(botId)) return;
+      void this.start(botId).catch((restartErr: unknown) => {
+        this.scheduleRestart(botId, restartErr);
+      });
+    }, delayMs);
+    timer.unref?.();
+    this.retryTimers.set(botId, timer);
   }
 
   async startAll(): Promise<void> {
@@ -50,16 +113,14 @@ export class PollingManager {
       try {
         await this.startBotRecord(botRecord);
       } catch (err) {
-        this.logger.error(
-          { botId: botRecord.id, err: (err as Error).message },
-          "Failed to start long polling for bot",
-        );
+        this.scheduleRestart(botRecord.id, err);
       }
     }
   }
 
   async start(botId: string): Promise<boolean> {
     if (this.activePollers.has(botId)) {
+      this.desiredBots.add(botId);
       this.logger.debug({ botId }, "Bot polling is already running");
       return true;
     }
@@ -70,6 +131,10 @@ export class PollingManager {
     });
 
     if (!botRecord || !botRecord.isActive) {
+      this.desiredBots.delete(botId);
+      this.failedBots.delete(botId);
+      this.retryAttempts.delete(botId);
+      this.clearRetryTimer(botId);
       this.logger.warn(
         { botId, exists: Boolean(botRecord), isActive: botRecord?.isActive },
         "Cannot start polling: bot not found or inactive",
@@ -81,6 +146,11 @@ export class PollingManager {
   }
 
   async stop(botId: string): Promise<boolean> {
+    this.desiredBots.delete(botId);
+    this.failedBots.delete(botId);
+    this.retryAttempts.delete(botId);
+    this.clearRetryTimer(botId);
+
     const bot = this.activePollers.get(botId);
     if (!bot) {
       return false;
@@ -98,12 +168,22 @@ export class PollingManager {
   }
 
   async stopAll(): Promise<void> {
+    for (const botId of this.retryTimers.keys()) {
+      this.clearRetryTimer(botId);
+    }
+    this.desiredBots.clear();
+    this.failedBots.clear();
+    this.retryAttempts.clear();
+
     const botIds = Array.from(this.activePollers.keys());
     this.logger.info({ count: botIds.length }, "Stopping all active bot pollers");
     await Promise.all(botIds.map((id) => this.stop(id)));
   }
 
   private async startBotRecord(botRecord: BotWithSubscription): Promise<boolean> {
+    this.desiredBots.add(botRecord.id);
+    this.clearRetryTimer(botRecord.id);
+
     if (this.activePollers.has(botRecord.id)) {
       return true;
     }
@@ -140,18 +220,25 @@ export class PollingManager {
       .start({
         drop_pending_updates: false,
         onStart: (info) => {
+          this.failedBots.delete(botRecord.id);
+          this.retryAttempts.delete(botRecord.id);
           this.logger.info(
             { botId: botRecord.id, username: info.username },
             "Long polling started for bot",
           );
         },
       })
-      .catch((err) => {
-        this.logger.error(
-          { botId: botRecord.id, err: (err as Error).message },
-          "Bot long polling encountered fatal error or stopped",
-        );
+      .then(() => {
         this.activePollers.delete(botRecord.id);
+        if (this.desiredBots.has(botRecord.id)) {
+          this.scheduleRestart(botRecord.id, new Error("Polling loop exited unexpectedly"));
+        }
+      })
+      .catch((err) => {
+        this.activePollers.delete(botRecord.id);
+        if (this.desiredBots.has(botRecord.id)) {
+          this.scheduleRestart(botRecord.id, err);
+        }
       });
 
     return true;

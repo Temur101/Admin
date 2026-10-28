@@ -287,7 +287,7 @@ export function registerBotsRoutes(
 
   // Register operations and diagnostic routes (admins, extend, unblock, health, webhooks)
   registerBotsOpsRoutes(app, prisma, tenantResolver, getBotInstance, pollingManager);
-  registerBotsSubscriptionRoutes(app, prisma);
+  registerBotsSubscriptionRoutes(app, prisma, tenantResolver);
   registerBotsResetRoutes(app, prisma, redis, {
     tenantResolver,
     logger,

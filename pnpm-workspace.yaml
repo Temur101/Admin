@@ -8,3 +8,11 @@ allowBuilds:
   argon2: true
   esbuild: true
   prisma: true
+
+overrides:
+  deepmerge-ts: '>=8.0.0'
+  fast-jwt: '>=6.3.4'
+  fastify: '>=5.12.6'
+  fast-uri: '>=4.2.3'
+  ip-address: '>=10.7.4'
+  zod: '>=4.6.6'

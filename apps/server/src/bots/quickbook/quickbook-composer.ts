@@ -167,7 +167,7 @@ export function registerQuickBookHandlers(
     const setRes = await redis.set(lockKey, "1", "EX", 86400, "NX").catch(() => null);
     if (setRes === "OK") {
       const details = resolveBookingDetails(booking, ctx.botMeta.settings, lang);
-      await notifyAdmins(
+      const sentCount = await notifyAdmins(
         ctx.botMeta.id,
         {
           kind: "BOOKING_CONFIRMED",
@@ -181,8 +181,16 @@ export function registerQuickBookHandlers(
         },
         { prisma, transport: opts.transport, logger: opts.logger },
       ).catch((err) => {
-        opts.logger.error({ err: (err as Error).message }, "Failed to notify admins of booking confirmation");
+        opts.logger.error(
+          { err: (err as Error).message },
+          "Failed to notify admins of booking confirmation",
+        );
+        return 0;
       });
+
+      if (sentCount === 0) {
+        await redis.del(lockKey).catch(() => {});
+      }
     }
 
     await ctx.reply(t(lang, "qb_confirmed_reply"));

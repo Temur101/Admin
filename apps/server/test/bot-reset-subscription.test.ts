@@ -338,5 +338,65 @@ describe("Bot Reset & Advanced Subscription Management Tests", () => {
       expect(trialBody.subscription.paidUntil).toBeNull();
       expect(new Date(trialBody.subscription.trialEndsAt).getTime()).toBeGreaterThan(Date.now());
     });
+
+    it("immediately invalidates Redis bot cache upon /extend, /reduce, /trial, and /unblock", async () => {
+      const token = await getAdminToken();
+      const { bot } = await createFixtureTenantAndBot("LEADCATCH");
+
+      const hashKey = `bot:hash:${bot.botTokenHash}`;
+      const idKey = `bot:id:${bot.id}`;
+
+      // Seed stale cache entries (simulating 10-minute TTL cache)
+      await redis.set(hashKey, JSON.stringify({ subscriptionStatus: "EXPIRED" }), "EX", 600);
+      await redis.set(idKey, JSON.stringify({ subscriptionStatus: "EXPIRED" }), "EX", 600);
+
+      const extendRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/bots/${bot.id}/extend`,
+        headers: { Authorization: `Bearer ${token}` },
+        payload: { days: 10 },
+      });
+      expect(extendRes.statusCode).toBe(200);
+      expect(await redis.get(hashKey)).toBeNull();
+      expect(await redis.get(idKey)).toBeNull();
+
+      // Re-seed cache and test /reduce invalidation
+      await redis.set(hashKey, "stale", "EX", 600);
+      await redis.set(idKey, "stale", "EX", 600);
+      const reduceRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/bots/${bot.id}/reduce`,
+        headers: { Authorization: `Bearer ${token}` },
+        payload: { days: 20 },
+      });
+      expect(reduceRes.statusCode).toBe(200);
+      expect(await redis.get(hashKey)).toBeNull();
+      expect(await redis.get(idKey)).toBeNull();
+
+      // Re-seed cache and test /trial invalidation
+      await redis.set(hashKey, "stale", "EX", 600);
+      await redis.set(idKey, "stale", "EX", 600);
+      const trialRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/bots/${bot.id}/trial`,
+        headers: { Authorization: `Bearer ${token}` },
+        payload: { days: 5 },
+      });
+      expect(trialRes.statusCode).toBe(200);
+      expect(await redis.get(hashKey)).toBeNull();
+      expect(await redis.get(idKey)).toBeNull();
+
+      // Re-seed cache and test /unblock invalidation
+      await redis.set(hashKey, "stale", "EX", 600);
+      await redis.set(idKey, "stale", "EX", 600);
+      const unblockRes = await app.inject({
+        method: "POST",
+        url: `/api/v1/bots/${bot.id}/unblock`,
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(unblockRes.statusCode).toBe(200);
+      expect(await redis.get(hashKey)).toBeNull();
+      expect(await redis.get(idKey)).toBeNull();
+    });
   });
 });

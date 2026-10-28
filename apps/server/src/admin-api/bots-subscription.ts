@@ -6,12 +6,17 @@ import {
   GrantTrialRequestSchema,
 } from "@lcqb/contracts";
 import { authenticateAdmin } from "./auth.js";
+import type { TenantResolver } from "../gateway/tenant-resolver.js";
 
 interface BotParams {
   id: string;
 }
 
-export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: PrismaClient): void {
+export function registerBotsSubscriptionRoutes(
+  app: FastifyInstance,
+  prisma: PrismaClient,
+  tenantResolver?: TenantResolver,
+): void {
   // POST /api/v1/bots/:id/extend - Manual subscription extension
   app.post<{ Params: BotParams }>(
     "/api/v1/bots/:id/extend",
@@ -27,11 +32,14 @@ export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: Pri
       }
       const { days } = parsed.data;
 
-      return prisma.$transaction(async (tx) => {
+      const txResult = await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sub:${id}`}));`;
-        const sub = await tx.subscription.findUnique({ where: { botId: id } });
+        const sub = await tx.subscription.findUnique({
+          where: { botId: id },
+          include: { bot: { select: { id: true, botTokenHash: true } } },
+        });
         if (!sub) {
-          return reply.code(404).send({ ok: false, error: "Subscription not found" });
+          return null;
         }
 
         const now = Date.now();
@@ -50,14 +58,22 @@ export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: Pri
           },
         });
 
-        return reply.send({
-          ok: true,
-          subscription: {
-            status: updated.status,
-            trialEndsAt: updated.trialEndsAt.toISOString(),
-            paidUntil: updated.paidUntil?.toISOString() ?? null,
-          },
-        });
+        return { updated, bot: sub.bot };
+      });
+
+      if (!txResult) {
+        return reply.code(404).send({ ok: false, error: "Subscription not found" });
+      }
+
+      await tenantResolver?.invalidate(txResult.bot.botTokenHash, txResult.bot.id);
+
+      return reply.send({
+        ok: true,
+        subscription: {
+          status: txResult.updated.status,
+          trialEndsAt: txResult.updated.trialEndsAt.toISOString(),
+          paidUntil: txResult.updated.paidUntil?.toISOString() ?? null,
+        },
       });
     },
   );
@@ -77,11 +93,14 @@ export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: Pri
       }
       const { days } = parsed.data;
 
-      return prisma.$transaction(async (tx) => {
+      const txResult = await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sub:${id}`}));`;
-        const sub = await tx.subscription.findUnique({ where: { botId: id } });
+        const sub = await tx.subscription.findUnique({
+          where: { botId: id },
+          include: { bot: { select: { id: true, botTokenHash: true } } },
+        });
         if (!sub) {
-          return reply.code(404).send({ ok: false, error: "Subscription not found" });
+          return { kind: "not_found" as const };
         }
 
         const now = Date.now();
@@ -95,20 +114,11 @@ export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: Pri
               status: isExpired ? "EXPIRED" : "TRIAL",
             },
           });
-          return reply.send({
-            ok: true,
-            subscription: {
-              status: updated.status,
-              trialEndsAt: updated.trialEndsAt.toISOString(),
-              paidUntil: updated.paidUntil?.toISOString() ?? null,
-            },
-          });
+          return { kind: "ok" as const, updated, bot: sub.bot };
         }
 
         if (!sub.paidUntil) {
-          return reply
-            .code(400)
-            .send({ ok: false, error: "Нечего уменьшать: у бота нет оплаченного периода" });
+          return { kind: "no_paid_until" as const };
         }
 
         const target = sub.paidUntil.getTime() - days * 86400 * 1000;
@@ -121,14 +131,27 @@ export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: Pri
           },
         });
 
-        return reply.send({
-          ok: true,
-          subscription: {
-            status: updated.status,
-            trialEndsAt: updated.trialEndsAt.toISOString(),
-            paidUntil: updated.paidUntil?.toISOString() ?? null,
-          },
-        });
+        return { kind: "ok" as const, updated, bot: sub.bot };
+      });
+
+      if (txResult.kind === "not_found") {
+        return reply.code(404).send({ ok: false, error: "Subscription not found" });
+      }
+      if (txResult.kind === "no_paid_until") {
+        return reply
+          .code(400)
+          .send({ ok: false, error: "Нечего уменьшать: у бота нет оплаченного периода" });
+      }
+
+      await tenantResolver?.invalidate(txResult.bot.botTokenHash, txResult.bot.id);
+
+      return reply.send({
+        ok: true,
+        subscription: {
+          status: txResult.updated.status,
+          trialEndsAt: txResult.updated.trialEndsAt.toISOString(),
+          paidUntil: txResult.updated.paidUntil?.toISOString() ?? null,
+        },
       });
     },
   );
@@ -148,18 +171,19 @@ export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: Pri
       }
       const { days } = parsed.data;
 
-      return prisma.$transaction(async (tx) => {
+      const txResult = await prisma.$transaction(async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`sub:${id}`}));`;
-        const sub = await tx.subscription.findUnique({ where: { botId: id } });
+        const sub = await tx.subscription.findUnique({
+          where: { botId: id },
+          include: { bot: { select: { id: true, botTokenHash: true } } },
+        });
         if (!sub) {
-          return reply.code(404).send({ ok: false, error: "Subscription not found" });
+          return { kind: "not_found" as const };
         }
 
         const now = Date.now();
         if (sub.status === "ACTIVE" && sub.paidUntil && sub.paidUntil.getTime() > now) {
-          return reply
-            .code(409)
-            .send({ ok: false, error: "У бота есть активная оплаченная подписка" });
+          return { kind: "conflict" as const };
         }
 
         const newTrialEndsAt = new Date(now + days * 86400 * 1000);
@@ -173,14 +197,27 @@ export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: Pri
           },
         });
 
-        return reply.send({
-          ok: true,
-          subscription: {
-            status: updated.status,
-            trialEndsAt: updated.trialEndsAt.toISOString(),
-            paidUntil: null,
-          },
-        });
+        return { kind: "ok" as const, updated, bot: sub.bot };
+      });
+
+      if (txResult.kind === "not_found") {
+        return reply.code(404).send({ ok: false, error: "Subscription not found" });
+      }
+      if (txResult.kind === "conflict") {
+        return reply
+          .code(409)
+          .send({ ok: false, error: "У бота есть активная оплаченная подписка" });
+      }
+
+      await tenantResolver?.invalidate(txResult.bot.botTokenHash, txResult.bot.id);
+
+      return reply.send({
+        ok: true,
+        subscription: {
+          status: txResult.updated.status,
+          trialEndsAt: txResult.updated.trialEndsAt.toISOString(),
+          paidUntil: null,
+        },
       });
     },
   );
@@ -191,7 +228,10 @@ export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: Pri
     { preHandler: [authenticateAdmin] },
     async (req, reply) => {
       const { id } = req.params;
-      const sub = await prisma.subscription.findUnique({ where: { botId: id } });
+      const sub = await prisma.subscription.findUnique({
+        where: { botId: id },
+        include: { bot: { select: { id: true, botTokenHash: true } } },
+      });
       if (!sub) {
         return reply.code(404).send({ ok: false, error: "Subscription not found" });
       }
@@ -203,6 +243,8 @@ export function registerBotsSubscriptionRoutes(app: FastifyInstance, prisma: Pri
           failedReceiptAttempts: 0,
         },
       });
+
+      await tenantResolver?.invalidate(sub.bot.botTokenHash, sub.bot.id);
 
       return reply.send({
         ok: true,

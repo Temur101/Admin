@@ -16,8 +16,8 @@ const EnvSchema = z.object({
   BOT_MODE: z.enum(["polling", "webhook"]).default("polling"),
   USE_MOCK_TELEGRAM: z
     .string()
-    .transform((v) => v === "true")
-    .default("false"),
+    .default("false")
+    .transform((v) => v === "true"),
   ADMIN_ORIGIN: z.string().default("http://localhost:5173"),
 
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),

@@ -1,4 +1,5 @@
 import { createEmptyQuizConfig } from "@lcqb/contracts";
+import { GrammyError } from "grammy";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   buildApp,
@@ -204,6 +205,166 @@ describe("Stage 8.5 Wave 1: PollingManager, Settings Parsing & Admin Links", () 
 
       await manager.stopAll();
       expect(manager.runningCount).toBe(0);
+    });
+
+    it("should catch handler errors via bot.catch without crashing and auto-restart crashed poller while reporting 503 on /health/ready", async () => {
+      const tenant = await prisma.tenant.create({
+        data: {
+          clientName: "Resilience Tenant",
+          contactPhone: "+998901234567",
+        },
+      });
+
+      const token = "444444:AAAFakeTokenResilience";
+      const botRecord = await prisma.bot.create({
+        data: {
+          tenantId: tenant.id,
+          botType: "QUICKBOOK",
+          botTokenEnc: encryptSecret(token, env.TOKEN_ENCRYPTION_KEY),
+          botTokenHash: sha256Hex(token),
+          webhookSecret: "secret_4",
+          adminInviteCode: "code_4",
+          botUsername: "resilient_qb_bot",
+          isActive: true,
+          subscription: {
+            create: {
+              status: "ACTIVE",
+              trialEndsAt: new Date(Date.now() + 86400000 * 3),
+            },
+          },
+        },
+      });
+
+      const botPool = new BotPool({
+        capacity: 10,
+        encryptionKey: env.TOKEN_ENCRYPTION_KEY,
+        transport,
+        redis,
+        sessionTtlSec: 3600,
+        logger,
+        prisma,
+      });
+
+      // 1. Verify bot.catch keeps polling loop alive when a handler throws (e.g. sendMessage error)
+      let throwOnSend = true;
+      let updateQueue: unknown[] = [
+        {
+          update_id: 1001,
+          message: {
+            message_id: 1,
+            date: 1700000000,
+            chat: { id: 555001, type: "private", first_name: "Клиент" },
+            from: { id: 555001, is_bot: false, first_name: "Клиент" },
+            text: "/start",
+          },
+        },
+      ];
+      const origTransformer = transport.transformerFor.bind(transport);
+      transport.transformerFor = (bId: string) => {
+        const base = origTransformer(bId);
+        return async (prev, method, payload, signal) => {
+          if (method === "getUpdates") {
+            await new Promise((r) => setTimeout(r, 20));
+            const batch = updateQueue;
+            updateQueue = [];
+            return { ok: true, result: batch } as never;
+          }
+          if (throwOnSend && method === "sendMessage") {
+            throw new Error("Telegram 403 Forbidden: bot was blocked by the user");
+          }
+          return base ? base(prev, method, payload, signal) : prev(method, payload, signal);
+        };
+      };
+
+      try {
+        const sendErrorManager = new PollingManager({
+          prisma,
+          botPool,
+          logger,
+          retryBaseDelayMs: 50,
+        });
+        await sendErrorManager.start(botRecord.id);
+        await new Promise((r) => setTimeout(r, 60));
+
+        // Bot must still be running and healthy despite sendMessage throwing on update 1001
+        expect(sendErrorManager.isRunning(botRecord.id)).toBe(true);
+        expect(sendErrorManager.isHealthy()).toBe(true);
+
+        // Next update in polling succeeds when Telegram send works again
+        throwOnSend = false;
+        transport.clear();
+        updateQueue = [
+          {
+            update_id: 1002,
+            message: {
+              message_id: 2,
+              date: 1700000001,
+              chat: { id: 555001, type: "private", first_name: "Клиент" },
+              from: { id: 555001, is_bot: false, first_name: "Клиент" },
+              text: "/start",
+            },
+          },
+        ];
+        await new Promise((r) => setTimeout(r, 60));
+        expect(transport.callsOf("sendMessage").length).toBeGreaterThan(0);
+
+        await sendErrorManager.stopAll();
+      } finally {
+        transport.transformerFor = origTransformer;
+      }
+
+      // 2. Verify PollingManager auto-restart and /health/ready integration
+      let failGetUpdates = true;
+      transport.transformerFor = (bId: string) => {
+        const base = origTransformer(bId);
+        return async (prev, method, payload, signal) => {
+          if (failGetUpdates && method === "getUpdates") {
+            throw new GrammyError(
+              "Simulated fatal polling failure",
+              { ok: false, error_code: 409, description: "Conflict: terminated" },
+              "getUpdates",
+              {},
+            );
+          }
+          return base ? base(prev, method, payload, signal) : prev(method, payload, signal);
+        };
+      };
+
+      const pm = (app as unknown as { pollingManager?: PollingManager }).pollingManager;
+      expect(pm).toBeDefined();
+
+      try {
+        botPool.evict(botRecord.id);
+        const fastManager = new PollingManager({
+          prisma,
+          botPool,
+          logger,
+          retryBaseDelayMs: 60,
+          retryMaxDelayMs: 200,
+        });
+        (app as unknown as { pollingManager?: PollingManager }).pollingManager = fastManager;
+
+        await fastManager.start(botRecord.id);
+        await new Promise((r) => setTimeout(r, 30));
+
+        // Polling crashed -> fastManager is unhealthy -> /health/ready returns 503
+        expect(fastManager.isHealthy()).toBe(false);
+        const unhealthyRes = await app.inject({ method: "GET", url: "/health/ready" });
+        expect(unhealthyRes.statusCode).toBe(503);
+
+        // Allow recovery on retry
+        failGetUpdates = false;
+        await new Promise((r) => setTimeout(r, 120));
+
+        expect(fastManager.isHealthy()).toBe(true);
+        const healthyRes = await app.inject({ method: "GET", url: "/health/ready" });
+        expect(healthyRes.statusCode).toBe(200);
+
+        await fastManager.stopAll();
+      } finally {
+        transport.transformerFor = origTransformer;
+        (app as unknown as { pollingManager?: PollingManager }).pollingManager = pm;
+      }
     });
   });
 

@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReceiptItem } from "../../api/receipts.js";
 import { getReceiptImageUrl } from "../../api/receipts.js";
+import { getStoredToken } from "../../api/client.js";
 import { formatPlatformDate } from "../../utils/dates.js";
 import { Modal } from "../common/Modal.js";
 import { Alert } from "../common/Alert.js";
+
 export function ReceiptDetailsModal({
   receipt,
   onClose,
@@ -11,7 +13,48 @@ export function ReceiptDetailsModal({
   receipt: ReceiptItem;
   onClose: () => void;
 }) {
+  const token = getStoredToken();
   const [failedImage, setFailedImage] = useState(false);
+  const [imageSrc, setImageSrc] = useState<string | undefined>(() =>
+    token ? undefined : getReceiptImageUrl(receipt.id),
+  );
+
+  useEffect(() => {
+    if (receipt.kind !== "PHOTO" || !token) return;
+    let revoked = false;
+    let objectUrl: string | undefined;
+
+    fetch(getReceiptImageUrl(receipt.id), {
+      headers: { Authorization: `Bearer ${token}` },
+      credentials: "include",
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error(`Status ${res.status}`);
+        return res.blob();
+      })
+      .then((blob) => {
+        const url = URL.createObjectURL(blob);
+        if (revoked) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        objectUrl = url;
+        setImageSrc(url);
+      })
+      .catch(() => {
+        if (!revoked) {
+          setFailedImage(true);
+        }
+      });
+
+    return () => {
+      revoked = true;
+      if (objectUrl) {
+        URL.revokeObjectURL(objectUrl);
+      }
+    };
+  }, [receipt.id, receipt.kind, token]);
+
   return (
     <Modal isOpen onClose={onClose} title="Детали оплаты" maxWidth="2xl">
       <div className="space-y-4">
@@ -30,7 +73,7 @@ export function ReceiptDetailsModal({
             </Alert>
           ) : (
             <img
-              src={getReceiptImageUrl(receipt.id)}
+              src={imageSrc}
               alt="Чек оплаты"
               onError={() => setFailedImage(true)}
               className="max-h-[60vh] mx-auto object-contain rounded-xl"
