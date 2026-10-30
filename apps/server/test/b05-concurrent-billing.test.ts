@@ -151,7 +151,7 @@ describe("B05: Concurrent Billing & Rollback", () => {
     // Failed attempts should only increment ONCE (from 0 to 1)
     const sub = await prisma.subscription.findUnique({ where: { botId } });
     expect(sub?.failedReceiptAttempts).toBe(1);
-    expect(sub?.status).toBe("GRACE_PERIOD");
+    expect(sub?.status).toBe("TRIAL");
 
     // Exactly 1 Telegram push notification sent
     const pushCalls = transport.callsOf("sendMessage");
@@ -272,9 +272,9 @@ describe("B05: Concurrent Billing & Rollback", () => {
     });
 
     sub = await prisma.subscription.findUnique({ where: { botId } });
-    const expected6m = addMonths(baseDate, 6);
+    const expected6m = baseDate; // Pending receipts do not extend entitlement.
     expect(sub?.paidUntil?.toISOString()).toBe(expected6m.toISOString());
-    expect(sub?.status).toBe("ACTIVE");
+    expect(sub?.status).toBe("GRACE_PERIOD");
 
     // 2. Reject B SECOND -> subtracting 6 months leaves baseDate
     await rejectReceipt({
@@ -315,6 +315,7 @@ describe("B05: Concurrent Billing & Rollback", () => {
       prisma,
       redis,
       receiptId: rA.id,
+      now: baseDate,
     });
 
     // Receipt B (+6m) submitted after A is approved
@@ -366,13 +367,13 @@ describe("B05: Concurrent Billing & Rollback", () => {
     });
 
     // Admin manually extends subscription by 3 months between submission and review
-    const manualExtendedDate = addMonths(baseDate, 4); // base + 1m (receipt) + 3m (manual)
+    const manualExtendedDate = addMonths(baseDate, 3); // Pending receipt grants no time.
     await prisma.subscription.update({
       where: { botId },
       data: { paidUntil: manualExtendedDate },
     });
 
-    // Reject Receipt A -> deduct 1m
+    // Reject pending Receipt A -> preserve the independent extension.
     await rejectReceipt({
       prisma,
       redis,
@@ -500,7 +501,7 @@ describe("B05: Concurrent Billing & Rollback", () => {
     // Rejection with months deduction
     const res = transitionSubscription(
       "ACTIVE",
-      { type: "RECEIPT_REJECTED", prevPaidUntil: baseDate, months: 6 },
+      { type: "RECEIPT_REJECTED", prevPaidUntil: baseDate, months: 6, optimisticGranted: true },
       ctx,
     );
 

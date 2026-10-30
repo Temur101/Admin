@@ -76,6 +76,7 @@ beforeEach(async () => {
     $executeRaw: vi.fn(async () => 0),
     paymentReceipt: { findUnique: vi.fn(async () => receipt), update: save },
     subscription: {
+      findUniqueOrThrow: vi.fn(async () => subscription),
       update: vi.fn(async ({ data }: { data: Partial<typeof subscription> }) =>
         Object.assign(subscription, data),
       ),

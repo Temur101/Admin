@@ -159,6 +159,7 @@ model PaymentReceipt {
   textNote        String?
   months          Int
   amount          Int
+  optimisticGranted Boolean @default(false)
   prevPaidUntil   DateTime?     @db.Timestamptz
   prevStatus      SubStatus
   grantedUntil    DateTime      @db.Timestamptz

@@ -4,7 +4,7 @@ export type SubscriptionEvent =
   | { type: "TICK" }
   | { type: "RECEIPT_SUBMITTED"; months: number }
   | { type: "RECEIPT_APPROVED" }
-  | { type: "RECEIPT_REJECTED"; prevPaidUntil: Date | null; prevStatus?: SubStatus; months?: number }
+  | { type: "RECEIPT_REJECTED"; prevPaidUntil: Date | null; prevStatus?: SubStatus; months?: number; optimisticGranted?: boolean }
   | { type: "MANUAL_EXTEND"; until: Date }
   | { type: "MANUAL_UNBLOCK" };
 
@@ -71,23 +71,7 @@ export function transitionSubscription(
     }
 
     case "RECEIPT_SUBMITTED": {
-      if (currentStatus === "BLOCKED") {
-        // Payment submission is disallowed when blocked
-        return {
-          nextStatus: currentStatus,
-          nextPaidUntil: paidUntil,
-          nextFailedAttempts: failedReceiptAttempts,
-          changed: false,
-        };
-      }
-      const baseDate = paidUntil && paidUntil > now ? paidUntil : now;
-      const nextPaidUntil = addMonths(baseDate, event.months);
-      return {
-        nextStatus: "ACTIVE",
-        nextPaidUntil,
-        nextFailedAttempts: failedReceiptAttempts,
-        changed: true,
-      };
+      return { nextStatus: currentStatus, nextPaidUntil: paidUntil, nextFailedAttempts: failedReceiptAttempts, changed: false };
     }
 
     case "RECEIPT_APPROVED": {
@@ -101,9 +85,9 @@ export function transitionSubscription(
 
     case "RECEIPT_REJECTED": {
       const nextFailedAttempts = failedReceiptAttempts + 1;
-      let nextPaidUntil: Date | null = event.prevPaidUntil;
+      let nextPaidUntil: Date | null = event.optimisticGranted ? event.prevPaidUntil : paidUntil;
 
-      if (event.months && paidUntil) {
+      if (event.optimisticGranted && event.months && paidUntil) {
         nextPaidUntil = addMonths(paidUntil, -event.months);
       }
 

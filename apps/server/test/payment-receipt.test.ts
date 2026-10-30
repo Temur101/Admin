@@ -308,7 +308,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
       calls = transport.callsOf("sendMessage");
       expect(calls).toHaveLength(1);
-      expect(String(calls[0]?.payload.text)).toContain("Оплата принята на проверку");
+      expect(String(calls[0]?.payload.text)).toContain("Чек принят на проверку");
 
       // Verify DB record
       const receipts = await prisma.paymentReceipt.findMany({ where: { botId } });
@@ -319,13 +319,13 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       expect(receipts[0]?.amount).toBe(500_000);
       expect(receipts[0]?.textNote).toBe("Перевел 500 000 сум в 14:35 через Payme с карты *1234");
 
-      // Verify subscription optimistically updated to ACTIVE
+      // Sending a receipt does not grant access.
       const sub = await prisma.subscription.findUnique({ where: { botId } });
-      expect(sub?.status).toBe("ACTIVE");
-      expect(sub?.paidUntil).not.toBeNull();
+      expect(sub?.status).toBe("TRIAL");
+      expect(sub?.paidUntil).toBeNull();
     });
 
-    it("should accept valid photo receipt and activate subscription", async () => {
+    it("should accept a photo receipt without activating the subscription", async () => {
       const bot = botPool.getOrCreateBot(resolvedBot);
 
       // Select tariff 1 month
@@ -363,7 +363,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
       const calls = transport.callsOf("sendMessage");
       expect(calls).toHaveLength(1);
-      expect(String(calls[0]?.payload.text)).toContain("Оплата принята на проверку");
+      expect(String(calls[0]?.payload.text)).toContain("Чек принят на проверку");
 
       const receipt = await prisma.paymentReceipt.findFirst({ where: { botId } });
       expect(receipt).not.toBeNull();
@@ -399,7 +399,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
       // Should be extended from futurePaidUntil (2026-10-20), resulting in 2026-11-20
       const expectedDate = addMonths(futurePaidUntil, 1);
-      expect(result.newPaidUntil.toISOString()).toBe(expectedDate.toISOString());
+      expect(result.newPaidUntil?.toISOString()).toBe(futurePaidUntil.toISOString());
+      await approveReceipt({ prisma, redis, receiptId: result.receipt.id, now });
 
       const sub = await prisma.subscription.findUnique({ where: { botId } });
       expect(sub?.paidUntil?.toISOString()).toBe(expectedDate.toISOString());
@@ -433,10 +434,10 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
         now: baseTime,
       });
 
-      expect(paidUntil1.toISOString()).toBe(addMonths(baseTime, 6).toISOString());
+      expect(paidUntil1?.toISOString()).toBe("2026-09-30T10:00:00.000Z");
 
       let sub = await prisma.subscription.findUnique({ where: { botId } });
-      expect(sub?.status).toBe("ACTIVE");
+      expect(sub?.status).toBe("EXPIRED");
 
       // 3. Reject receipt 1 -> rollback to EXPIRED, attempt = 1 -> GRACE_PERIOD
       transport.clear();
@@ -473,7 +474,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       });
 
       sub = await prisma.subscription.findUnique({ where: { botId } });
-      expect(sub?.status).toBe("ACTIVE");
+      expect(sub?.status).toBe("GRACE_PERIOD");
 
       // Switch admin to UZ language to test Uzbek push notification
       await prisma.botUser.update({
@@ -601,6 +602,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
         prisma,
         redis,
         receiptId: r1.id,
+        now: initialDate,
       });
 
       let sub = await prisma.subscription.findUnique({ where: { botId } });
@@ -622,8 +624,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       });
 
       sub = await prisma.subscription.findUnique({ where: { botId } });
-      // Paid until should be initialDate + 1m + 6m = 7m
-      const expected7m = addMonths(expected1m, 6);
+      // The second receipt is still pending: preserve only the approved first month.
+      const expected7m = expected1m;
       expect(sub?.paidUntil?.toISOString()).toBe(expected7m.toISOString());
 
       // Reject Receipt 2 -> should roll back to after Receipt 1 (+1 month)
