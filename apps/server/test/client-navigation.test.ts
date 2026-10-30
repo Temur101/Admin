@@ -223,11 +223,13 @@ describe("Постоянная навигация клиента", () => {
         user.lang = lang;
         await message("/menu");
         expect(keyboard().is_persistent).toBe(true);
-        expect(labels()).toEqual([
+        const expectedLabels = [
           t(lang, type === "QUICKBOOK" ? "client_book" : "client_quiz"),
+          ...(type === "QUICKBOOK" ? [t(lang, "client_my_bookings")] : []),
           t(lang, "client_menu"),
           t(lang, "client_language"),
-        ]);
+        ];
+        expect(labels()).toEqual(expectedLabels);
       }
     },
   );
@@ -383,7 +385,7 @@ describe("Язык и права владельца", () => {
     hold();
     await message("➕ Записать клиента");
     expect(locks.size).toBe(0);
-    expect(state.quickbook).toEqual({});
+    expect(state.quickbook).toEqual({ isAdminBooking: true });
     expect(last().text).toBe(t("RU", "qb_choose_service"));
   });
   it("владелец получает своё меню, в том числе после старой клиентской кнопки", async () => {

@@ -45,7 +45,18 @@ export interface QuickBookSessionState {
   customerName?: string;
   phone?: string;
   phoneVerified?: boolean;
-  step?: "service" | "resource" | "date" | "slot" | "phone" | "summary" | "edit";
+  step?:
+    | "service"
+    | "resource"
+    | "date"
+    | "slot"
+    | "phone"
+    | "summary"
+    | "edit"
+    | "admin_name"
+    | "admin_phone"
+    | "admin_summary";
+  isAdminBooking?: boolean;
   lockedUntil?: number;
   lockToken?: string;
   lockDurationMin?: number;

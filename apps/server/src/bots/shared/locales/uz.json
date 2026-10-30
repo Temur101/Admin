@@ -116,5 +116,16 @@
   "btn_toggle_leads_on": "🔔 Arizalar qabuli: Yoqilgan",
   "btn_toggle_leads_off": "🔕 Arizalar qabuli: O'chirilgan",
   "receives_leads_enabled": "🔔 Yangi arizalar haqida bildirishnomalar yoqildi.",
-  "receives_leads_disabled": "🔕 Yangi arizalar haqida bildirishnomalar o'chirildi."
+  "receives_leads_disabled": "🔕 Yangi arizalar haqida bildirishnomalar o'chirildi.",
+  "client_my_bookings": "📅 Mening buyurtmalarim",
+  "my_bookings_empty": "Sizda hali yaqinlashib kelayotgan buyurtmalar yo'q.",
+  "my_bookings_title": "📅 <b>Sizning yaqinlashib kelayotgan buyurtmalaringiz:</b>",
+  "btn_cancel_booking": "❌ Bekor qilish",
+  "btn_reschedule_booking": "🔄 Ko'chirish",
+  "reschedule_choose_date": "Buyurtmani ko'chirish uchun yangi sanani tanlang:",
+  "reschedule_success": "✅ Buyurtmangiz muvaffaqiyatli {time} ga ko'chirildi!",
+  "reschedule_failed": "⚠️ Buyurtmani ko'chirib bo'lmadi (ehtimol, tanlangan vaqt band). Boshqa vaqtni tanlang.",
+  "admin_manual_booking_created": "✅ Mijoz buyurtmasi muvaffaqiyatli yaratildi!",
+  "booking_rescheduled_notification_open": "🔄 Buyurtma ko'chirildi!\n\nMijoz: {name}\nTelefon: {phone}\nXizmat: {service}\nMutaxassis: {staff}\nYangi vaqt: {time}",
+  "booking_rescheduled_notification_masked": "🔄 Buyurtma ko'chirildi (YASHIRILGAN)!\n\nMijoz: {name}\nTelefon: {phone}\nXizmat: {service}\nMutaxassis: {staff}\nYangi vaqt: {time}\n\n⚠️ Kontaktlarni ochish uchun obunani to'lang!"
 }

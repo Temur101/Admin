@@ -3,11 +3,13 @@ import { showBookingDates } from "./booking-dates.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
 import { isActualBotAdmin } from "../shared/user-service.js";
-import { cancelBooking, formatTashkentDateTime } from "./booking-service.js";
+import { cancelBooking } from "./booking-service.js";
 import { notifyAdmins } from "../shared/notification.js";
-import { getQuickBookConfig } from "./config-resolver.js";
 import { contactKeyboard } from "../shared/client-menu.js";
 import { resetClientFlow } from "../shared/flow-reset.js";
+import { registerAdminBookingHandlers, handleAdminBookingText } from "./admin-booking.js";
+import { registerClientBookingsHandlers } from "./client-bookings.js";
+import { registerOwnerSettingsHandlers } from "./owner-settings.js";
 
 export {
   type QuickBookComposerOptions,
@@ -22,29 +24,7 @@ import {
   type QuickBookComposerOptions,
 } from "./quickbook-handlers.js";
 
-function resolveBookingDetails(
-  booking: {
-    bot?: { settings: unknown } | null;
-    serviceId: string;
-    serviceName: string;
-    staffId: string;
-    slotTime: Date;
-  },
-  settings: unknown,
-  lang: "RU" | "UZ",
-) {
-  const config = getQuickBookConfig(
-    (booking.bot?.settings ?? settings) as Record<string, unknown> | null | undefined,
-  );
-  const loc = lang === "UZ" ? "uz" : "ru";
-  const service = config.services.find((s) => s.id === booking.serviceId);
-  const resource = config.resources.find((r) => r.id === booking.staffId);
-  return {
-    serviceName: service?.name[loc] || booking.serviceName,
-    staffName: resource?.name[loc] || booking.staffId,
-    timeFormatted: formatTashkentDateTime(booking.slotTime),
-  };
-}
+import { resolveBookingDetails } from "./booking-details-resolver.js";
 
 export function registerQuickBookHandlers(
   bot: import("grammy").Bot<PlatformBotContext>,
@@ -53,6 +33,9 @@ export function registerQuickBookHandlers(
   const { prisma, redis } = opts;
 
   registerBookingSelectionHandlers(bot, opts);
+  registerAdminBookingHandlers(bot, opts);
+  registerClientBookingsHandlers(bot, opts);
+  registerOwnerSettingsHandlers(bot, opts);
 
   bot.hears([t("RU", "btn_back"), t("UZ", "btn_back")], async (ctx, next) => {
     const session = ctx.session.quickbook;
@@ -76,12 +59,7 @@ export function registerQuickBookHandlers(
     await startQuickBookFlow(ctx, prisma, redis);
   });
 
-  bot.hears(/^(➕ Записать клиента|➕ Mijozni yozish)$/, async (ctx) => {
-    if (!ctx.from) return;
-    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
-    if (!isAdmin) return;
-    await startQuickBookFlow(ctx, prisma, redis);
-  });
+
 
   bot.hears(/^(📅 Записи|📅 Buyurtmalar)$/, async (ctx) => {
     if (!ctx.from) return;
@@ -147,7 +125,14 @@ export function registerQuickBookHandlers(
 
   bot.on("message:text", async (ctx, next) => {
     const session = ctx.session.quickbook;
-    if (session?.slotTimeIso && session.step !== "summary") {
+    if (
+      session?.isAdminBooking &&
+      (session.step === "admin_name" || session.step === "admin_phone")
+    ) {
+      const handled = await handleAdminBookingText(ctx, opts);
+      if (handled) return;
+    }
+    if (session?.slotTimeIso && session.step !== "summary" && !session.isAdminBooking) {
       const text = ctx.message.text.trim();
       if (
         !text.startsWith("/") &&

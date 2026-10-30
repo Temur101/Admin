@@ -8,10 +8,16 @@ import { parseAndNormalizePhone } from "../shared/phone.js";
 import { releaseSlotLock } from "./slot-lock.js";
 import { getAlternativeSlots, type TimeSlot } from "./slot-generator.js";
 import { formatTashkentDateTime } from "../shared/payment-service.js";
+import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS } from "./booking-constants.js";
+import { getTashkentTimeParts, validateBookingSlotEligibility } from "./booking-validator.js";
 
-export const REMINDER_ZSET_KEY = "booking:reminders";
-export const REMINDER_LEAD_TIME_MS = 1 * 3600 * 1000;
-export { formatTashkentDateTime };
+export { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS, formatTashkentDateTime };
+export { getTashkentTimeParts, validateBookingSlotEligibility };
+export {
+  cancelBooking,
+  type CancelBookingOptions,
+  type CancelBookingResult,
+} from "./booking-cancel-service.js";
 
 export interface CreateBookingParams {
   prisma: PrismaClient;
@@ -31,6 +37,7 @@ export interface CreateBookingParams {
   lockToken?: string;
   now?: Date;
   source?: "TELEGRAM" | "MANUAL";
+  createdByTgId?: number | bigint | null;
 }
 
 export type CreateBookingError =
@@ -59,9 +66,6 @@ export type CreateBookingResult =
       alternativeSlots: TimeSlot[];
     };
 
-import { getTashkentTimeParts, validateBookingSlotEligibility } from "./booking-validator.js";
-export { getTashkentTimeParts, validateBookingSlotEligibility };
-
 export async function createBooking(params: CreateBookingParams): Promise<CreateBookingResult> {
   const {
     prisma,
@@ -87,14 +91,10 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
   const normalizedPhone = parsedPhone.normalized;
 
   const service = config.services.find((s) => s.id === serviceId);
-  if (!service) {
-    return { success: false, error: "SERVICE_NOT_FOUND" };
-  }
+  if (!service) return { success: false, error: "SERVICE_NOT_FOUND" };
 
   const staff = config.resources.find((r) => r.id === staffId);
-  if (!staff) {
-    return { success: false, error: "STAFF_NOT_FOUND" };
-  }
+  if (!staff) return { success: false, error: "STAFF_NOT_FOUND" };
 
   const slotDate = typeof slotTime === "string" ? new Date(slotTime) : slotTime;
   const serviceName = lang === "UZ" ? service.name.uz : service.name.ru;
@@ -113,7 +113,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     if (eligibility.error === "SERVICE_NOT_SUPPORTED") {
       return { success: false, error: "SERVICE_NOT_SUPPORTED" };
     }
-
     const alternativeSlots = await getAlternativeSlots({
       botId,
       config,
@@ -125,12 +124,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       now: params.now,
       lang,
     });
-
-    return {
-      success: false,
-      error: eligibility.error,
-      alternativeSlots,
-    };
+    return { success: false, error: eligibility.error, alternativeSlots };
   }
 
   const endTime = new Date(slotDate.getTime() + service.durationMin * 60000);
@@ -139,6 +133,21 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     const booking = await prisma.$transaction(
       async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${staffId}`}));`;
+
+        // Check for conflicting TimeBlock
+        const timeBlock = tx.timeBlock?.findFirst
+          ? await tx.timeBlock.findFirst({
+              where: {
+                botId,
+                resourceId: { in: [staffId, "all"] },
+                startsAt: { lt: endTime },
+                endsAt: { gt: slotDate },
+              },
+            })
+          : null;
+        if (timeBlock) {
+          throw new Error("TIME_BLOCKED");
+        }
 
         const existing = await tx.booking.findFirst({
           where: {
@@ -178,6 +187,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
             endTime,
             status: "CONFIRMED",
             source,
+            createdByTgId: params.createdByTgId != null ? BigInt(params.createdByTgId) : null,
           },
         });
       },
@@ -229,6 +239,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
     const isConflict =
       errorMsg.includes("SLOT_ALREADY_BOOKED") ||
+      errorMsg.includes("TIME_BLOCKED") ||
       errorMsg.includes("booking_no_overlap_excl") ||
       errorMsg.includes("conflicts with existing key") ||
       errorMsg.includes("Unable to start a transaction in the given time") ||
@@ -264,69 +275,4 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
     throw err;
   }
-}
-
-export interface CancelBookingOptions {
-  bookingId: string;
-  botId?: string;
-  userId?: number | bigint;
-  isAdmin?: boolean;
-}
-
-export type CancelBookingResult =
-  | { success: true; booking: Booking; alreadyCancelled: boolean }
-  | { success: false; error: "NOT_FOUND" | "FORBIDDEN" };
-
-export async function cancelBooking(
-  prisma: PrismaClient,
-  redis: Redis,
-  bookingIdOrOpts: string | CancelBookingOptions,
-  botId?: string,
-  userId?: number | bigint,
-  isAdmin?: boolean,
-): Promise<CancelBookingResult> {
-  const opts: CancelBookingOptions =
-    typeof bookingIdOrOpts === "string"
-      ? {
-          bookingId: bookingIdOrOpts,
-          botId,
-          userId,
-          isAdmin,
-        }
-      : bookingIdOrOpts;
-
-  const booking = await prisma.booking.findUnique({
-    where: { id: opts.bookingId },
-  });
-
-  if (!booking) {
-    return { success: false, error: "NOT_FOUND" };
-  }
-
-  if (opts.botId && booking.botId !== opts.botId) {
-    return { success: false, error: "FORBIDDEN" };
-  }
-
-  if (opts.userId !== undefined && opts.userId !== null && opts.userId !== 0) {
-    const isOwner = booking.customerTgId === BigInt(opts.userId);
-    if (!isOwner && !opts.isAdmin) {
-      return { success: false, error: "FORBIDDEN" };
-    }
-  }
-
-  if (booking.status === "CANCELLED") {
-    return { success: true, booking, alreadyCancelled: true };
-  }
-
-  const updated = await prisma.booking.update({
-    where: { id: opts.bookingId },
-    data: {
-      status: "CANCELLED",
-      reminderLockedUntil: null,
-    },
-  });
-
-  await redis.zrem(REMINDER_ZSET_KEY, opts.bookingId).catch(() => {});
-
-  return { success: true, booking: updated, alreadyCancelled: false };
 }

@@ -116,5 +116,16 @@
   "btn_toggle_leads_on": "🔔 Приём заявок: Вкл",
   "btn_toggle_leads_off": "🔕 Приём заявок: Выкл",
   "receives_leads_enabled": "🔔 Получение уведомлений о новых заявках включено.",
-  "receives_leads_disabled": "🔕 Получение уведомлений о новых заявках отключено."
+  "receives_leads_disabled": "🔕 Получение уведомлений о новых заявках отключено.",
+  "client_my_bookings": "📅 Мои записи",
+  "my_bookings_empty": "У вас пока нет предстоящих записей.",
+  "my_bookings_title": "📅 <b>Ваши предстоящие записи:</b>",
+  "btn_cancel_booking": "❌ Отменить",
+  "btn_reschedule_booking": "🔄 Перенести",
+  "reschedule_choose_date": "Выберите новую дату для переноса записи:",
+  "reschedule_success": "✅ Ваша запись успешно перенесена на {time}!",
+  "reschedule_failed": "⚠️ Не удалось перенести запись (возможно, выбранное время уже занято). Попробуйте выбрать другой слот.",
+  "admin_manual_booking_created": "✅ Запись клиента успешно создана!",
+  "booking_rescheduled_notification_open": "🔄 Запись перенесена!\n\nКлиент: {name}\nТелефон: {phone}\nУслуга: {service}\nМастер: {staff}\nНовое время: {time}",
+  "booking_rescheduled_notification_masked": "🔄 Запись перенесена (ЯВЛЯЕТСЯ СКРЫТОЙ)!\n\nКлиент: {name}\nТелефон: {phone}\nУслуга: {service}\nМастер: {staff}\nНовое время: {time}\n\n⚠️ Оплатите подписку, чтобы открыть контакты!"
 }

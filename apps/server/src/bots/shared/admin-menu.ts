@@ -17,6 +17,11 @@ export function buildAdminReplyKeyboard(
     kb.text(l === "UZ" ? "📅 Buyurtmalar" : "📅 Записи")
       .text(l === "UZ" ? "➕ Mijozni yozish" : "➕ Записать клиента")
       .row();
+    if (role !== "STAFF") {
+      kb.text(l === "UZ" ? "🔒 Blokirovkalar" : "🔒 Блокировки")
+        .text(l === "UZ" ? "⚙️ Sozlamalar" : "⚙️ Настройки")
+        .row();
+    }
   } else {
     kb.text(t(l, "admin_menu_leads")).row();
   }

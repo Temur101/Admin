@@ -5,7 +5,7 @@ import { decryptSecret } from "../../core/crypto.js";
 import { env } from "../../core/env.js";
 import type { Logger } from "../../core/logger.js";
 import { t } from "./i18n.js";
-import { maskName, maskPhone, maskUsername } from "./masking.js";
+import { maskName, maskPhone } from "./masking.js";
 import { isMaskedStatus } from "./subscription.js";
 import { getQuickBookConfig } from "../quickbook/config-resolver.js";
 import { safeTelegramCall } from "./telegram-errors.js";
@@ -62,73 +62,32 @@ export interface BookingCancelledNotifyPayload {
   staffId?: string;
 }
 
+export interface BookingRescheduledNotifyPayload {
+  kind: "BOOKING_RESCHEDULED";
+  name?: string | null;
+  phone: string;
+  phoneVerified?: boolean;
+  service: string;
+  staff: string;
+  time: string;
+  serviceId?: string;
+  staffId?: string;
+}
+
 export type AdminNotifyPayload =
   | LeadNotifyPayload
   | BookingNotifyPayload
   | BookingConfirmedNotifyPayload
-  | BookingCancelledNotifyPayload;
+  | BookingCancelledNotifyPayload
+  | BookingRescheduledNotifyPayload;
+
+import { textChunks, formatLeadNotificationText } from "./notification-formatter.js";
+export { formatLeadNotificationText };
 
 export interface NotifyAdminsOptions {
   prisma: PrismaClient;
   transport: TelegramTransport;
   logger: Logger;
-}
-
-function textChunks(text: string): string[] {
-  const chunks: string[] = [];
-  let chunk = "";
-  for (const character of text) {
-    if (chunk.length + character.length > 4000) {
-      chunks.push(chunk);
-      chunk = "";
-    }
-    chunk += character;
-  }
-  if (chunk) chunks.push(chunk);
-  return chunks;
-}
-
-export function formatLeadNotificationText(params: {
-  lang: "RU" | "UZ";
-  masked: boolean;
-  name?: string | null;
-  phone: string;
-  phoneVerified?: boolean;
-  username?: string | null;
-  answers: Record<string, unknown>;
-  statusLine?: string;
-  assigneeLine?: string;
-}): string {
-  const { lang, masked, name, phone, phoneVerified, username, answers, statusLine, assigneeLine } =
-    params;
-  const answersStr = Object.entries(answers)
-    .map(([q, a]) => `• ${q}: ${String(a)}`)
-    .join("\n");
-
-  const verifiedBadge =
-    phoneVerified === undefined
-      ? ""
-      : ` (${t(lang, phoneVerified ? "phone_verified_badge" : "phone_unverified_badge")})`;
-
-  let base: string;
-  if (masked) {
-    base = t(lang, "lead_notification_masked", {
-      name: maskName(name),
-      phone: maskPhone(phone),
-      username: maskUsername(username),
-      answers: answersStr,
-    });
-  } else {
-    base = t(lang, "lead_notification_open", {
-      name: name || "—",
-      phone: `${phone}${verifiedBadge}`,
-      username: username ? `@${username}` : "—",
-      answers: answersStr,
-    });
-  }
-
-  const extras = [statusLine, assigneeLine].filter(Boolean);
-  return extras.length > 0 ? `${base}\n\n${extras.join("\n")}` : base;
 }
 
 export async function notifyAdmins(
@@ -207,13 +166,17 @@ export async function notifyAdmins(
           ? "booking_confirmed_notification_open"
           : payload.kind === "BOOKING_CANCELLED"
             ? "booking_cancelled_notification_open"
-            : "booking_notification_open";
+            : payload.kind === "BOOKING_RESCHEDULED"
+              ? "booking_rescheduled_notification_open"
+              : "booking_notification_open";
       const maskedKey =
         payload.kind === "BOOKING_CONFIRMED"
           ? "booking_confirmed_notification_masked"
           : payload.kind === "BOOKING_CANCELLED"
             ? "booking_cancelled_notification_masked"
-            : "booking_notification_masked";
+            : payload.kind === "BOOKING_RESCHEDULED"
+              ? "booking_rescheduled_notification_masked"
+              : "booking_notification_masked";
 
       const verifiedSuffix =
         payload.phoneVerified === undefined

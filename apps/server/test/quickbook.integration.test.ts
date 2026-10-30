@@ -171,6 +171,7 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
     transport.clear();
     const slotDate1 = new Date();
     slotDate1.setDate(slotDate1.getDate() + 2);
+    if (slotDate1.getDay() === 0) slotDate1.setDate(slotDate1.getDate() + 1);
     slotDate1.setHours(12, 0, 0, 0);
     const futureSlotIso = slotDate1.toISOString();
     await bot.handleUpdate({
@@ -266,6 +267,7 @@ describe("QuickBook E2E Booking Dialog & Subscription Integration", () => {
 
     const slotDate2 = new Date();
     slotDate2.setDate(slotDate2.getDate() + 3);
+    if (slotDate2.getDay() === 1) slotDate2.setDate(slotDate2.getDate() + 1);
     slotDate2.setHours(12, 0, 0, 0);
     const futureSlotIso = slotDate2.toISOString();
     await bot.handleUpdate({

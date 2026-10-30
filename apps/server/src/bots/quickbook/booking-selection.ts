@@ -28,8 +28,9 @@ export function registerBookingSelectionHandlers(
 
   const showResourcesForService = async (ctx: PlatformBotContext, serviceId: string) => {
     const config = getQuickBookConfig(ctx.botMeta.settings);
+    const wasAdmin = ctx.session.quickbook?.isAdminBooking;
     if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
-    ctx.session.quickbook = { serviceId };
+    ctx.session.quickbook = { serviceId, isAdminBooking: wasAdmin };
     const lang = ctx.session.lang ?? "RU";
     const eligibleResources = config.resources.filter(
       (r) => !r.serviceIds || r.serviceIds.length === 0 || r.serviceIds.includes(serviceId),
@@ -86,8 +87,9 @@ export function registerBookingSelectionHandlers(
       return;
     }
 
+    const wasAdmin = ctx.session.quickbook?.isAdminBooking;
     if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
-    ctx.session.quickbook = { serviceId, resourceId };
+    ctx.session.quickbook = { serviceId, resourceId, isAdminBooking: wasAdmin };
     await showBookingDates(ctx, serviceId, resourceId, page);
   });
 
@@ -207,7 +209,9 @@ export function registerBookingSelectionHandlers(
       return;
     }
 
+    const wasAdmin = ctx.session.quickbook?.isAdminBooking;
     ctx.session.quickbook = {
+      isAdminBooking: wasAdmin,
       serviceId,
       resourceId: staffId,
       slotTimeIso,
@@ -215,7 +219,13 @@ export function registerBookingSelectionHandlers(
       lockToken: lockRes.lockToken,
       lockDurationMin: srv.durationMin,
       lockIntervalMin: config.slotIntervalMin,
+      step: wasAdmin ? "admin_name" : undefined,
     };
+
+    if (wasAdmin) {
+      await ctx.reply(lang === "UZ" ? "👤 Mijozning ismini kiriting:" : "👤 Введите имя клиента:");
+      return;
+    }
 
     await ctx.reply(t(lang, "qb_prompt_phone"), {
       reply_markup: contactKeyboard(ctx),

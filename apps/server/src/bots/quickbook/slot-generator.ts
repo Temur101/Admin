@@ -99,23 +99,39 @@ export async function generateAvailableSlots(opts: GenerateSlotsOptions): Promis
 
   if (resources.length === 0) return [];
 
-  // Query existing bookings for this bot on this day
-  const existingBookings = await prisma.booking.findMany({
-    where: {
-      botId,
-      slotTime: {
-        gte: dayStartUtc,
-        lt: dayEndUtc,
+  // Query existing bookings and time blocks for this bot on this day
+  const [existingBookings, existingTimeBlocks] = await Promise.all([
+    prisma.booking.findMany({
+      where: {
+        botId,
+        slotTime: {
+          gte: dayStartUtc,
+          lt: dayEndUtc,
+        },
+        status: { in: ["PENDING", "CONFIRMED"] },
       },
-      status: { in: ["PENDING", "CONFIRMED"] },
-    },
-    select: {
-      staffId: true,
-      slotTime: true,
-      endTime: true,
-      durationMin: true,
-    },
-  });
+      select: {
+        staffId: true,
+        slotTime: true,
+        endTime: true,
+        durationMin: true,
+      },
+    }),
+    prisma.timeBlock?.findMany
+      ? prisma.timeBlock.findMany({
+          where: {
+            botId,
+            startsAt: { lt: dayEndUtc },
+            endsAt: { gt: dayStartUtc },
+          },
+          select: {
+            resourceId: true,
+            startsAt: true,
+            endsAt: true,
+          },
+        })
+      : Promise.resolve([]),
+  ]);
 
   const slots: TimeSlot[] = [];
   const intervalMin = config.slotIntervalMin ?? 30;
@@ -167,6 +183,18 @@ export async function generateAvailableSlots(opts: GenerateSlotsOptions): Promis
       });
 
       if (hasBookingConflict) {
+        continue;
+      }
+
+      // Check overlap with time blocks
+      const hasBlockConflict = existingTimeBlocks.some((tb) => {
+        if (tb.resourceId !== "all" && tb.resourceId !== res.id) return false;
+        const tbStartMs = tb.startsAt.getTime();
+        const tbEndMs = tb.endsAt.getTime();
+        return slotStartMs < tbEndMs && slotEndMs > tbStartMs;
+      });
+
+      if (hasBlockConflict) {
         continue;
       }
 

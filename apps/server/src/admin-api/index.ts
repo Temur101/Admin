@@ -19,6 +19,7 @@ import {
 } from "./auth.js";
 import { registerTenantRoutes } from "./tenants.js";
 import { registerBotsRoutes } from "./bots.js";
+import { registerBotsSimpleSettingsRoutes } from "./bots-simple-settings.js";
 import { registerTemplatesRoutes } from "./templates.js";
 import { registerBookingsRoutes } from "./bookings.js";
 import { registerReceiptsRoutes } from "./receipts.js";
@@ -66,6 +67,7 @@ export async function registerAdminApi(
   registerAuthRoutes(app, prisma, redis);
   registerTenantRoutes(app, prisma);
   registerBotsRoutes(app, prisma, tenantResolver, logger, transport, pollingManager, redis);
+  registerBotsSimpleSettingsRoutes(app, prisma, redis);
   registerTemplatesRoutes(app, prisma, tenantResolver);
   registerBookingsRoutes(app, prisma, redis, transport, logger);
   registerReceiptsRoutes(app, prisma, redis, transport, logger);

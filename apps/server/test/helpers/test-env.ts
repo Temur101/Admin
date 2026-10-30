@@ -88,6 +88,8 @@ export async function safeCleanTestDb(prisma: PrismaClient): Promise<void> {
   assertTestEnvironment();
   await prisma.webhookInbox.deleteMany();
   await prisma.booking.deleteMany();
+  await prisma.timeBlock.deleteMany();
+  await prisma.botSettingsLog.deleteMany();
   await prisma.lead.deleteMany();
   await prisma.paymentReceipt.deleteMany();
   await prisma.adminInvite.deleteMany();

@@ -97,6 +97,8 @@ model Bot {
   invites         AdminInvite[]
   leads           Lead[]
   bookings        Booking[]
+  timeBlocks      TimeBlock[]
+  settingsLogs    BotSettingsLog[]
   receipts        PaymentReceipt[]
   inbox           WebhookInbox[]
 }
@@ -208,6 +210,7 @@ model Booking {
   endTime             DateTime?     @db.Timestamptz
   status              BookingStatus @default(PENDING)
   source              BookingSource @default(TELEGRAM)
+  createdByTgId       BigInt?
   reminderSent        Boolean       @default(false)
   reminderAttempts    Int           @default(0)
   reminderLockedUntil DateTime?     @db.Timestamptz
@@ -218,6 +221,32 @@ model Booking {
   @@index([botId, slotTime])
   @@index([botId, staffId, status, slotTime, endTime])
   @@index([reminderSent, status, slotTime])
+}
+
+model TimeBlock {
+  id            String   @id @default(uuid()) @db.Uuid
+  botId         String   @db.Uuid
+  bot           Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  resourceId    String   @db.VarChar(64)
+  startsAt      DateTime @db.Timestamptz
+  endsAt        DateTime @db.Timestamptz
+  reason        String?  @db.VarChar(255)
+  createdByTgId BigInt?
+  createdAt     DateTime @default(now()) @db.Timestamptz
+
+  @@index([botId, resourceId, startsAt, endsAt])
+}
+
+model BotSettingsLog {
+  id               String   @id @default(uuid()) @db.Uuid
+  botId            String   @db.Uuid
+  bot              Bot      @relation(fields: [botId], references: [id], onDelete: Cascade)
+  changedByTgId    BigInt?
+  changedByAdminId String?  @db.Uuid
+  changes          Json
+  createdAt        DateTime @default(now()) @db.Timestamptz
+
+  @@index([botId, createdAt])
 }
 
 model Admin {
