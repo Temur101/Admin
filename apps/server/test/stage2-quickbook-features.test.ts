@@ -397,8 +397,8 @@ describe("Stage 2 QuickBook Features: Manual Booking, Client Reschedule, TimeBlo
     expect(patchRes.statusCode).toBe(200);
     const updatedBot = await prisma.bot.findUnique({ where: { id: botId } });
     const settings = (updatedBot?.settings ?? {}) as unknown as QuickBookConfig;
-    expect(settings.services[0].priceUzs).toBe(75000);
-    expect(settings.customTexts.welcome.ru).toBe("Добро пожаловать в барбершоп!");
+    expect(settings.services[0]?.priceUzs).toBe(75000);
+    expect(settings.customTexts?.welcome?.ru).toBe("Добро пожаловать в барбершоп!");
 
     // Audit log was recorded
     const logs = await prisma.botSettingsLog.findMany({ where: { botId } });

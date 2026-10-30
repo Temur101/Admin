@@ -1,0 +1,526 @@
+<!doctype html>
+<html lang="ru" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>QuickBook Launch Video</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --bg-deep: #070a12;
+        --surface: #111827;
+        --surface-border: #1f293d;
+        --text-white: #f8fafc;
+        --text-muted: #94a3b8;
+        --accent-tg: #2481cc;
+        --accent-emerald: #10b981;
+        --accent-amber: #f59e0b;
+        --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        width: 1080px;
+        height: 1920px;
+        background: var(--bg-deep);
+        color: var(--text-white);
+        font-family: var(--font-main);
+        overflow: hidden;
+      }
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        background: radial-gradient(circle at 50% 30%, #172554 0%, #070a12 70%);
+        overflow: hidden;
+      }
+
+      /* Common utility styles */
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px;
+        opacity: 0;
+        pointer-events: none;
+      }
+      #scene-1 {
+        opacity: 1;
+      }
+
+      /* Scene 1: Chaos */
+      #scene-1 .headline {
+        font-size: 56px;
+        font-weight: 800;
+        text-align: center;
+        line-height: 1.25;
+        margin-bottom: 50px;
+        background: linear-gradient(135deg, #f87171, #fbbf24);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+      .chat-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        width: 100%;
+        max-width: 900px;
+      }
+      .chat-bubble {
+        background: #1e293b;
+        border: 2px solid #334155;
+        border-radius: 28px 28px 28px 8px;
+        padding: 32px 40px;
+        font-size: 38px;
+        color: #f1f5f9;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+      }
+      .chat-time {
+        font-size: 24px;
+        color: #64748b;
+        margin-left: auto;
+      }
+      .bubble-missed {
+        border-color: #ef4444;
+        background: rgba(239, 68, 68, 0.15);
+      }
+
+      /* Phone Frame Container */
+      .phone-mock {
+        position: absolute;
+        top: 260px;
+        width: 880px;
+        height: 1400px;
+        background: #0f172a;
+        border: 10px solid #334155;
+        border-radius: 64px;
+        overflow: hidden;
+        box-shadow: 0 40px 100px rgba(0,0,0,0.8), 0 0 60px rgba(36, 129, 204, 0.2);
+        display: flex;
+        flex-direction: column;
+      }
+      .phone-notch {
+        height: 50px;
+        background: #0f172a;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .notch-pill {
+        width: 140px;
+        height: 16px;
+        background: #1e293b;
+        border-radius: 8px;
+      }
+      .tg-header {
+        background: #1e293b;
+        padding: 24px 36px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        border-bottom: 2px solid #334155;
+      }
+      .tg-avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 36px;
+      }
+      .tg-title-box h3 {
+        font-size: 34px;
+        font-weight: 700;
+      }
+      .tg-title-box p {
+        font-size: 22px;
+        color: #38bdf8;
+      }
+
+      .tg-body {
+        flex: 1;
+        padding: 36px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        background: #0b1120;
+      }
+      .bot-msg {
+        background: #1e293b;
+        padding: 28px 32px;
+        border-radius: 24px 24px 24px 6px;
+        font-size: 32px;
+        line-height: 1.4;
+        max-width: 90%;
+      }
+      .btn-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+      }
+      .btn-tg {
+        background: #2481cc;
+        color: white;
+        padding: 24px 32px;
+        border-radius: 18px;
+        font-size: 30px;
+        font-weight: 600;
+        text-align: center;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        border: 2px solid rgba(255,255,255,0.1);
+      }
+      .btn-tg.selected {
+        background: #10b981;
+        color: #064e3b;
+        box-shadow: 0 0 30px rgba(16, 185, 129, 0.6);
+      }
+      .chips-row {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        background: #1e293b;
+        border: 2px solid #334155;
+        padding: 18px 28px;
+        border-radius: 16px;
+        font-size: 28px;
+        font-weight: 600;
+      }
+      .chip.selected {
+        background: #10b981;
+        border-color: #34d399;
+        color: #064e3b;
+        font-weight: 800;
+        box-shadow: 0 0 25px rgba(16, 185, 129, 0.5);
+      }
+
+      /* Notification card overlay */
+      .notif-popup {
+        position: absolute;
+        top: 180px;
+        left: 120px;
+        width: 840px;
+        background: rgba(30, 41, 59, 0.95);
+        backdrop-filter: blur(20px);
+        border: 2px solid #38bdf8;
+        border-radius: 28px;
+        padding: 30px 40px;
+        display: flex;
+        align-items: center;
+        gap: 24px;
+        box-shadow: 0 25px 60px rgba(0,0,0,0.7);
+        z-index: 100;
+      }
+      .notif-popup .notif-icon {
+        font-size: 54px;
+      }
+      .notif-popup .notif-text h4 {
+        font-size: 32px;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+      .notif-popup .notif-text p {
+        font-size: 24px;
+        color: #94a3b8;
+      }
+
+      /* Success confirmation popup */
+      .confirm-overlay {
+        position: absolute;
+        inset: 0;
+        background: rgba(11, 17, 32, 0.94);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 40px;
+        text-align: center;
+        opacity: 0;
+      }
+      .success-badge {
+        width: 140px;
+        height: 140px;
+        background: #10b981;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 80px;
+        box-shadow: 0 0 60px rgba(16, 185, 129, 0.6);
+        margin-bottom: 30px;
+      }
+
+      /* Top Title Bar */
+      .top-title {
+        position: absolute;
+        top: 90px;
+        width: 100%;
+        text-align: center;
+        font-size: 46px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        padding: 0 60px;
+      }
+      .highlight-text {
+        color: #38bdf8;
+      }
+
+      /* Scene 5: Outro */
+      #scene-5 {
+        background: radial-gradient(circle at 50% 50%, #1e1b4b 0%, #070a12 80%);
+      }
+      .logo-icon {
+        width: 180px;
+        height: 180px;
+        border-radius: 44px;
+        background: linear-gradient(135deg, #2563eb, #06b6d4);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 100px;
+        box-shadow: 0 20px 60px rgba(37, 99, 235, 0.5);
+        margin-bottom: 40px;
+      }
+      .outro-brand {
+        font-size: 82px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+        margin-bottom: 24px;
+      }
+      .outro-sub {
+        font-size: 40px;
+        color: #94a3b8;
+        max-width: 800px;
+        text-align: center;
+        line-height: 1.35;
+        margin-bottom: 60px;
+      }
+      .pill-feature {
+        background: rgba(255,255,255,0.08);
+        border: 2px solid rgba(255,255,255,0.15);
+        padding: 20px 40px;
+        border-radius: 50px;
+        font-size: 32px;
+        font-weight: 600;
+        color: #38bdf8;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="20"
+      data-width="1080"
+      data-height="1920"
+    >
+      <audio id="bgm" data-start="0" data-track-index="1" data-volume="0.8" src="assets/music/music.mp3"></audio>
+
+      <!-- Scene 1: The Chaos of manual booking -->
+      <div id="scene-1" class="scene">
+        <h2 class="headline">Сколько клиентов уходит,<br />пока вы стрижёте?</h2>
+        <div class="chat-stack">
+          <div id="bubble-1" class="chat-bubble">
+            <span>💬 «Здравствуйте, в субботу на 16:00 свободно?»</span>
+            <span class="chat-time" data-layout-ignore="true">14:22</span>
+          </div>
+          <div id="bubble-2" class="chat-bubble">
+            <span>💬 «Перенесите меня пожалуйста на завтра!»</span>
+            <span class="chat-time" data-layout-ignore="true">14:48</span>
+          </div>
+          <div id="bubble-3" class="chat-bubble bubble-missed">
+            <span>📞 Пропущенный вызов (2)</span>
+            <span class="chat-time" data-layout-ignore="true">15:10</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- App Presentation Scenes (2, 3, 4) -->
+      <div id="app-view" style="position: absolute; inset: 0; opacity: 0;">
+        <div id="app-title" class="top-title">Онлайн-запись прямо в Telegram 24/7</div>
+
+        <div class="phone-mock">
+          <div class="phone-notch"><div class="notch-pill"></div></div>
+          <div class="tg-header">
+            <div class="tg-avatar">💈</div>
+            <div class="tg-title-box">
+              <h3>QuickCut Barbershop</h3>
+              <p data-layout-ignore="true" style="font-size: 28px; color: #38bdf8;">@QuickCut_test_bot</p>
+            </div>
+          </div>
+          <div class="tg-body">
+            <div id="msg-welcome" class="bot-msg">
+              👋 Добро пожаловать! Выберите услугу:
+            </div>
+            
+            <div id="service-list" class="btn-grid">
+              <div id="srv-1" class="btn-tg">
+                <span>✂️ Мужская стрижка</span>
+                <span>80 000 UZS</span>
+              </div>
+              <div class="btn-tg">
+                <span>🧔 Стрижка бороды</span>
+                <span>40 000 UZS</span>
+              </div>
+              <div class="btn-tg">
+                <span>🔥 Стрижка + Борода</span>
+                <span>110 000 UZS</span>
+              </div>
+            </div>
+
+            <!-- Master selection -->
+            <div id="master-box" style="display: none; flex-direction: column; gap: 16px;">
+              <div class="bot-msg">Выберите мастера:</div>
+              <div class="btn-grid">
+                <div id="master-1" class="btn-tg">
+                  <span>💈 Жасур (Топ-мастер)</span>
+                  <span>⭐️ 5.0</span>
+                </div>
+                <div class="btn-tg">
+                  <span>💈 Алишер</span>
+                  <span>⭐️ 4.9</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Slots selection -->
+            <div id="slot-box" style="display: none; flex-direction: column; gap: 16px;">
+              <div class="bot-msg">Свободные окна на сегодня:</div>
+              <div class="chips-row">
+                <div class="chip">10:00</div>
+                <div class="chip">11:30</div>
+                <div id="slot-target" class="chip">15:30</div>
+                <div class="chip">17:00</div>
+              </div>
+            </div>
+
+            <!-- Confirmation overlay -->
+            <div id="confirm-box" class="confirm-overlay" data-layout-allow-occlusion>
+              <div class="success-badge">✓</div>
+              <h2 style="font-size: 44px; margin-bottom: 16px; color: #10b981;">Запись подтверждена!</h2>
+              <p style="font-size: 32px; color: #cbd5e1; margin-bottom: 24px;">Жасур · Мужская стрижка</p>
+              <div style="background: rgba(255,255,255,0.06); padding: 18px 36px; border-radius: 16px; font-size: 28px; color: #38bdf8;">
+                📅 Сегодня в 15:30
+              </div>
+            </div>
+
+            <!-- Client My Bookings overlay -->
+            <div id="my-bookings-box" class="confirm-overlay" data-layout-allow-occlusion style="background: rgba(15, 23, 42, 0.98);">
+              <h3 style="font-size: 38px; margin-bottom: 24px; color: #38bdf8;">📅 Мои записи</h3>
+              <div style="background: #1e293b; border: 2px solid #334155; border-radius: 20px; padding: 24px; width: 100%; text-align: left; margin-bottom: 20px;">
+                <p style="font-size: 30px; font-weight: 700;">Мужская стрижка</p>
+                <p style="font-size: 26px; color: #94a3b8;">Мастер: Жасур · 15:30</p>
+              </div>
+              <div style="display: flex; gap: 16px; width: 100%;">
+                <div id="btn-resched" class="btn-tg selected" style="flex: 1; font-size: 26px; justify-content: center;">
+                  🔄 Перенести
+                </div>
+                <div class="btn-tg" style="flex: 1; font-size: 26px; justify-content: center; background: #ef4444;">
+                  ❌ Отменить
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Notification popup -->
+        <div id="notif-popup" class="notif-popup" style="opacity: 0;">
+          <div class="notif-icon">⏰</div>
+          <div class="notif-text">
+            <h4>Напоминание о записи</h4>
+            <p>Ждём вас через 2 часа (15:30) в QuickCut</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 5: Outro -->
+      <div id="scene-5" class="scene">
+        <div class="logo-icon">💈</div>
+        <h1 class="outro-brand">QuickBook</h1>
+        <p class="outro-sub">Ваше расписание заполнено.<br />Ваши руки свободны.</p>
+        <div style="display: flex; flex-direction: column; gap: 20px; align-items: center;">
+          <div class="pill-feature">⚡️ 0 двойных записей (PostgreSQL Locks)</div>
+          <div class="pill-feature">📅 Клиент сам переносит визит</div>
+          <div class="pill-feature">🤖 Работает в Telegram 24/7</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // Scene 1: Chaos (0.0s - 3.5s)
+      tl.to("#scene-1", { opacity: 1, duration: 0.3 }, 0);
+      tl.from("#bubble-1", { y: 40, opacity: 0, duration: 0.4, ease: "power2.out" }, 0.6);
+      tl.from("#bubble-2", { y: 40, opacity: 0, duration: 0.4, ease: "power2.out" }, 1.3);
+      tl.from("#bubble-3", { y: 40, opacity: 0, duration: 0.4, ease: "power2.out" }, 2.0);
+      tl.to("#scene-1", { opacity: 0, scale: 0.95, duration: 0.4, ease: "power2.in" }, 3.3);
+
+      // Scene 2: App Reveal & Service Select (3.5s - 8.0s)
+      tl.to("#app-view", { opacity: 1, duration: 0.4 }, 3.6);
+      tl.from(".phone-mock", { y: 80, opacity: 0, duration: 0.6, ease: "power3.out" }, 3.6);
+      tl.from("#msg-welcome", { scale: 0.9, opacity: 0, duration: 0.3 }, 4.2);
+      tl.from("#service-list .btn-tg", { y: 20, opacity: 0, stagger: 0.15, duration: 0.4 }, 4.5);
+      // Tap service
+      tl.to("#srv-1", { scale: 0.96, background: "#10b981", duration: 0.2 }, 6.2);
+      tl.to("#srv-1", { scale: 1, duration: 0.2 }, 6.4);
+
+      // Scene 3: Master & Slot Select (8.0s - 13.0s)
+      tl.to("#service-list", { display: "none", duration: 0.1 }, 7.2);
+      tl.set("#master-box", { display: "flex" }, 7.2);
+      tl.from("#master-box", { opacity: 0, y: 20, duration: 0.3 }, 7.2);
+      tl.to("#app-title", { textContent: "Выбор мастера и свободного времени", duration: 0.1 }, 7.2);
+      // Tap master
+      tl.to("#master-1", { scale: 0.96, background: "#10b981", duration: 0.2 }, 8.3);
+      tl.to("#master-1", { scale: 1, duration: 0.2 }, 8.5);
+
+      tl.to("#master-box", { display: "none", duration: 0.1 }, 9.0);
+      tl.set("#slot-box", { display: "flex" }, 9.0);
+      tl.from("#slot-box .chip", { scale: 0.8, opacity: 0, stagger: 0.08, duration: 0.3 }, 9.1);
+      // Tap slot 15:30
+      tl.to("#slot-target", { scale: 1.15, background: "#10b981", color: "#064e3b", duration: 0.2 }, 10.2);
+      
+      // Confirmation pop
+      tl.to("#confirm-box", { opacity: 1, duration: 0.4, ease: "back.out(1.4)" }, 10.8);
+      tl.to("#app-title", { textContent: "Мгновенное бронирование без накладок!", duration: 0.1 }, 10.8);
+
+      // Scene 4: Auto-reminder & Reschedule (12.8s - 16.2s)
+      tl.to("#confirm-box", { opacity: 0, duration: 0.3 }, 12.8);
+      tl.fromTo("#notif-popup", { y: -40, opacity: 0 }, { y: 0, opacity: 1, duration: 0.4, ease: "power3.out" }, 13.0);
+      tl.to("#app-title", { textContent: "Автонапоминания и перенос в 1 клик", duration: 0.1 }, 13.0);
+      
+      // Show My Bookings
+      tl.to("#my-bookings-box", { opacity: 1, duration: 0.3 }, 14.0);
+      tl.to("#btn-resched", { scale: 0.95, duration: 0.2 }, 14.8);
+      tl.to("#btn-resched", { scale: 1, duration: 0.2 }, 15.0);
+
+      // Scene 5: Outro (16.2s - 20.0s)
+      tl.to("#notif-popup", { opacity: 0, duration: 0.2 }, 16.2);
+      tl.to("#app-view", { opacity: 0, scale: 0.92, duration: 0.3 }, 16.3);
+      tl.to("#scene-5", { opacity: 1, duration: 0.4, ease: "power2.out" }, 16.5);
+      tl.from(".logo-icon", { scale: 0.5, opacity: 0, duration: 0.4, ease: "back.out(1.7)" }, 16.6);
+      tl.from(".outro-brand", { y: 20, opacity: 0, duration: 0.3 }, 16.8);
+      tl.from(".outro-sub", { y: 20, opacity: 0, duration: 0.3 }, 17.0);
+      tl.from(".pill-feature", { y: 20, opacity: 0, stagger: 0.12, duration: 0.3 }, 17.2);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

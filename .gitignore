@@ -21,6 +21,7 @@ dist/
 build/
 coverage/
 *.tsbuildinfo
+.hyperframes/
 
 # OS & IDE
 .DS_Store

@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="ru" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>QuickBook Speed-Run & Stress-Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --bg-cyber: #050811;
+        --cyan-glow: #06b6d4;
+        --green-neon: #10b981;
+        --purple-neon: #8b5cf6;
+        --red-alert: #f43f5e;
+        --text-bright: #f8fafc;
+        --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+        --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html, body {
+        width: 1080px;
+        height: 1920px;
+        background: var(--bg-cyber);
+        color: var(--text-bright);
+        font-family: var(--font-sans);
+        overflow: hidden;
+      }
+      #root {
+        position: relative;
+        width: 1080px;
+        height: 1920px;
+        background: radial-gradient(circle at 50% 20%, #0e1e38 0%, #050811 75%);
+        overflow: hidden;
+      }
+
+      /* Cyber grid background */
+      .grid-bg {
+        position: absolute;
+        inset: 0;
+        background-image: 
+          linear-gradient(rgba(6, 182, 212, 0.07) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(6, 182, 212, 0.07) 1px, transparent 1px);
+        background-size: 80px 80px;
+        pointer-events: none;
+      }
+
+      .scene {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px;
+        opacity: 0;
+      }
+      #scene-1 {
+        opacity: 1;
+      }
+
+      /* Stopwatch element */
+      .stopwatch-box {
+        background: rgba(15, 23, 42, 0.9);
+        border: 4px solid var(--cyan-glow);
+        border-radius: 40px;
+        padding: 30px 60px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        box-shadow: 0 0 60px rgba(6, 182, 212, 0.4);
+        margin-bottom: 50px;
+      }
+      .stopwatch-digits {
+        font-family: var(--font-mono);
+        font-size: 110px;
+        font-weight: 900;
+        color: #38bdf8;
+        letter-spacing: 0.05em;
+        text-shadow: 0 0 30px rgba(56, 189, 248, 0.6);
+      }
+      .stopwatch-label {
+        font-size: 32px;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 0.2em;
+        margin-top: 10px;
+      }
+
+      /* Phone Frame Container */
+      .phone-cyber {
+        position: absolute;
+        top: 240px;
+        width: 860px;
+        height: 1380px;
+        background: #090d16;
+        border: 8px solid #1e293b;
+        border-radius: 56px;
+        overflow: hidden;
+        box-shadow: 0 30px 90px rgba(0,0,0,0.9), 0 0 50px rgba(6, 182, 212, 0.25);
+        display: flex;
+        flex-direction: column;
+      }
+      .phone-bar {
+        height: 48px;
+        background: #0f172a;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      .bar-dot {
+        width: 120px;
+        height: 14px;
+        background: #334155;
+        border-radius: 7px;
+      }
+      .tg-top {
+        background: #0f172a;
+        padding: 24px 36px;
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        border-bottom: 2px solid #1e293b;
+      }
+      .tg-top h3 {
+        font-size: 34px;
+        font-weight: 700;
+      }
+      .tg-top p {
+        font-size: 28px;
+        color: #06b6d4;
+      }
+      .tg-content {
+        flex: 1;
+        padding: 36px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        background: #050811;
+      }
+
+      .cyber-btn {
+        background: #0f172a;
+        border: 2px solid #1e293b;
+        border-radius: 20px;
+        padding: 24px 32px;
+        font-size: 32px;
+        font-weight: 700;
+        color: #f1f5f9;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .cyber-btn.active {
+        border-color: #10b981;
+        background: rgba(16, 185, 129, 0.2);
+        box-shadow: 0 0 35px rgba(16, 185, 129, 0.5);
+      }
+
+      /* Badges & Metrics */
+      .badge-lock {
+        background: linear-gradient(135deg, #059669, #10b981);
+        color: #ffffff;
+        padding: 28px 50px;
+        border-radius: 30px;
+        font-size: 40px;
+        font-weight: 900;
+        text-align: center;
+        box-shadow: 0 0 60px rgba(16, 185, 129, 0.7);
+        letter-spacing: -0.01em;
+      }
+      .metric-row {
+        display: flex;
+        gap: 24px;
+        width: 100%;
+        max-width: 900px;
+      }
+      .metric-card {
+        flex: 1;
+        background: rgba(15, 23, 42, 0.95);
+        border: 2px solid #334155;
+        border-radius: 28px;
+        padding: 30px;
+        text-align: center;
+      }
+      .metric-card h4 {
+        font-size: 64px;
+        font-weight: 900;
+        color: #10b981;
+        margin-bottom: 8px;
+      }
+      .metric-card p {
+        font-size: 28px;
+        color: #94a3b8;
+      }
+
+      /* Concurrency visualization */
+      .concurrency-box {
+        width: 100%;
+        max-width: 920px;
+        background: #0f172a;
+        border: 3px solid #06b6d4;
+        border-radius: 36px;
+        padding: 40px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        box-shadow: 0 0 70px rgba(6, 182, 212, 0.35);
+      }
+      .lock-status {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #1e293b;
+        padding: 24px 32px;
+        border-radius: 20px;
+        font-size: 32px;
+        font-weight: 700;
+      }
+
+      /* Scene 5 Outro */
+      .outro-title {
+        font-size: 88px;
+        font-weight: 900;
+        letter-spacing: -0.03em;
+        background: linear-gradient(135deg, #38bdf8, #10b981);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 24px;
+      }
+      .outro-lead {
+        font-size: 44px;
+        color: #e2e8f0;
+        text-align: center;
+        margin-bottom: 50px;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-duration="18"
+      data-width="1080"
+      data-height="1920"
+    >
+      <div class="grid-bg"></div>
+      <audio id="bgm" data-start="0" data-track-index="1" data-volume="0.8" src="assets/music/music.mp3"></audio>
+
+      <!-- Scene 1: Speed Challenge Start (0.0s - 3.2s) -->
+      <div id="scene-1" class="scene">
+        <h2 style="font-size: 54px; font-weight: 800; text-align: center; margin-bottom: 40px; line-height: 1.25;">
+          СКОЛЬКО СЕКУНД НУЖНО,<br /><span style="color: #06b6d4;">ЧТОБЫ ЗАПИСАТЬСЯ К ВАМ?</span>
+        </h2>
+        
+        <div class="stopwatch-box">
+          <div id="sw-digits-1" class="stopwatch-digits">00:00.00</div>
+          <div class="stopwatch-label">LIVE STOPWATCH</div>
+        </div>
+
+        <div id="sw-start-badge" style="background: #10b981; color: #022c22; font-size: 36px; font-weight: 900; padding: 18px 48px; border-radius: 30px;">
+          ⚡️ СТАРТ ТЕСТА
+        </div>
+      </div>
+
+      <!-- Scene 2: 2.4s Speed Run (3.2s - 7.5s) -->
+      <div id="scene-2" class="scene">
+        <div style="position: absolute; top: 90px; text-align: center; width: 100%;">
+          <div style="font-size: 34px; color: #94a3b8; font-weight: 700; margin-bottom: 8px;">ТЕСТ СКОРОСТИ ЗАПИСИ</div>
+          <div id="sw-running" class="stopwatch-digits" style="font-size: 80px;">00:00.00</div>
+        </div>
+
+        <div class="phone-cyber">
+          <div class="phone-bar"><div class="bar-dot"></div></div>
+          <div class="tg-top">
+            <div style="font-size: 48px;">💈</div>
+            <div>
+              <h3>QuickCut Barbershop</h3>
+              <p data-layout-ignore="true">@QuickCut_test_bot</p>
+            </div>
+          </div>
+          <div class="tg-content">
+            <div id="btn-speed-1" class="cyber-btn">
+              <span>✂️ Стрижка</span>
+              <span style="color: #38bdf8;">80 000 UZS</span>
+            </div>
+            <div id="btn-speed-2" class="cyber-btn">
+              <span>💈 Мастер: Алишер</span>
+              <span style="color: #10b981;">⭐️ 4.9</span>
+            </div>
+            <div id="btn-speed-3" class="cyber-btn">
+              <span>🕒 Время: 15:30</span>
+              <span style="color: #f59e0b;">Свободно</span>
+            </div>
+
+            <div id="speed-result-box" style="margin-top: 20px; opacity: 0; display: flex; flex-direction: column; align-items: center; gap: 20px;">
+              <div class="badge-lock">⚡️ ЗАПИСЬ ОФОРМЛЕНА!</div>
+              <p style="font-size: 32px; color: #94a3b8; text-align: center;">2.4 секунды · 3 клика</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 3: Concurrency Stress Test (7.5s - 13.0s) -->
+      <div id="scene-3" class="scene">
+        <h2 style="font-size: 50px; font-weight: 800; text-align: center; margin-bottom: 40px; line-height: 1.25;">
+          🔥 СТРЕСС-ТЕСТ:<br />
+          <span style="color: #f43f5e;">50 КЛИЕНТОВ НА 1 СЛОТ</span>
+        </h2>
+
+        <div class="concurrency-box">
+          <div style="font-size: 30px; color: #94a3b8; margin-bottom: 8px;">Параллельные запросы к слоту 15:30:</div>
+          
+          <div class="lock-status" style="border: 2px solid #10b981;">
+            <span>Клиент #1</span>
+            <span style="color: #10b981;">✅ ЗАБРОНИРОВАНО (15:30)</span>
+          </div>
+
+          <div class="lock-status" style="border: 2px solid #06b6d4;">
+            <span>Клиенты #2 — #50</span>
+            <span style="color: #38bdf8;">🔄 Альтернативные слоты (16:00, 16:30)</span>
+          </div>
+
+          <div style="background: rgba(16, 185, 129, 0.15); border: 2px dashed #10b981; border-radius: 20px; padding: 24px; text-align: center;">
+            <p style="font-size: 32px; font-weight: 800; color: #10b981;">🛡 PostgreSQL Advisory & Exclusion Lock</p>
+            <p style="font-size: 28px; color: #94a3b8; margin-top: 6px;">Накладки и двойные записи невозможны физически</p>
+          </div>
+        </div>
+
+        <div class="metric-row" style="margin-top: 40px;">
+          <div class="metric-card">
+            <h4>0</h4>
+            <p>Двойных записей</p>
+          </div>
+          <div class="metric-card">
+            <h4>100%</h4>
+            <p>Доставка в базу</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scene 4 & 5: Outro & Branding (13.0s - 18.0s) -->
+      <div id="scene-4" class="scene">
+        <div style="font-size: 110px; margin-bottom: 30px;">💈</div>
+        <h1 class="outro-title">QuickBook</h1>
+        <p class="outro-lead">Быстрее, чем набрать номер администратора.</p>
+
+        <div style="display: flex; flex-direction: column; gap: 20px; width: 100%; max-width: 800px;">
+          <div class="cyber-btn" style="border-color: #06b6d4; justify-content: center; font-size: 34px;">
+            ⚡️ 2.4 секунды на полный цикл
+          </div>
+          <div class="cyber-btn" style="border-color: #10b981; justify-content: center; font-size: 34px;">
+            🔒 Атомарная защита от накладок
+          </div>
+          <div class="cyber-btn" style="border-color: #8b5cf6; justify-content: center; font-size: 34px;">
+            📱 Работает внутри Telegram 24/7
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+
+      // Scene 1: Challenge Start (0.0s - 3.2s)
+      tl.to("#scene-1", { opacity: 1, duration: 0.1 }, 0);
+      tl.from(".stopwatch-box", { scale: 0.85, opacity: 0, duration: 0.5, ease: "back.out(1.5)" }, 0.2);
+      tl.from("#sw-start-badge", { scale: 0.9, opacity: 0, y: 20, duration: 0.4 }, 0.8);
+      tl.to("#scene-1", { opacity: 0, scale: 0.95, duration: 0.3 }, 3.0);
+
+      // Scene 2: Speed Run (3.2s - 7.5s)
+      tl.to("#scene-2", { opacity: 1, duration: 0.3 }, 3.2);
+      tl.from(".phone-cyber", { y: 60, opacity: 0, duration: 0.4 }, 3.2);
+
+      // Live timer counter simulation
+      const timeObj = { val: 0 };
+      tl.to(timeObj, {
+        val: 2.4,
+        duration: 2.4,
+        ease: "linear",
+        onUpdate: () => {
+          const el = document.getElementById("sw-running");
+          if (el) {
+            const sec = Math.floor(timeObj.val);
+            const ms = Math.floor((timeObj.val % 1) * 100);
+            el.textContent = `00:0${sec}.${ms < 10 ? '0' : ''}${ms}`;
+          }
+        }
+      }, 3.5);
+
+      // Clicks
+      tl.to("#btn-speed-1", { className: "cyber-btn active", scale: 0.96, duration: 0.15 }, 4.1);
+      tl.to("#btn-speed-1", { scale: 1, duration: 0.15 }, 4.3);
+
+      tl.to("#btn-speed-2", { className: "cyber-btn active", scale: 0.96, duration: 0.15 }, 4.8);
+      tl.to("#btn-speed-2", { scale: 1, duration: 0.15 }, 5.0);
+
+      tl.to("#btn-speed-3", { className: "cyber-btn active", scale: 0.96, duration: 0.15 }, 5.6);
+      tl.to("#btn-speed-3", { scale: 1, duration: 0.15 }, 5.8);
+
+      // Result Lock at 2.4s
+      tl.to("#speed-result-box", { opacity: 1, scale: 1.05, duration: 0.3, ease: "back.out(2)" }, 6.0);
+      tl.to("#scene-2", { opacity: 0, scale: 0.92, duration: 0.3 }, 7.2);
+
+      // Scene 3: Concurrency Stress Test (7.5s - 13.0s)
+      tl.to("#scene-3", { opacity: 1, duration: 0.3 }, 7.5);
+      tl.from(".concurrency-box", { scale: 0.9, opacity: 0, duration: 0.4, ease: "power2.out" }, 7.6);
+      tl.from(".metric-card", { y: 30, opacity: 0, stagger: 0.15, duration: 0.4 }, 8.4);
+      tl.to("#scene-3", { opacity: 0, scale: 0.95, duration: 0.3 }, 12.6);
+
+      // Scene 4: Outro (13.0s - 18.0s) - held for 5 seconds
+      tl.to("#scene-4", { opacity: 1, duration: 0.4 }, 13.0);
+      tl.from(".outro-title", { scale: 0.8, opacity: 0, duration: 0.5, ease: "back.out(1.5)" }, 13.1);
+      tl.from(".outro-lead", { y: 20, opacity: 0, duration: 0.4 }, 13.3);
+      tl.from("#scene-4 .cyber-btn", { y: 20, opacity: 0, stagger: 0.15, duration: 0.4 }, 13.6);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="ru" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <title>Онлайн-запись: путь клиента и владельца</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      /* Сетка 8px. Поля 96px. Верх 160px, низ 280px свободны от важного текста. */
+      :root {
+        --bg: #f4f6fa; --card: #ffffff; --ink: #0f1b2d; --muted: #5b6678; --line: #d9dfe8;
+        --accent: #1d4ed8; --accent-soft: #e3ebff; --ok: #15803d; --ok-soft: #dcf3e4;
+        --font: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--font); }
+      #root { position: relative; width: 1080px; height: 1920px; background: var(--bg); overflow: hidden; }
+      .scene { position: absolute; left: 0; top: 0; width: 1080px; height: 1920px; opacity: 0; }
+      #s1 { opacity: 1; }
+      .center { padding: 160px 96px 280px; display: flex; flex-direction: column; justify-content: center; }
+      .kicker { font-size: 36px; font-weight: 600; color: var(--accent); margin-bottom: 32px; }
+      h1 { font-size: 96px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; }
+      h2 { font-size: 72px; font-weight: 800; line-height: 1.15; margin-bottom: 64px; }
+      .lead { font-size: 48px; line-height: 1.35; color: var(--muted); margin-top: 40px; }
+
+      .cap { position: absolute; left: 96px; right: 96px; top: 160px; height: 136px; display: flex; flex-direction: column; justify-content: flex-end; }
+      .cap .who { font-size: 32px; font-weight: 700; color: var(--accent); letter-spacing: 0.04em; text-transform: uppercase; }
+      .cap .what { font-size: 56px; font-weight: 800; line-height: 1.15; margin-top: 8px; }
+
+      .chat { position: absolute; left: 96px; top: 336px; width: 888px; height: 1304px; background: var(--card); border: 2px solid var(--line); border-radius: 32px; overflow: hidden; }
+      .head { height: 128px; border-bottom: 2px solid var(--line); display: flex; align-items: center; gap: 24px; padding: 0 32px; }
+      .ava { width: 72px; height: 72px; border-radius: 36px; background: var(--accent); color: #fff; font-size: 36px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+      .hname { font-size: 40px; font-weight: 700; }
+      .hsub { font-size: 32px; color: var(--muted); }
+      .body { padding: 32px; display: flex; flex-direction: column; gap: 24px; }
+      .bub { max-width: 760px; background: #eef1f6; border-radius: 24px; padding: 24px 32px; font-size: 40px; line-height: 1.3; }
+      .bub.me { align-self: flex-end; background: var(--accent); color: #fff; }
+      .bub b { font-weight: 700; }
+      .row { height: 104px; border: 2px solid var(--line); border-radius: 20px; background: #fff; padding: 0 32px; display: flex; align-items: center; justify-content: space-between; font-size: 40px; font-weight: 600; }
+      .row span { color: var(--muted); font-weight: 500; font-size: 36px; }
+      .row.on { background: var(--accent-soft); border-color: var(--accent); }
+      .row.on span { color: var(--accent); }
+      .grid { display: grid; gap: 16px; }
+      .g3 { grid-template-columns: repeat(3, 1fr); }
+      .g4 { grid-template-columns: repeat(4, 1fr); }
+      .chip { height: 96px; border: 2px solid var(--line); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 600; background: #fff; }
+      .chip.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+      .chip.busy { color: #a7b0bf; background: #f4f6fa; text-decoration: line-through; }
+      .label { font-size: 32px; font-weight: 600; color: var(--muted); }
+      .ok { background: var(--ok-soft); border: 2px solid var(--ok); border-radius: 24px; padding: 24px 32px; font-size: 40px; line-height: 1.35; }
+      .ok h3 { font-size: 44px; font-weight: 800; color: var(--ok); margin-bottom: 8px; }
+      .note { position: absolute; left: 96px; right: 96px; top: 1672px; font-size: 32px; color: var(--muted); line-height: 1.3; }
+
+      .bridge { display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 96px; }
+      .bridge h2 { margin: 0; }
+
+      .step { display: flex; align-items: center; gap: 32px; background: var(--card); border: 2px solid var(--line); border-radius: 24px; padding: 32px 40px; margin-bottom: 24px; }
+      .tick { flex: 0 0 64px; width: 64px; height: 64px; border-radius: 32px; background: var(--ok); color: #fff; font-size: 40px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+      .step p { font-size: 48px; font-weight: 700; line-height: 1.25; }
+      .step small { display: block; font-size: 36px; font-weight: 400; color: var(--muted); margin-top: 4px; }
+
+      .grid10 { display: grid; grid-template-columns: repeat(5, 1fr); gap: 24px; margin-bottom: 48px; }
+      .client { height: 144px; border-radius: 24px; background: var(--card); border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; font-size: 40px; font-weight: 700; color: var(--muted); }
+      .client.win { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+      .result-row { display: flex; gap: 24px; }
+      .result { flex: 1; background: var(--card); border: 2px solid var(--line); border-radius: 24px; padding: 32px; }
+      .result b { display: block; font-size: 72px; font-weight: 800; }
+      .result.good b { color: var(--ok); }
+      .result span { font-size: 36px; color: var(--muted); line-height: 1.3; display: block; margin-top: 8px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="33" data-width="1080" data-height="1920">
+      <audio id="bgm" data-start="0" data-track-index="1" data-volume="0.6" src="assets/music/music.mp3"></audio>
+
+      <!-- 1: заставка 0-3 -->
+      <div id="s1" class="scene center">
+        <div class="kicker">Онлайн-запись в чате</div>
+        <h1>Запись клиентов без звонков</h1>
+        <p class="lead">Работает круглосуточно</p>
+      </div>
+
+      <!-- 2: услуга 3-7.5 -->
+      <div id="s2" class="scene">
+        <div class="cap"><div class="who">Клиент · шаг 1</div><div class="what">Выбирает услугу</div></div>
+        <div class="chat">
+          <div class="head"><div class="ava">Б</div><div><div class="hname">Барбершоп</div><div class="hsub">онлайн-запись</div></div></div>
+          <div class="body">
+            <div class="bub">Здравствуйте! На какую услугу записать вас?</div>
+            <div class="row">Мужская стрижка<span>80 000</span></div>
+            <div class="row">Детская стрижка<span>60 000</span></div>
+            <div class="row">Стрижка бороды<span>50 000</span></div>
+            <div class="row">Стрижка и борода<span>120 000</span></div>
+            <div class="row">Королевское бритьё<span>90 000</span></div>
+            <div class="row">Укладка<span>40 000</span></div>
+          </div>
+        </div>
+        <div class="note">Пример оформления. Услуги, цены и тексты настраиваются под ваш бизнес.</div>
+      </div>
+
+      <!-- 3: мастер 7.5-11 -->
+      <div id="s3" class="scene">
+        <div class="cap"><div class="who">Клиент · шаг 2</div><div class="what">Выбирает мастера</div></div>
+        <div class="chat">
+          <div class="head"><div class="ava">Б</div><div><div class="hname">Барбершоп</div><div class="hsub">онлайн-запись</div></div></div>
+          <div class="body">
+            <div class="bub me">Мужская стрижка</div>
+            <div class="bub">К какому мастеру записать?</div>
+            <div class="row">Алишер<span>свободен сегодня</span></div>
+            <div class="row">Рустам<span>свободен сегодня</span></div>
+            <div class="row">Даниил<span>с завтрашнего дня</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 4: дата и время 11-15 -->
+      <div id="s4" class="scene">
+        <div class="cap"><div class="who">Клиент · шаг 3</div><div class="what">Выбирает дату и время</div></div>
+        <div class="chat">
+          <div class="head"><div class="ava">Б</div><div><div class="hname">Барбершоп</div><div class="hsub">онлайн-запись</div></div></div>
+          <div class="body">
+            <div class="bub me">Рустам</div>
+            <div class="bub">Выберите день и время. Показаны только свободные места.</div>
+            <div class="label">День</div>
+            <div class="grid g3">
+              <div class="chip on">Пт 31.10</div><div class="chip">Сб 01.11</div><div class="chip">Вс 02.11</div>
+            </div>
+            <div class="label">Время</div>
+            <div class="grid g4">
+              <div class="chip busy">10:00</div><div class="chip">11:00</div><div class="chip busy">12:00</div><div class="chip">13:00</div>
+              <div class="chip">14:00</div><div class="chip on" id="t1530">15:30</div><div class="chip">16:30</div><div class="chip">17:30</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5: подтверждение 15-18.5 -->
+      <div id="s5" class="scene">
+        <div class="cap"><div class="who">Клиент · шаг 4</div><div class="what">Оставляет контакт, запись готова</div></div>
+        <div class="chat">
+          <div class="head"><div class="ava">Б</div><div><div class="hname">Барбершоп</div><div class="hsub">онлайн-запись</div></div></div>
+          <div class="body">
+            <div class="bub">Как вас зовут и какой у вас номер телефона?</div>
+            <div class="bub me" id="c1">Тимур, +998 90 123 45 67</div>
+            <div class="ok" id="okcard">
+              <h3>Запись подтверждена</h3>
+              Мужская стрижка<br />Мастер: Рустам<br />Пятница, 31 октября, 15:30
+            </div>
+            <div class="bub" id="c2">Мы напомним вам о записи заранее.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 6: переход 18.5-20.5 -->
+      <div id="s6" class="scene bridge"><h2>В этот момент запись<br />приходит владельцу</h2></div>
+
+      <!-- 7: владелец 20.5-26.5 -->
+      <div id="s7" class="scene">
+        <div class="cap"><div class="who">Владелец</div><div class="what">Получает запись сразу</div></div>
+        <div class="chat">
+          <div class="head"><div class="ava">Б</div><div><div class="hname">Барбершоп</div><div class="hsub">чат владельца</div></div></div>
+          <div class="body">
+            <div class="ok" id="newb" style="background:#e3ebff;border-color:#1d4ed8;">
+              <h3 style="color:#1d4ed8;">Новая запись</h3>
+              Тимур · +998 90 123 45 67<br />Мужская стрижка · Рустам<br />Пт 31.10, 15:30
+            </div>
+            <div class="label" id="todaylbl" style="margin-top:16px;">Записи на пятницу</div>
+            <div class="row" id="r1">11:00 · Детская стрижка<span>Алишер</span></div>
+            <div class="row" id="r2">13:00 · Стрижка и борода<span>Даниил</span></div>
+            <div class="row on" id="r3">15:30 · Мужская стрижка<span>Рустам</span></div>
+            <div class="row" id="r4">17:30 · Укладка<span>Алишер</span></div>
+          </div>
+        </div>
+        <div class="note">Пример оформления. Владелец видит записи и может отменить или перенести их в чате.</div>
+      </div>
+
+      <!-- 8: один слот 26.5-29.5 -->
+      <div id="s8" class="scene center">
+        <h2>Одно время — одна запись</h2>
+        <div class="grid10">
+          <div class="client win">1</div><div class="client">2</div><div class="client">3</div><div class="client">4</div><div class="client">5</div>
+          <div class="client">6</div><div class="client">7</div><div class="client">8</div><div class="client">9</div><div class="client">10</div>
+        </div>
+        <div class="result-row">
+          <div class="result good"><b>1</b><span>клиент записан</span></div>
+          <div class="result"><b>9</b><span>получили другое время</span></div>
+        </div>
+      </div>
+
+      <!-- 9: итог 29.5-33 -->
+      <div id="s9" class="scene center">
+        <h2>Итог</h2>
+        <div class="step"><div class="tick">✓</div><p>Клиент записывается сам<small>В любое время, без звонков</small></p></div>
+        <div class="step"><div class="tick">✓</div><p>Расписание без накладок<small>Занятое время недоступно другим</small></p></div>
+        <div class="step"><div class="tick">✓</div><p>Запись сразу у владельца<small>И напоминание клиенту</small></p></div>
+      </div>
+    </div>
+
+    <script>
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const IN = (sel, t, d = 0.4, s = 0) => tl.fromTo(sel, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: d, stagger: s }, t);
+      const SCENE = (id, a, b) => { tl.to(id, { opacity: 1, duration: 0.3 }, a); tl.to(id, { opacity: 0, duration: 0.3 }, b - 0.3); };
+      const ON = (sel, t) => tl.to(sel, { backgroundColor: "#e3ebff", borderColor: "#1d4ed8", duration: 0.25 }, t);
+
+      // 1
+      IN("#s1 .kicker, #s1 h1, #s1 .lead", 0.1, 0.5, 0.25);
+      tl.to("#s1", { opacity: 0, duration: 0.3 }, 2.7);
+
+      // 2 услуга
+      SCENE("#s2", 3, 7.5);
+      IN("#s2 .cap", 3.1); IN("#s2 .bub", 3.4); IN("#s2 .row", 3.9, 0.35, 0.25); IN("#s2 .note", 5.6, 0.4);
+      ON("#s2 .row:nth-child(2)", 6.4);
+
+      // 3 мастер
+      SCENE("#s3", 7.5, 11);
+      IN("#s3 .cap", 7.6); IN("#s3 .bub", 7.8, 0.35, 0.35); IN("#s3 .row", 8.6, 0.35, 0.3);
+      ON("#s3 .row:nth-child(4)", 10.0);
+
+      // 4 дата, время
+      SCENE("#s4", 11, 15);
+      IN("#s4 .cap", 11.1); IN("#s4 .bub", 11.3, 0.35, 0.3); IN("#s4 .label, #s4 .grid", 12.0, 0.4, 0.2);
+      tl.fromTo("#t1530", { scale: 1 }, { scale: 1.06, duration: 0.2, yoyo: true, repeat: 1 }, 14.0);
+
+      // 5 подтверждение
+      SCENE("#s5", 15, 18.5);
+      IN("#s5 .cap", 15.1); IN("#s5 .bub:first-of-type", 15.3); IN("#c1", 16.0); IN("#okcard", 16.8); IN("#c2", 17.5);
+
+      // 6 переход
+      SCENE("#s6", 18.5, 20.5); IN("#s6 h2", 18.7, 0.5);
+
+      // 7 владелец
+      SCENE("#s7", 20.5, 26.5);
+      IN("#s7 .cap", 20.6); IN("#newb", 21.0, 0.5); IN("#todaylbl", 22.4);
+      IN("#r1, #r2, #r3, #r4", 22.8, 0.35, 0.3); IN("#s7 .note", 24.4, 0.4);
+
+      // 8 одно время
+      SCENE("#s8", 26.5, 29.5);
+      IN("#s8 h2", 26.6);
+      tl.fromTo("#s8 .client", { opacity: 0 }, { opacity: 1, duration: 0.2, stagger: 0.08 }, 27.1);
+      IN("#s8 .result", 28.0, 0.4, 0.2);
+
+      // 9 итог
+      tl.to("#s9", { opacity: 1, duration: 0.3 }, 29.5);
+      IN("#s9 h2", 29.7); IN("#s9 .step", 30.2, 0.4, 0.6);
+
+      window.__timelines["main"] = tl;
+      tl.seek(0);
+    </script>
+  </body>
+</html>
