@@ -3,8 +3,8 @@ import type { Redis } from "ioredis";
 import type { QuickBookConfig } from "@lcqb/contracts";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
-import { notifyAdmins } from "../shared/notification.js";
-import { formatTashkentDateTime } from "../shared/payment-service.js";
+import { randomUUID } from "node:crypto";
+import { enqueueAdminNotifications, dispatchQueuedNotifications, bookingNotification } from "../shared/notification-outbox.js";
 import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS } from "./booking-constants.js";
 import { validateBookingSlotEligibility } from "./booking-validator.js";
 
@@ -41,7 +41,6 @@ export async function rescheduleBooking(
     userId,
     isAdmin = false,
     config,
-    lang = "RU",
   } = params;
 
   const now = params.now ?? new Date();
@@ -84,6 +83,7 @@ export async function rescheduleBooking(
   const endTime = new Date(slotDate.getTime() + booking.durationMin * 60000);
 
   try {
+    const eventKey = `booking:${bookingId}:rescheduled:${randomUUID()}`;
     const updated = await prisma.$transaction(
       async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${`calendar:${botId}`}));`;
@@ -120,7 +120,8 @@ export async function rescheduleBooking(
           throw new Error("SLOT_ALREADY_BOOKED");
         }
 
-        return tx.booking.update({
+        if (current.slotTime.getTime() === slotDate.getTime()) return current;
+        const updatedBooking = await tx.booking.update({
           where: { id: bookingId },
           data: {
             slotTime: slotDate,
@@ -131,6 +132,8 @@ export async function rescheduleBooking(
             reminderLastError: null,
           },
         });
+        await enqueueAdminNotifications(tx, botId, eventKey, bookingNotification(updatedBooking, "BOOKING_RESCHEDULED"));
+        return updatedBooking;
       },
       { maxWait: 15000, timeout: 20000 },
     );
@@ -139,29 +142,7 @@ export async function rescheduleBooking(
     const reminderScore = slotDate.getTime() - REMINDER_LEAD_TIME_MS;
     await redis.zadd(REMINDER_ZSET_KEY, reminderScore, booking.id).catch(() => {});
 
-    // Notify admins / staff
-    const loc = lang === "UZ" ? "uz" : "ru";
-    const serviceName = service.name[loc] || booking.serviceName;
-    const staffName = staff.name[loc] || booking.staffId;
-    const timeFormatted = formatTashkentDateTime(slotDate);
-
-    await notifyAdmins(
-      botId,
-      {
-        kind: "BOOKING_RESCHEDULED",
-        name: booking.customerName,
-        phone: booking.customerPhone,
-        phoneVerified: booking.phoneVerified,
-        service: serviceName,
-        staff: staffName,
-        time: timeFormatted,
-        serviceId: booking.serviceId,
-        staffId: booking.staffId,
-      },
-      { prisma, transport, logger },
-    ).catch((err) => {
-      logger.error({ err: (err as Error).message }, "Failed to notify admins of rescheduled booking");
-    });
+    await dispatchQueuedNotifications({ prisma, transport, logger, eventKey });
 
     return { success: true, booking: updated };
   } catch (err: unknown) {

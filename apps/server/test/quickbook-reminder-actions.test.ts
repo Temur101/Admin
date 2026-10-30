@@ -487,7 +487,8 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
       });
 
       // Lock key should NOT remain set since delivery failed
-      expect(await redis.get(`booking:confirm_notified:${booking.id}`)).toBeNull();
+      expect(await prisma.notificationDelivery.count({ where: { eventKey: `booking:${booking.id}:acknowledged`, status: "PENDING" } })).toBe(1);
+      await prisma.notificationDelivery.updateMany({ where: { eventKey: `booking:${booking.id}:acknowledged` }, data: { availableAt: new Date(0) } });
 
       // 2nd click: Telegram recovers -> admin notification succeeds!
       failAdminSend = false;
@@ -511,7 +512,7 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
       const adminMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
       expect(adminMsgs).toHaveLength(1);
       expect(String(adminMsgs[0]?.payload.text)).toContain("Клиент подтвердил запись");
-      expect(await redis.get(`booking:confirm_notified:${booking.id}`)).toBe("1");
+      expect(await prisma.notificationDelivery.count({ where: { eventKey: `booking:${booking.id}:acknowledged`, status: "SENT" } })).toBe(1);
     } finally {
       transport.transformerFor = origTransformer;
     }

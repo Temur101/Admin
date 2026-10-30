@@ -88,6 +88,7 @@ export interface NotifyAdminsOptions {
   prisma: PrismaClient;
   transport: TelegramTransport;
   logger: Logger;
+  recipientTgId?: bigint;
 }
 
 export async function notifyAdmins(
@@ -110,6 +111,7 @@ export async function notifyAdmins(
   }
 
   const eligibleUsers = bot.users.filter((u) => {
+    if (opts.recipientTgId != null && u.tgId !== opts.recipientTgId) return false;
     if (u.unreachableAt) return false;
     if (payload.kind === "LEAD" && u.receivesLeads === false) return false;
     return true;
@@ -261,10 +263,13 @@ export async function notifyAdmins(
   }
 
   if (payload.kind === "LEAD" && payload.leadId && leadRefs.length > 0 && prisma.lead?.update) {
+    const previous = await prisma.lead.findUnique({ where: { id: payload.leadId } });
+    const oldRefs = Array.isArray(previous?.notificationRefs) ? previous.notificationRefs as unknown as LeadNotificationRef[] : [];
+    const mergedRefs = [...oldRefs.filter(r => !leadRefs.some(n => n.chatId === r.chatId)), ...leadRefs];
     await prisma.lead
       .update({
         where: { id: payload.leadId },
-        data: { notificationRefs: leadRefs as unknown as object },
+        data: { notificationRefs: mergedRefs as unknown as object },
       })
       .catch(() => {});
   }

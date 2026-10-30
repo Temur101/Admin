@@ -1,3 +1,4 @@
+import { attachOutboxFixture } from "./helpers/outbox-fixture.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Bot } from "grammy";
 import { pino } from "pino";
@@ -130,6 +131,7 @@ beforeEach(async () => {
     },
     lead: { upsert: saveLead },
   } as unknown as PrismaClient;
+  attachOutboxFixture(prisma);
   transport = new MockTelegramTransport();
   bot = new Bot<PlatformBotContext>("123456:navigation-test-token");
   bot.api.config.use(transport.transformerFor("b1"));
@@ -385,7 +387,7 @@ describe("Язык и права владельца", () => {
     hold();
     await message("➕ Записать клиента");
     expect(locks.size).toBe(0);
-    expect(state.quickbook).toEqual({ isAdminBooking: true });
+    expect(state.quickbook).toEqual({ isAdminBooking: true, runId: expect.any(String) });
     expect(last().text).toBe(t("RU", "qb_choose_service"));
   });
   it("владелец получает своё меню, в том числе после старой клиентской кнопки", async () => {

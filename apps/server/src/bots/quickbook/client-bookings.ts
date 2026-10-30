@@ -77,6 +77,7 @@ export function registerClientBookingsHandlers(
       bookingId,
       botId: ctx.botMeta.id,
       userId: ctx.from.id,
+      notifications: { transport, logger },
     });
 
     if (!res.success) {

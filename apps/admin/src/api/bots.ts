@@ -82,6 +82,7 @@ export interface BotHealth {
   lastErrorAt?: string | null;
   subscriptionStatus: string;
   failedInboxCount: number;
+  failedNotificationCount?: number;
   connection?: {
     mode: "polling" | "webhook";
     status: "READY" | "PAUSED" | "STOPPED" | "NOT_CONFIGURED" | "ERROR" | "UNKNOWN";
@@ -235,4 +236,13 @@ export async function checkBotSetup(id: string): Promise<BotSetupCheck> {
 
 export async function launchBot(id: string): Promise<void> {
   await apiRequest(`/api/v1/bots/${id}/launch`, { method: "POST" });
+}
+
+export interface FailedNotification { id: string; botId: string; attempts: number; lastError: string | null; createdAt: string }
+export async function getFailedNotifications(botId: string): Promise<FailedNotification[]> {
+  const data = await apiRequest<{ deliveries: FailedNotification[] }>(`/api/v1/system/notification-errors?botId=${encodeURIComponent(botId)}`);
+  return data.deliveries;
+}
+export async function retryNotification(id: string): Promise<void> {
+  await apiRequest(`/api/v1/system/notification-errors/${encodeURIComponent(id)}/retry`, { method: "POST" });
 }

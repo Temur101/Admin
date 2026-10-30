@@ -101,6 +101,7 @@ model Bot {
   settingsLogs    BotSettingsLog[]
   receipts        PaymentReceipt[]
   inbox           WebhookInbox[]
+  notificationDeliveries NotificationDelivery[]
 }
 
 model Subscription {
@@ -288,3 +289,23 @@ model WebhookInbox {
   @@index([botId, status])
 }
 
+
+model NotificationDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  botId String @db.Uuid
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  eventKey String @db.VarChar(255)
+  recipientTgId BigInt
+  payload Json
+  status String @default("PENDING") @db.VarChar(16)
+  attempts Int @default(0)
+  availableAt DateTime @default(now()) @db.Timestamptz
+  lockedUntil DateTime? @db.Timestamptz
+  leaseToken String? @db.Uuid
+  lastError String?
+  deliveredAt DateTime? @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  @@unique([eventKey, recipientTgId])
+  @@index([status, availableAt, lockedUntil])
+  @@index([botId, status])
+}

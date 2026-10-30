@@ -181,6 +181,7 @@ export function registerBookingsRoutes(
         bookingId,
         botId: id,
         isAdmin: true,
+        notifications: { transport, logger },
       });
 
       if (!result.success) {

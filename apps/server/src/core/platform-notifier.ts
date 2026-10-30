@@ -27,7 +27,7 @@ export type PlatformEvent =
       botId: string;
     }
   | {
-      type: "BOT_BLOCKED";
+      type: "BOT_BLOCKED" | "DELIVERY_FAILED";
       botName: string;
       reason: string;
     };
@@ -85,9 +85,9 @@ export async function notifyPlatformOwner(
         `🏢 <b>Организация:</b> ${html(event.clientName)}\n` +
         (event.botUsername ? `💬 <b>Username:</b> @${html(event.botUsername)}\n\n` : `\n`) +
         `🔗 <a href="${html(adminOrigin)}/bots/${html(event.botId)}">Карточка бота в админке</a>`;
-    } else if (event.type === "BOT_BLOCKED") {
+    } else if (event.type === "BOT_BLOCKED" || event.type === "DELIVERY_FAILED") {
       message =
-        `🚫 <b>Бот заблокирован!</b>\n\n` +
+        (event.type === "BOT_BLOCKED" ? `🚫 <b>Бот заблокирован!</b>\n\n` : `⚠️ <b>Ошибка доставки уведомления</b>\n\n`) +
         `🤖 <b>Бот:</b> ${html(event.botName)}\n` +
         `⚠️ <b>Причина:</b> ${html(event.reason)}`;
     }
