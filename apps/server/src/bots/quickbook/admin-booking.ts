@@ -1,3 +1,5 @@
+import { resetClientFlow } from "../shared/flow-reset.js";
+import { releaseHeldBooking } from "./booking-session.js";
 import { randomUUID } from "node:crypto";
 import { InlineKeyboard } from "grammy";
 import type { PlatformBotContext } from "../../gateway/types.js";
@@ -115,7 +117,7 @@ export function registerAdminBookingHandlers(
 
   bot.callbackQuery(/^qb:adm:cancel$/, async (ctx) => {
     await ctx.answerCallbackQuery().catch(() => {});
-    delete ctx.session.quickbook;
+    if (!(await resetClientFlow(ctx, redis, logger))) return;
     await ctx.reply(ctx.session.lang === "UZ" ? "Yozuv bekor qilindi." : "Запись отменена.");
   });
 
@@ -159,6 +161,7 @@ export function registerAdminBookingHandlers(
     });
 
     if (res.success) {
+      await releaseHeldBooking(ctx, redis).catch(() => {});
       delete ctx.session.quickbook;
       await ctx.reply(t(lang, "admin_manual_booking_created"));
     } else {

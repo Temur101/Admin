@@ -53,7 +53,7 @@ export function registerQuickBookHandlers(
     if (session.slotTimeIso && session.serviceId && session.resourceId) {
       const { serviceId, resourceId } = session;
       if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
-      ctx.session.quickbook = { serviceId, resourceId };
+      ctx.session.quickbook = { serviceId, resourceId, isAdminBooking: session.isAdminBooking, runId: session.runId };
       await showBookingDates(ctx, serviceId, resourceId, 0);
       return;
     }

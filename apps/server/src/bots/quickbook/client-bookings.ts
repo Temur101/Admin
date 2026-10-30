@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { InlineKeyboard } from "grammy";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
@@ -108,9 +109,14 @@ export function registerClientBookingsHandlers(
     await showRescheduleSlots(ctx, bookingId, dateStr, opts);
   });
 
-  bot.callbackQuery(/^qb:rs:c:(.+):(.+)$/, async (ctx) => {
-    const bookingId = ctx.match[1];
-    const slotIso = ctx.match[2];
+  bot.callbackQuery(/^qb:rs:c:([a-f0-9]{12}):(\d{13})$/, async (ctx) => {
+    const selection = ctx.session.reschedule;
+    const slotIso = new Date(Number(ctx.match[2])).toISOString();
+    if (!selection || selection.token !== ctx.match[1] || selection.expiresAt < Date.now() || !selection.slots.includes(slotIso)) {
+      await ctx.answerCallbackQuery({ text: t(ctx.session.lang, "qb_stale_selection"), show_alert: true }).catch(() => {});
+      return;
+    }
+    const bookingId = selection.bookingId;
     if (!bookingId || !slotIso || !ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
     const lang = ctx.session.lang ?? "RU";
@@ -130,6 +136,7 @@ export function registerClientBookingsHandlers(
     });
 
     if (res.success) {
+      delete ctx.session.reschedule;
       await ctx.reply(
         t(lang, "reschedule_success", { time: formatTashkentDateTime(new Date(slotIso)) }),
       );
@@ -205,9 +212,11 @@ async function showRescheduleSlots(
     return;
   }
 
+  const token = randomBytes(6).toString("hex");
+  ctx.session.reschedule = { bookingId, token, expiresAt: Date.now() + 5 * 60000, slots: slots.map(s => s.slotTimeIso) };
   const keyboard = new InlineKeyboard();
   slots.forEach((slot, index) => {
-    keyboard.text(slot.timeLabel, `qb:rs:c:${bookingId}:${slot.slotTimeIso}`);
+    keyboard.text(slot.timeLabel, `qb:rs:c:${token}:${slot.slotTime.getTime()}`);
     if (index % 3 === 2) keyboard.row();
   });
 

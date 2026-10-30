@@ -71,7 +71,7 @@ export async function rescheduleBooking(
 
   const eligibility = validateBookingSlotEligibility({
     config,
-    service,
+    service: { ...service, durationMin: booking.durationMin },
     staff,
     slotDate,
     now,
@@ -81,13 +81,15 @@ export async function rescheduleBooking(
     return { success: false, error: "SLOT_TAKEN" };
   }
 
-  const endTime = new Date(slotDate.getTime() + service.durationMin * 60000);
+  const endTime = new Date(slotDate.getTime() + booking.durationMin * 60000);
 
   try {
     const updated = await prisma.$transaction(
       async (tx) => {
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${booking.staffId}`}));`;
 
+        const current = await tx.booking.findUnique({ where: { id: bookingId } });
+        if (!current || !["PENDING", "CONFIRMED"].includes(current.status)) throw new Error("BOOKING_INACTIVE");
         // Check for conflicting TimeBlock
         const timeBlock = await tx.timeBlock.findFirst({
           where: {
@@ -123,6 +125,7 @@ export async function rescheduleBooking(
             slotTime: slotDate,
             endTime,
             reminderSent: false,
+            reminderAttempts: 0,
             reminderLockedUntil: null,
             reminderLastError: null,
           },
@@ -162,6 +165,7 @@ export async function rescheduleBooking(
     return { success: true, booking: updated };
   } catch (err: unknown) {
     const errorMsg = (err as Error).message ?? "";
+    if (errorMsg.includes("BOOKING_INACTIVE")) return { success: false, error: "INVALID_SLOT" };
     const isConflict =
       errorMsg.includes("SLOT_ALREADY_BOOKED") ||
       errorMsg.includes("TIME_BLOCKED") ||
