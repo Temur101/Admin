@@ -132,6 +132,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
   try {
     const booking = await prisma.$transaction(
       async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${`calendar:${botId}`}));`;
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${staffId}`}));`;
 
         // Check for conflicting TimeBlock

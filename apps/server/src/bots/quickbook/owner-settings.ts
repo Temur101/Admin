@@ -1,3 +1,6 @@
+import { randomBytes } from "node:crypto";
+import { tashkentDateString } from "./booking-horizon.js";
+import { parseTashkentDate } from "./slot-generator.js";
 import { InlineKeyboard } from "grammy";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { formatTashkentDateTime } from "../shared/payment-service.js";
@@ -5,7 +8,7 @@ import type { BotAdminAction } from "../shared/permissions.js";
 import { isActualBotAdmin } from "../shared/user-service.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import {
-  createTimeBlock,
+  createTimeBlock, TimeBlockConflictError,
   deleteTimeBlock,
   listTimeBlocks,
 } from "./time-block-service.js";
@@ -142,28 +145,33 @@ export function registerOwnerSettingsHandlers(
     const now = new Date();
     const targetDate = new Date(now.getTime() + dayOffset * 86400000);
 
-    const year = targetDate.getFullYear();
-    const month = targetDate.getMonth();
-    const date = targetDate.getDate();
-
-    // Tashkent is UTC+5, full day 00:00 to 23:59:59
-    const startsAt = new Date(Date.UTC(year, month, date, 0 - 5, 0, 0, 0));
-    const endsAt = new Date(Date.UTC(year, month, date, 24 - 5, 0, 0, 0));
-
-    await createTimeBlock(prisma, {
-      botId: ctx.botMeta.id,
-      resourceId,
-      startsAt,
-      endsAt,
-      reason: when === "tomorrow" ? "Выходной (завтра)" : "Выходной (сегодня)",
-      createdByTgId: ctx.from.id,
-    });
+    const { dayStartUtc: startsAt, dayEndUtc: endsAt } = parseTashkentDate(tashkentDateString(targetDate));
+    const draft = { resourceId, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), token: randomBytes(6).toString("hex"), expiresAt: Date.now() + 5 * 60000 };
+    try {
+      await createTimeBlock(prisma, { botId: ctx.botMeta.id, resourceId, startsAt, endsAt, createdByTgId: ctx.from.id });
+    } catch (error) {
+      if (!(error instanceof TimeBlockConflictError)) throw error;
+      ctx.session.timeBlockDraft = draft;
+      const details = error.bookings.slice(0, 10).map(b => formatTashkentDateTime(b.slotTime)).join("\n");
+      await ctx.reply(`⚠️ ${error.bookings.length} записей / buyurtma:\n${details}\nПодтвердить блокировку? / Tasdiqlaysizmi?`, { reply_markup: new InlineKeyboard().text("✅ Подтвердить / Tasdiqlash", `tb:confirm:${draft.token}`) });
+      return;
+    }
 
     await ctx.reply(
       ctx.session.lang === "UZ"
         ? "✅ Blokirovka muvaffaqiyatli saqlandi!"
         : "✅ Блокировка времени успешно установлена!",
     );
+  });
+
+  bot.callbackQuery(/^tb:confirm:([a-f0-9]{12})$/, async ctx => {
+    if (!(await allowed(ctx, "MANAGE_TIME_BLOCKS"))) return;
+    await ctx.answerCallbackQuery().catch(() => {});
+    const draft = ctx.session.timeBlockDraft;
+    if (!draft || draft.token !== ctx.match[1] || draft.expiresAt < Date.now()) return;
+    await createTimeBlock(prisma, { botId: ctx.botMeta.id, resourceId: draft.resourceId, startsAt: new Date(draft.startsAt), endsAt: new Date(draft.endsAt), createdByTgId: ctx.from!.id, confirmConflicts: true });
+    delete ctx.session.timeBlockDraft;
+    await ctx.reply("✅ Блокировка сохранена / Blokirovka saqlandi");
   });
 
   // 2. Owner Settings Menu

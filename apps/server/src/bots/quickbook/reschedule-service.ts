@@ -86,6 +86,7 @@ export async function rescheduleBooking(
   try {
     const updated = await prisma.$transaction(
       async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${`calendar:${botId}`}));`;
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${booking.staffId}`}));`;
 
         const current = await tx.booking.findUnique({ where: { id: bookingId } });

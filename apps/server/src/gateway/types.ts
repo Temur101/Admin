@@ -77,6 +77,7 @@ export interface PlatformBotSession {
   quiz?: QuizSessionState;
   quickbook?: QuickBookSessionState;
   payment?: PaymentSessionState;
+  timeBlockDraft?: { resourceId: string; startsAt: string; endsAt: string; token: string; expiresAt: number };
   reschedule?: { bookingId: string; token: string; expiresAt: number; slots: string[] };
   [key: string]: unknown;
 }
