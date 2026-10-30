@@ -137,11 +137,51 @@ describe("B05: Concurrent Billing & Rollback", () => {
 
     // 5 concurrent reject calls
     const results = await Promise.all([
-      rejectReceipt({ prisma, redis, receiptId: receipt.id, reason: "Тест отклонения", transport, logger, now: baseDate }),
-      rejectReceipt({ prisma, redis, receiptId: receipt.id, reason: "Тест отклонения", transport, logger, now: baseDate }),
-      rejectReceipt({ prisma, redis, receiptId: receipt.id, reason: "Тест отклонения", transport, logger, now: baseDate }),
-      rejectReceipt({ prisma, redis, receiptId: receipt.id, reason: "Тест отклонения", transport, logger, now: baseDate }),
-      rejectReceipt({ prisma, redis, receiptId: receipt.id, reason: "Тест отклонения", transport, logger, now: baseDate }),
+      rejectReceipt({
+        prisma,
+        redis,
+        receiptId: receipt.id,
+        reason: "Тест отклонения",
+        transport,
+        logger,
+        now: baseDate,
+      }),
+      rejectReceipt({
+        prisma,
+        redis,
+        receiptId: receipt.id,
+        reason: "Тест отклонения",
+        transport,
+        logger,
+        now: baseDate,
+      }),
+      rejectReceipt({
+        prisma,
+        redis,
+        receiptId: receipt.id,
+        reason: "Тест отклонения",
+        transport,
+        logger,
+        now: baseDate,
+      }),
+      rejectReceipt({
+        prisma,
+        redis,
+        receiptId: receipt.id,
+        reason: "Тест отклонения",
+        transport,
+        logger,
+        now: baseDate,
+      }),
+      rejectReceipt({
+        prisma,
+        redis,
+        receiptId: receipt.id,
+        reason: "Тест отклонения",
+        transport,
+        logger,
+        now: baseDate,
+      }),
     ]);
 
     for (const r of results) {
@@ -175,7 +215,15 @@ describe("B05: Concurrent Billing & Rollback", () => {
 
     await Promise.all([
       approveReceipt({ prisma, redis, receiptId: receipt.id, transport, logger }),
-      rejectReceipt({ prisma, redis, receiptId: receipt.id, reason: "Race reject", transport, logger, now: baseDate }),
+      rejectReceipt({
+        prisma,
+        redis,
+        receiptId: receipt.id,
+        reason: "Race reject",
+        transport,
+        logger,
+        now: baseDate,
+      }),
     ]);
 
     const finalReceipt = await prisma.paymentReceipt.findUnique({ where: { id: receipt.id } });

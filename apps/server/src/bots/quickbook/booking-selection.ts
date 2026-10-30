@@ -24,7 +24,10 @@ export function registerBookingSelectionHandlers(
   opts: QuickBookComposerOptions,
 ): void {
   const { prisma, redis } = opts;
-  const mode = (ctx: PlatformBotContext) => ({ isAdminBooking: ctx.session.quickbook?.isAdminBooking, runId: ctx.session.quickbook?.runId });
+  const mode = (ctx: PlatformBotContext) => ({
+    isAdminBooking: ctx.session.quickbook?.isAdminBooking,
+    runId: ctx.session.quickbook?.runId,
+  });
   const restart = async (ctx: PlatformBotContext) => {
     const saved = mode(ctx);
     await startQuickBookFlow(ctx, prisma, redis);
@@ -55,9 +58,7 @@ export function registerBookingSelectionHandlers(
       const name = lang === "UZ" ? res.name.uz : res.name.ru;
       keyboard.text(name, `qb:res:${callbackId(serviceId)}:${callbackId(res.id)}`).row();
     }
-    keyboard
-      .text(t(lang, "btn_back"), "qb:back:srv")
-      .text(t(lang, "btn_restart"), "qb:restart");
+    keyboard.text(t(lang, "btn_back"), "qb:back:srv").text(t(lang, "btn_restart"), "qb:restart");
 
     await ctx.reply(t(lang, "qb_choose_resource", { label }), { reply_markup: keyboard });
   };
@@ -264,8 +265,7 @@ export function registerBookingSelectionHandlers(
     }
     if (target === "date") {
       const serviceId = resolveCallbackId(config.services, parts[1]);
-      const resourceId =
-        parts[2] === "any" ? "any" : resolveCallbackId(config.resources, parts[2]);
+      const resourceId = parts[2] === "any" ? "any" : resolveCallbackId(config.resources, parts[2]);
       if (!serviceId || !resourceId) {
         await stale(ctx);
         return;

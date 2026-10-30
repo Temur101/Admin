@@ -1,4 +1,8 @@
-import { bookingNotification, enqueueAdminNotifications, dispatchQueuedNotifications } from "../shared/notification-outbox.js";
+import {
+  bookingNotification,
+  enqueueAdminNotifications,
+  dispatchQueuedNotifications,
+} from "../shared/notification-outbox.js";
 import type { NotifyAdminsOptions } from "../shared/notification.js";
 import type { Booking, PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
@@ -57,17 +61,30 @@ export async function cancelBooking(
     return { success: true, booking, alreadyCancelled: true };
   }
 
-  const result = await prisma.$transaction(async tx => {
+  const result = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${booking.botId}:${booking.staffId}`}));`;
     const current = await tx.booking.findUniqueOrThrow({ where: { id: opts.bookingId } });
     if (current.status === "CANCELLED") return { booking: current, alreadyCancelled: true };
-    const updated = await tx.booking.update({ where: { id: opts.bookingId }, data: { status: "CANCELLED", reminderLockedUntil: null } });
-    await enqueueAdminNotifications(tx, booking.botId, `booking:${booking.id}:cancelled`, bookingNotification(updated, "BOOKING_CANCELLED"));
+    const updated = await tx.booking.update({
+      where: { id: opts.bookingId },
+      data: { status: "CANCELLED", reminderLockedUntil: null },
+    });
+    await enqueueAdminNotifications(
+      tx,
+      booking.botId,
+      `booking:${booking.id}:cancelled`,
+      bookingNotification(updated, "BOOKING_CANCELLED"),
+    );
     return { booking: updated, alreadyCancelled: false };
   });
 
   await redis.zrem(REMINDER_ZSET_KEY, opts.bookingId).catch(() => {});
 
-  if (opts.notifications) await dispatchQueuedNotifications({ prisma, ...opts.notifications, eventKey: `booking:${booking.id}:cancelled` });
+  if (opts.notifications)
+    await dispatchQueuedNotifications({
+      prisma,
+      ...opts.notifications,
+      eventKey: `booking:${booking.id}:cancelled`,
+    });
   return { success: true, ...result };
 }

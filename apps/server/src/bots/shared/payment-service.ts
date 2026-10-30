@@ -102,7 +102,8 @@ export async function submitPaymentReceipt(
       const prevStatus = currentSub.status;
 
       // Base date: if already in future, extend from future; otherwise extend from now
-      const baseDate = prevPaidUntil && prevPaidUntil.getTime() > now.getTime() ? prevPaidUntil : now;
+      const baseDate =
+        prevPaidUntil && prevPaidUntil.getTime() > now.getTime() ? prevPaidUntil : now;
       const newPaidUntil = addMonths(baseDate, months);
       const newStatus: SubStatus = currentSub.status;
 
@@ -124,7 +125,13 @@ export async function submitPaymentReceipt(
         },
       });
 
-      return { receipt, newPaidUntil: currentSub.paidUntil, newStatus, botTokenHash: bot.botTokenHash, botId: bot.id };
+      return {
+        receipt,
+        newPaidUntil: currentSub.paidUntil,
+        newStatus,
+        botTokenHash: bot.botTokenHash,
+        botId: bot.id,
+      };
     },
     { maxWait: 15000, timeout: 20000 },
   );
@@ -134,16 +141,18 @@ export async function submitPaymentReceipt(
     await redis.del(`bot:hash:${result.botTokenHash}`, `bot:id:${result.botId}`).catch(() => {});
   }
 
-  return { receipt: result.receipt, newPaidUntil: result.newPaidUntil, newStatus: result.newStatus };
+  return {
+    receipt: result.receipt,
+    newPaidUntil: result.newPaidUntil,
+    newStatus: result.newStatus,
+  };
 }
 
 /**
  * Approves a pending receipt. Resets failed attempts to 0.
  * Enforces single terminal state transition and idempotent notifications.
  */
-export async function approveReceipt(
-  params: ApproveReceiptParams,
-): Promise<PaymentReceipt | null> {
+export async function approveReceipt(params: ApproveReceiptParams): Promise<PaymentReceipt | null> {
   const { prisma, redis, receiptId, transport, logger } = params;
 
   const result = await prisma.$transaction(
@@ -178,8 +187,17 @@ export async function approveReceipt(
       const sub = await tx.subscription.findUniqueOrThrow({ where: { botId: receipt.botId } });
       const now = params.now ?? new Date();
       const base = sub.paidUntil && sub.paidUntil > now ? sub.paidUntil : now;
-      const grantedUntil = receipt.optimisticGranted ? (sub.paidUntil ?? receipt.grantedUntil) : addMonths(base, receipt.months);
-      await tx.subscription.update({ where: { botId: receipt.botId }, data: { status: grantedUntil > now ? "ACTIVE" : "EXPIRED", paidUntil: grantedUntil, failedReceiptAttempts: 0 } });
+      const grantedUntil = receipt.optimisticGranted
+        ? (sub.paidUntil ?? receipt.grantedUntil)
+        : addMonths(base, receipt.months);
+      await tx.subscription.update({
+        where: { botId: receipt.botId },
+        data: {
+          status: grantedUntil > now ? "ACTIVE" : "EXPIRED",
+          paidUntil: grantedUntil,
+          failedReceiptAttempts: 0,
+        },
+      });
 
       // 2. Mark receipt as APPROVED
       const updatedReceipt = await tx.paymentReceipt.update({
@@ -213,7 +231,9 @@ export async function approveReceipt(
 
   // 4. Invalidate Redis cache AFTER transaction commit
   if (redis) {
-    await redis.del(`bot:hash:${receipt.bot.botTokenHash}`, `bot:id:${receipt.bot.id}`).catch(() => {});
+    await redis
+      .del(`bot:hash:${receipt.bot.botTokenHash}`, `bot:id:${receipt.bot.id}`)
+      .catch(() => {});
   }
 
   // 5. Send Telegram push notification to admins with idempotency key
@@ -231,9 +251,7 @@ export async function approveReceipt(
  * Rejects pending receipts without removing independently paid time.
  * Legacy optimistic grants are reversed using their recorded grant interval.
  */
-export async function rejectReceipt(
-  params: RejectReceiptParams,
-): Promise<PaymentReceipt | null> {
+export async function rejectReceipt(params: RejectReceiptParams): Promise<PaymentReceipt | null> {
   const { prisma, redis, receiptId, reason, transport, logger } = params;
   const now = params.now ?? new Date();
 
@@ -269,7 +287,14 @@ export async function rejectReceipt(
       const sub = await tx.subscription.findUniqueOrThrow({ where: { botId: receipt.botId } });
       const attempts = sub.failedReceiptAttempts + 1;
       const rolledBackPaidUntil = paidUntilAfterRejection(receipt, sub);
-      const newStatus = statusAfterRejection(receipt.optimisticGranted && receipt.prevStatus === "TRIAL" ? { ...sub, status: "TRIAL" } : sub, rolledBackPaidUntil, attempts, now);
+      const newStatus = statusAfterRejection(
+        receipt.optimisticGranted && receipt.prevStatus === "TRIAL"
+          ? { ...sub, status: "TRIAL" }
+          : sub,
+        rolledBackPaidUntil,
+        attempts,
+        now,
+      );
 
       if (newStatus === "BLOCKED") {
         notifyPlatformOwner(
@@ -333,7 +358,9 @@ export async function rejectReceipt(
 
   // 4. Invalidate Redis cache AFTER transaction commit
   if (redis) {
-    await redis.del(`bot:hash:${receipt.bot.botTokenHash}`, `bot:id:${receipt.bot.id}`).catch(() => {});
+    await redis
+      .del(`bot:hash:${receipt.bot.botTokenHash}`, `bot:id:${receipt.bot.id}`)
+      .catch(() => {});
   }
 
   // 5. Send Telegram push notification to admins with idempotency key

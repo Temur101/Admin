@@ -12,7 +12,9 @@ export interface CreateTimeBlockParams {
 }
 
 export class TimeBlockConflictError extends Error {
-  constructor(readonly bookings: Booking[]) { super("CONFLICTS_DETECTED"); }
+  constructor(readonly bookings: Booking[]) {
+    super("CONFLICTS_DETECTED");
+  }
 }
 
 export interface ListTimeBlocksParams {
@@ -27,21 +29,44 @@ export async function createTimeBlock(
   params: CreateTimeBlockParams,
 ): Promise<TimeBlock> {
   const { botId, resourceId, startsAt, endsAt, reason, createdByTgId } = params;
-  if (!Number.isFinite(startsAt.getTime()) || !Number.isFinite(endsAt.getTime()) || startsAt >= endsAt) {
+  if (
+    !Number.isFinite(startsAt.getTime()) ||
+    !Number.isFinite(endsAt.getTime()) ||
+    startsAt >= endsAt
+  ) {
     throw new Error("INVALID_TIME_RANGE: startsAt must be before endsAt");
   }
 
-  return prisma.$transaction(async tx => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`calendar:${botId}`}));`;
-    const bot = await tx.bot.findUnique({ where: { id: botId } });
-    const config = getQuickBookConfig(bot?.settings as Record<string, unknown> | undefined);
-    if (!bot || (resourceId !== "all" && !config.resources.some(r => r.id === resourceId))) throw new Error("RESOURCE_NOT_FOUND");
-    const bookings = await tx.booking.findMany({ where: {
-      botId, ...(resourceId !== "all" ? { staffId: resourceId } : {}), status: { in: ["PENDING", "CONFIRMED"] }, slotTime: { lt: endsAt }, endTime: { gt: startsAt },
-    } });
-    if (bookings.length && !params.confirmConflicts) throw new TimeBlockConflictError(bookings);
-    return tx.timeBlock.create({ data: { botId, resourceId, startsAt, endsAt, reason: reason?.trim() || null, createdByTgId: createdByTgId != null ? BigInt(createdByTgId) : null } });
-  }, { maxWait: 15000, timeout: 20000 });
+  return prisma.$transaction(
+    async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`calendar:${botId}`}));`;
+      const bot = await tx.bot.findUnique({ where: { id: botId } });
+      const config = getQuickBookConfig(bot?.settings as Record<string, unknown> | undefined);
+      if (!bot || (resourceId !== "all" && !config.resources.some((r) => r.id === resourceId)))
+        throw new Error("RESOURCE_NOT_FOUND");
+      const bookings = await tx.booking.findMany({
+        where: {
+          botId,
+          ...(resourceId !== "all" ? { staffId: resourceId } : {}),
+          status: { in: ["PENDING", "CONFIRMED"] },
+          slotTime: { lt: endsAt },
+          endTime: { gt: startsAt },
+        },
+      });
+      if (bookings.length && !params.confirmConflicts) throw new TimeBlockConflictError(bookings);
+      return tx.timeBlock.create({
+        data: {
+          botId,
+          resourceId,
+          startsAt,
+          endsAt,
+          reason: reason?.trim() || null,
+          createdByTgId: createdByTgId != null ? BigInt(createdByTgId) : null,
+        },
+      });
+    },
+    { maxWait: 15000, timeout: 20000 },
+  );
 }
 
 export async function deleteTimeBlock(

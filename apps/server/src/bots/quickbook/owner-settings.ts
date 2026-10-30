@@ -9,7 +9,8 @@ import type { BotAdminAction } from "../shared/permissions.js";
 import { isActualBotAdmin } from "../shared/user-service.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import {
-  createTimeBlock, TimeBlockConflictError,
+  createTimeBlock,
+  TimeBlockConflictError,
   deleteTimeBlock,
   listTimeBlocks,
 } from "./time-block-service.js";
@@ -21,8 +22,12 @@ export function registerOwnerSettingsHandlers(
 ): void {
   const { prisma } = opts;
   const allowed = async (ctx: PlatformBotContext, action: BotAdminAction) => {
-    if (ctx.from && await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id, action)) return true;
-    if (ctx.callbackQuery) await ctx.answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo‘q", show_alert: true }).catch(() => {});
+    if (ctx.from && (await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id, action)))
+      return true;
+    if (ctx.callbackQuery)
+      await ctx
+        .answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo‘q", show_alert: true })
+        .catch(() => {});
     return false;
   };
 
@@ -47,9 +52,7 @@ export function registerOwnerSettingsHandlers(
         "tb:menu:add",
       );
       await ctx.reply(
-        lang === "UZ"
-          ? "Faol vaqt blokirovkalari yo'q."
-          : "Активных блокировок времени пока нет.",
+        lang === "UZ" ? "Faol vaqt blokirovkalari yo'q." : "Активных блокировок времени пока нет.",
         { reply_markup: kb },
       );
       return;
@@ -62,7 +65,12 @@ export function registerOwnerSettingsHandlers(
 
     for (const b of blocks.slice(0, 10)) {
       const staff = config.resources.find((r) => r.id === b.resourceId);
-      const staffName = b.resourceId === "all" ? (lang === "UZ" ? "Barcha mutaxassislar" : "Все мастера") : (staff?.name[loc] || b.resourceId);
+      const staffName =
+        b.resourceId === "all"
+          ? lang === "UZ"
+            ? "Barcha mutaxassislar"
+            : "Все мастера"
+          : staff?.name[loc] || b.resourceId;
       const fromStr = formatTashkentDateTime(b.startsAt);
       const toStr = formatTashkentDateTime(b.endsAt);
       const reasonStr = b.reason ? `\nSabab / Причина: ${b.reason}` : "";
@@ -90,9 +98,7 @@ export function registerOwnerSettingsHandlers(
     if (!(await allowed(ctx, "MANAGE_TIME_BLOCKS"))) return;
 
     await deleteTimeBlock(prisma, { botId: ctx.botMeta.id, blockId });
-    await ctx.reply(
-      ctx.session.lang === "UZ" ? "Blokirovka o'chirildi." : "Блокировка удалена.",
-    );
+    await ctx.reply(ctx.session.lang === "UZ" ? "Blokirovka o'chirildi." : "Блокировка удалена.");
   });
 
   // Add TimeBlock quick menu
@@ -124,12 +130,20 @@ export function registerOwnerSettingsHandlers(
     const lang = ctx.session.lang ?? "RU";
 
     const kb = new InlineKeyboard()
-      .text(lang === "UZ" ? "Bugun butun kun" : "Сегодня на весь день", `tb:create:${resourceId}:today`)
+      .text(
+        lang === "UZ" ? "Bugun butun kun" : "Сегодня на весь день",
+        `tb:create:${resourceId}:today`,
+      )
       .row()
-      .text(lang === "UZ" ? "Ertaga butun kun" : "Завтра на весь день", `tb:create:${resourceId}:tomorrow`);
+      .text(
+        lang === "UZ" ? "Ertaga butun kun" : "Завтра на весь день",
+        `tb:create:${resourceId}:tomorrow`,
+      );
 
     await ctx.reply(
-      lang === "UZ" ? "Qaysi kunga blokirovka o'rnatilsin?" : "На какой день установить блокировку?",
+      lang === "UZ"
+        ? "Qaysi kunga blokirovka o'rnatilsin?"
+        : "На какой день установить блокировку?",
       { reply_markup: kb },
     );
   });
@@ -146,15 +160,40 @@ export function registerOwnerSettingsHandlers(
     const now = new Date();
     const targetDate = new Date(now.getTime() + dayOffset * 86400000);
 
-    const { dayStartUtc: startsAt, dayEndUtc: endsAt } = parseTashkentDate(tashkentDateString(targetDate));
-    const draft = { resourceId, startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString(), token: randomBytes(6).toString("hex"), expiresAt: Date.now() + 5 * 60000 };
+    const { dayStartUtc: startsAt, dayEndUtc: endsAt } = parseTashkentDate(
+      tashkentDateString(targetDate),
+    );
+    const draft = {
+      resourceId,
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      token: randomBytes(6).toString("hex"),
+      expiresAt: Date.now() + 5 * 60000,
+    };
     try {
-      await createTimeBlock(prisma, { botId: ctx.botMeta.id, resourceId, startsAt, endsAt, createdByTgId: ctx.from.id });
+      await createTimeBlock(prisma, {
+        botId: ctx.botMeta.id,
+        resourceId,
+        startsAt,
+        endsAt,
+        createdByTgId: ctx.from.id,
+      });
     } catch (error) {
       if (!(error instanceof TimeBlockConflictError)) throw error;
       ctx.session.timeBlockDraft = draft;
-      const details = error.bookings.slice(0, 10).map(b => formatTashkentDateTime(b.slotTime)).join("\n");
-      await ctx.reply(`⚠️ ${error.bookings.length} записей / buyurtma:\n${details}\nПодтвердить блокировку? / Tasdiqlaysizmi?`, { reply_markup: new InlineKeyboard().text("✅ Подтвердить / Tasdiqlash", `tb:confirm:${draft.token}`) });
+      const details = error.bookings
+        .slice(0, 10)
+        .map((b) => formatTashkentDateTime(b.slotTime))
+        .join("\n");
+      await ctx.reply(
+        `⚠️ ${error.bookings.length} записей / buyurtma:\n${details}\nПодтвердить блокировку? / Tasdiqlaysizmi?`,
+        {
+          reply_markup: new InlineKeyboard().text(
+            "✅ Подтвердить / Tasdiqlash",
+            `tb:confirm:${draft.token}`,
+          ),
+        },
+      );
       return;
     }
 
@@ -165,12 +204,19 @@ export function registerOwnerSettingsHandlers(
     );
   });
 
-  bot.callbackQuery(/^tb:confirm:([a-f0-9]{12})$/, async ctx => {
+  bot.callbackQuery(/^tb:confirm:([a-f0-9]{12})$/, async (ctx) => {
     if (!(await allowed(ctx, "MANAGE_TIME_BLOCKS"))) return;
     await ctx.answerCallbackQuery().catch(() => {});
     const draft = ctx.session.timeBlockDraft;
     if (!draft || draft.token !== ctx.match[1] || draft.expiresAt < Date.now()) return;
-    await createTimeBlock(prisma, { botId: ctx.botMeta.id, resourceId: draft.resourceId, startsAt: new Date(draft.startsAt), endsAt: new Date(draft.endsAt), createdByTgId: ctx.from!.id, confirmConflicts: true });
+    await createTimeBlock(prisma, {
+      botId: ctx.botMeta.id,
+      resourceId: draft.resourceId,
+      startsAt: new Date(draft.startsAt),
+      endsAt: new Date(draft.endsAt),
+      createdByTgId: ctx.from!.id,
+      confirmConflicts: true,
+    });
     delete ctx.session.timeBlockDraft;
     await ctx.reply("✅ Блокировка сохранена / Blokirovka saqlandi");
   });

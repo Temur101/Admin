@@ -24,20 +24,20 @@ export function assertTestEnvironment(): void {
 
   if (!testDb) {
     throw new Error(
-      "FATAL (B00): TEST_DATABASE_URL is not set or empty. Tests cannot run to protect dev/prod databases."
+      "FATAL (B00): TEST_DATABASE_URL is not set or empty. Tests cannot run to protect dev/prod databases.",
     );
   }
 
   if (testDb === devDb) {
     throw new Error(
-      "FATAL (B00): TEST_DATABASE_URL matches DATABASE_URL. Refusing to run tests to prevent wiping dev/prod database."
+      "FATAL (B00): TEST_DATABASE_URL matches DATABASE_URL. Refusing to run tests to prevent wiping dev/prod database.",
     );
   }
 
   const dbUrlLower = testDb.toLowerCase();
   if (!dbUrlLower.includes("test")) {
     throw new Error(
-      `FATAL (B00): TEST_DATABASE_URL does not appear to be a test database (missing 'test' in URL: ${testDb}). Refusing to run.`
+      `FATAL (B00): TEST_DATABASE_URL does not appear to be a test database (missing 'test' in URL: ${testDb}). Refusing to run.`,
     );
   }
 
@@ -46,13 +46,13 @@ export function assertTestEnvironment(): void {
 
   if (!testRedis) {
     throw new Error(
-      "FATAL (B00): TEST_REDIS_URL is not set or empty. Tests cannot run to protect dev/prod Redis."
+      "FATAL (B00): TEST_REDIS_URL is not set or empty. Tests cannot run to protect dev/prod Redis.",
     );
   }
 
   if (testRedis === devRedis) {
     throw new Error(
-      "FATAL (B00): TEST_REDIS_URL matches REDIS_URL. Refusing to run tests to prevent wiping dev/prod Redis."
+      "FATAL (B00): TEST_REDIS_URL matches REDIS_URL. Refusing to run tests to prevent wiping dev/prod Redis.",
     );
   }
 }
@@ -106,7 +106,9 @@ export async function safeCleanTestRedis(redis: Redis): Promise<void> {
   const clientOptions = (redis as unknown as { options?: { url?: string } }).options;
   const clientUrl = clientOptions?.url ?? "";
   if (clientUrl && clientUrl === env.REDIS_URL) {
-    throw new Error("FATAL (B00): Refusing to flush Redis because client URL matches dev REDIS_URL!");
+    throw new Error(
+      "FATAL (B00): Refusing to flush Redis because client URL matches dev REDIS_URL!",
+    );
   }
   await redis.flushdb();
 }

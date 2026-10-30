@@ -58,9 +58,7 @@ export async function handleAdminBookingsList(
   const lang = ctx.session.lang ?? "RU";
 
   if (bookings.length === 0) {
-    await ctx.reply(
-      isUz ? "Yaqin orada buyurtmalar yo'q." : "Предстоящих записей пока нет.",
-    );
+    await ctx.reply(isUz ? "Yaqin orada buyurtmalar yo'q." : "Предстоящих записей пока нет.");
     return;
   }
 
@@ -95,5 +93,6 @@ export async function handleAdminBookingsList(
     sections.push(`${pastHeader}\n\n${pastLines.join("\n\n")}`);
   }
 
-  for (const page of telegramHtmlPages(sections.join("\n\n──────────────────\n\n"))) await ctx.reply(page, { parse_mode: "HTML" });
+  for (const page of telegramHtmlPages(sections.join("\n\n──────────────────\n\n")))
+    await ctx.reply(page, { parse_mode: "HTML" });
 }

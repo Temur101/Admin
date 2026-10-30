@@ -5,7 +5,12 @@ import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { authenticateAdmin } from "./auth.js";
-import { createTimeBlock, deleteTimeBlock, listTimeBlocks, TimeBlockConflictError } from "../bots/quickbook/time-block-service.js";
+import {
+  createTimeBlock,
+  deleteTimeBlock,
+  listTimeBlocks,
+  TimeBlockConflictError,
+} from "../bots/quickbook/time-block-service.js";
 import { findAffectedBookings } from "../bots/quickbook/conflict-checker.js";
 import { getQuickBookConfig } from "../bots/quickbook/config-resolver.js";
 import type { QuickBookConfig } from "@lcqb/contracts";
@@ -114,7 +119,8 @@ export function registerBotsSimpleSettingsRoutes(
           }
 
           const issues = bookingSetupIssues(config);
-          if (issues.length) return reply.code(400).send({ error: "VALIDATION_ERROR", details: issues });
+          if (issues.length)
+            return reply.code(400).send({ error: "VALIDATION_ERROR", details: issues });
           const conflictCheck = await findAffectedBookings({
             botId: id,
             prisma,
@@ -131,7 +137,8 @@ export function registerBotsSimpleSettingsRoutes(
         }
 
         const issues = bookingSetupIssues(config);
-        if (issues.length) return reply.code(400).send({ error: "VALIDATION_ERROR", details: issues });
+        if (issues.length)
+          return reply.code(400).send({ error: "VALIDATION_ERROR", details: issues });
         await prisma.bot.update({
           where: { id },
           data: { settings: config as unknown as object },
@@ -204,11 +211,26 @@ export function registerBotsSimpleSettingsRoutes(
       }
 
       try {
-        const block = await createTimeBlock(prisma, { botId: id, resourceId, startsAt: startDate, endsAt: endDate, reason, confirmConflicts });
+        const block = await createTimeBlock(prisma, {
+          botId: id,
+          resourceId,
+          startsAt: startDate,
+          endsAt: endDate,
+          reason,
+          confirmConflicts,
+        });
         return reply.status(201).send({ ok: true, timeBlock: block });
       } catch (error) {
-        if (error instanceof TimeBlockConflictError) return reply.code(409).send({ error: "CONFLICTS_DETECTED", affectedCount: error.bookings.length, affectedBookings: error.bookings });
-        if ((error as Error).message === "RESOURCE_NOT_FOUND") return reply.code(400).send({ error: "RESOURCE_NOT_FOUND" });
+        if (error instanceof TimeBlockConflictError)
+          return reply
+            .code(409)
+            .send({
+              error: "CONFLICTS_DETECTED",
+              affectedCount: error.bookings.length,
+              affectedBookings: error.bookings,
+            });
+        if ((error as Error).message === "RESOURCE_NOT_FOUND")
+          return reply.code(400).send({ error: "RESOURCE_NOT_FOUND" });
         throw error;
       }
     },

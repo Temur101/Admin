@@ -19,7 +19,12 @@ export async function startAdminBookingFlow(
 ): Promise<void> {
   if (!ctx.from) return;
   const { prisma, redis } = opts;
-  const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id, "CREATE_MANUAL_BOOKING");
+  const isAdmin = await isActualBotAdmin(
+    prisma,
+    ctx.botMeta.id,
+    ctx.from.id,
+    "CREATE_MANUAL_BOOKING",
+  );
   if (!isAdmin) return;
 
   await startQuickBookFlow(ctx, prisma, redis);
@@ -45,7 +50,11 @@ export async function handleAdminBookingText(
 
   if (session.step === "admin_name") {
     if (text.length < 1 || text.length > 255 || text.startsWith("/")) {
-      await ctx.reply(lang === "UZ" ? "⚠️ Iltimos, mijoz ismini kiriting:" : "⚠️ Пожалуйста, введите корректное имя клиента:");
+      await ctx.reply(
+        lang === "UZ"
+          ? "⚠️ Iltimos, mijoz ismini kiriting:"
+          : "⚠️ Пожалуйста, введите корректное имя клиента:",
+      );
       return true;
     }
     session.customerName = text;
@@ -103,7 +112,8 @@ export async function showAdminBookingSummary(ctx: PlatformBotContext): Promise<
     .text(lang === "UZ" ? "✅ Yozish" : "✅ Записать клиента", `qb:adm:confirm:${session.runId}`)
     .text(lang === "UZ" ? "❌ Bekor qilish" : "❌ Отмена", "qb:adm:cancel");
 
-  for (const page of telegramHtmlPages(text)) await ctx.reply(page, { parse_mode: "HTML", reply_markup: kb });
+  for (const page of telegramHtmlPages(text))
+    await ctx.reply(page, { parse_mode: "HTML", reply_markup: kb });
 }
 
 export function registerAdminBookingHandlers(
@@ -125,10 +135,14 @@ export function registerAdminBookingHandlers(
   bot.callbackQuery(/^qb:adm:confirm(?::([a-zA-Z0-9_-]+))?$/, async (ctx) => {
     if (!ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
-    if (!(await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id, "CREATE_MANUAL_BOOKING"))) return;
+    if (!(await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id, "CREATE_MANUAL_BOOKING")))
+      return;
     const session = ctx.session.quickbook;
     if (
-      !session?.isAdminBooking || session.step !== "admin_summary" || !session.runId || session.runId !== ctx.match[1] ||
+      !session?.isAdminBooking ||
+      session.step !== "admin_summary" ||
+      !session.runId ||
+      session.runId !== ctx.match[1] ||
       !session.serviceId ||
       !session.resourceId ||
       !session.slotTimeIso ||

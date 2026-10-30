@@ -147,9 +147,7 @@ export function BotDiagnosticsTab({ bot }: BotDiagnosticsTabProps) {
                 <span className="text-ui-muted">Статус здоровья токена:</span>
                 <span
                   className={`font-semibold ${
-                    health.healthStatus === "NEEDS_ATTENTION"
-                      ? "text-ui-danger"
-                      : "text-ui-success"
+                    health.healthStatus === "NEEDS_ATTENTION" ? "text-ui-danger" : "text-ui-success"
                   }`}
                 >
                   {health.healthStatus === "NEEDS_ATTENTION" ? "Требует внимания" : "В норме (OK)"}
@@ -167,7 +165,11 @@ export function BotDiagnosticsTab({ bot }: BotDiagnosticsTabProps) {
               </div>
               <div className="flex justify-between p-2.5 rounded-xl bg-ui-subtle border border-ui-border">
                 <span className="text-ui-muted">Недоставленные уведомления:</span>
-                <span className={health.failedNotificationCount ? "text-ui-danger" : "text-ui-success"}>{health.failedNotificationCount ?? 0}</span>
+                <span
+                  className={health.failedNotificationCount ? "text-ui-danger" : "text-ui-success"}
+                >
+                  {health.failedNotificationCount ?? 0}
+                </span>
               </div>
               {health.lastErrorMsg && (
                 <div className="p-2.5 rounded-xl bg-ui-danger-soft border border-ui-danger-border text-ui-danger">

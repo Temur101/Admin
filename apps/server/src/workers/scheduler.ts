@@ -64,7 +64,9 @@ export class BackgroundWorkerScheduler {
       this.triggerReminderTick();
     }, remInterval);
 
-    this.recoveryTimer = setInterval(() => { this.triggerRecoveryTick(); }, recInterval);
+    this.recoveryTimer = setInterval(() => {
+      this.triggerRecoveryTick();
+    }, recInterval);
 
     this.opts.logger.info(
       { subInterval, remInterval, recInterval },

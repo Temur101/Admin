@@ -3,7 +3,11 @@ import type { Redis } from "ioredis";
 import type { QuickBookConfig } from "@lcqb/contracts";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
-import { enqueueAdminNotifications, dispatchQueuedNotifications, bookingNotification } from "../shared/notification-outbox.js";
+import {
+  enqueueAdminNotifications,
+  dispatchQueuedNotifications,
+  bookingNotification,
+} from "../shared/notification-outbox.js";
 import { parseAndNormalizePhone } from "../shared/phone.js";
 import { releaseSlotLock } from "./slot-lock.js";
 import { getAlternativeSlots, type TimeSlot } from "./slot-generator.js";
@@ -58,11 +62,7 @@ export type CreateBookingResult =
   | {
       success: false;
       error:
-        | "SLOT_TAKEN"
-        | "SLOT_IN_PAST"
-        | "OUTSIDE_HORIZON"
-        | "NOT_IN_SCHEDULE"
-        | "SLOT_IN_BREAK";
+        "SLOT_TAKEN" | "SLOT_IN_PAST" | "OUTSIDE_HORIZON" | "NOT_IN_SCHEDULE" | "SLOT_IN_BREAK";
       alternativeSlots: TimeSlot[];
     };
 
@@ -190,7 +190,12 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
             createdByTgId: params.createdByTgId != null ? BigInt(params.createdByTgId) : null,
           },
         });
-        await enqueueAdminNotifications(tx, botId, `booking:${created.id}:created`, bookingNotification(created, "BOOKING"));
+        await enqueueAdminNotifications(
+          tx,
+          botId,
+          `booking:${created.id}:created`,
+          bookingNotification(created, "BOOKING"),
+        );
         return created;
       },
       { maxWait: 15000, timeout: 20000 },
@@ -213,7 +218,12 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       logger.warn({ err: (err as Error).message }, "Could not schedule reminder in Redis");
     });
 
-    await dispatchQueuedNotifications({ prisma, transport, logger, eventKey: `booking:${booking.id}:created` });
+    await dispatchQueuedNotifications({
+      prisma,
+      transport,
+      logger,
+      eventKey: `booking:${booking.id}:created`,
+    });
 
     return { success: true, booking };
   } catch (err: unknown) {

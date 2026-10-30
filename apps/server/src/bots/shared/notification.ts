@@ -264,8 +264,13 @@ export async function notifyAdmins(
 
   if (payload.kind === "LEAD" && payload.leadId && leadRefs.length > 0 && prisma.lead?.update) {
     const previous = await prisma.lead.findUnique({ where: { id: payload.leadId } });
-    const oldRefs = Array.isArray(previous?.notificationRefs) ? previous.notificationRefs as unknown as LeadNotificationRef[] : [];
-    const mergedRefs = [...oldRefs.filter(r => !leadRefs.some(n => n.chatId === r.chatId)), ...leadRefs];
+    const oldRefs = Array.isArray(previous?.notificationRefs)
+      ? (previous.notificationRefs as unknown as LeadNotificationRef[])
+      : [];
+    const mergedRefs = [
+      ...oldRefs.filter((r) => !leadRefs.some((n) => n.chatId === r.chatId)),
+      ...leadRefs,
+    ];
     await prisma.lead
       .update({
         where: { id: payload.leadId },

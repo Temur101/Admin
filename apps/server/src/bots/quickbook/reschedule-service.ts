@@ -4,7 +4,11 @@ import type { QuickBookConfig } from "@lcqb/contracts";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
 import { randomUUID } from "node:crypto";
-import { enqueueAdminNotifications, dispatchQueuedNotifications, bookingNotification } from "../shared/notification-outbox.js";
+import {
+  enqueueAdminNotifications,
+  dispatchQueuedNotifications,
+  bookingNotification,
+} from "../shared/notification-outbox.js";
 import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS } from "./booking-constants.js";
 import { validateBookingSlotEligibility } from "./booking-validator.js";
 
@@ -90,7 +94,8 @@ export async function rescheduleBooking(
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${booking.staffId}`}));`;
 
         const current = await tx.booking.findUnique({ where: { id: bookingId } });
-        if (!current || !["PENDING", "CONFIRMED"].includes(current.status)) throw new Error("BOOKING_INACTIVE");
+        if (!current || !["PENDING", "CONFIRMED"].includes(current.status))
+          throw new Error("BOOKING_INACTIVE");
         // Check for conflicting TimeBlock
         const timeBlock = await tx.timeBlock.findFirst({
           where: {
@@ -132,7 +137,12 @@ export async function rescheduleBooking(
             reminderLastError: null,
           },
         });
-        await enqueueAdminNotifications(tx, botId, eventKey, bookingNotification(updatedBooking, "BOOKING_RESCHEDULED"));
+        await enqueueAdminNotifications(
+          tx,
+          botId,
+          eventKey,
+          bookingNotification(updatedBooking, "BOOKING_RESCHEDULED"),
+        );
         return updatedBooking;
       },
       { maxWait: 15000, timeout: 20000 },

@@ -172,19 +172,14 @@ export async function reduceBotSubscription(
   });
 }
 
-export async function grantBotTrial(
-  id: string,
-  payload: GrantTrialRequest,
-): Promise<void> {
+export async function grantBotTrial(id: string, payload: GrantTrialRequest): Promise<void> {
   await apiRequest(`/api/v1/bots/${id}/trial`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
 }
 
-export async function resetBot(
-  id: string,
-): Promise<{ clearedSessions: number; warning?: string }> {
+export async function resetBot(id: string): Promise<{ clearedSessions: number; warning?: string }> {
   return apiRequest(`/api/v1/bots/${id}/reset`, {
     method: "POST",
   });
@@ -238,11 +233,21 @@ export async function launchBot(id: string): Promise<void> {
   await apiRequest(`/api/v1/bots/${id}/launch`, { method: "POST" });
 }
 
-export interface FailedNotification { id: string; botId: string; attempts: number; lastError: string | null; createdAt: string }
+export interface FailedNotification {
+  id: string;
+  botId: string;
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+}
 export async function getFailedNotifications(botId: string): Promise<FailedNotification[]> {
-  const data = await apiRequest<{ deliveries: FailedNotification[] }>(`/api/v1/system/notification-errors?botId=${encodeURIComponent(botId)}`);
+  const data = await apiRequest<{ deliveries: FailedNotification[] }>(
+    `/api/v1/system/notification-errors?botId=${encodeURIComponent(botId)}`,
+  );
   return data.deliveries;
 }
 export async function retryNotification(id: string): Promise<void> {
-  await apiRequest(`/api/v1/system/notification-errors/${encodeURIComponent(id)}/retry`, { method: "POST" });
+  await apiRequest(`/api/v1/system/notification-errors/${encodeURIComponent(id)}/retry`, {
+    method: "POST",
+  });
 }

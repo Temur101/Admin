@@ -54,7 +54,10 @@ export async function notifyPlatformOwner(
       try {
         token = decryptSecret(settings.alertBotTokenEnc, env.TOKEN_ENCRYPTION_KEY);
       } catch (err) {
-        logger?.warn({ err: (err as Error).message }, "Failed to decrypt alert bot token from settings");
+        logger?.warn(
+          { err: (err as Error).message },
+          "Failed to decrypt alert bot token from settings",
+        );
       }
     }
 
@@ -87,7 +90,9 @@ export async function notifyPlatformOwner(
         `🔗 <a href="${html(adminOrigin)}/bots/${html(event.botId)}">Карточка бота в админке</a>`;
     } else if (event.type === "BOT_BLOCKED" || event.type === "DELIVERY_FAILED") {
       message =
-        (event.type === "BOT_BLOCKED" ? `🚫 <b>Бот заблокирован!</b>\n\n` : `⚠️ <b>Ошибка доставки уведомления</b>\n\n`) +
+        (event.type === "BOT_BLOCKED"
+          ? `🚫 <b>Бот заблокирован!</b>\n\n`
+          : `⚠️ <b>Ошибка доставки уведомления</b>\n\n`) +
         `🤖 <b>Бот:</b> ${html(event.botName)}\n` +
         `⚠️ <b>Причина:</b> ${html(event.reason)}`;
     }

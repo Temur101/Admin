@@ -53,7 +53,8 @@ export async function showMyBookings(
       .text(t(lang, "btn_reschedule_booking"), `qb:my:resched:${b.id}`)
       .text(t(lang, "btn_cancel_booking"), `qb:my:cancel:${b.id}`);
 
-    for (const page of telegramHtmlPages(text)) await ctx.reply(page, { parse_mode: "HTML", reply_markup: kb });
+    for (const page of telegramHtmlPages(text))
+      await ctx.reply(page, { parse_mode: "HTML", reply_markup: kb });
   }
 }
 
@@ -114,8 +115,15 @@ export function registerClientBookingsHandlers(
   bot.callbackQuery(/^qb:rs:c:([a-f0-9]{12}):(\d{13})$/, async (ctx) => {
     const selection = ctx.session.reschedule;
     const slotIso = new Date(Number(ctx.match[2])).toISOString();
-    if (!selection || selection.token !== ctx.match[1] || selection.expiresAt < Date.now() || !selection.slots.includes(slotIso)) {
-      await ctx.answerCallbackQuery({ text: t(ctx.session.lang, "qb_stale_selection"), show_alert: true }).catch(() => {});
+    if (
+      !selection ||
+      selection.token !== ctx.match[1] ||
+      selection.expiresAt < Date.now() ||
+      !selection.slots.includes(slotIso)
+    ) {
+      await ctx
+        .answerCallbackQuery({ text: t(ctx.session.lang, "qb_stale_selection"), show_alert: true })
+        .catch(() => {});
       return;
     }
     const bookingId = selection.bookingId;
@@ -215,7 +223,12 @@ async function showRescheduleSlots(
   }
 
   const token = randomBytes(6).toString("hex");
-  ctx.session.reschedule = { bookingId, token, expiresAt: Date.now() + 5 * 60000, slots: slots.map(s => s.slotTimeIso) };
+  ctx.session.reschedule = {
+    bookingId,
+    token,
+    expiresAt: Date.now() + 5 * 60000,
+    slots: slots.map((s) => s.slotTimeIso),
+  };
   const keyboard = new InlineKeyboard();
   slots.forEach((slot, index) => {
     keyboard.text(slot.timeLabel, `qb:rs:c:${token}:${slot.slotTime.getTime()}`);
@@ -225,12 +238,20 @@ async function showRescheduleSlots(
   await ctx.reply(t(lang, "qb_choose_time"), { reply_markup: keyboard });
 }
 
-async function findClientBooking(ctx: PlatformBotContext, bookingId: string, opts: QuickBookComposerOptions) {
+async function findClientBooking(
+  ctx: PlatformBotContext,
+  bookingId: string,
+  opts: QuickBookComposerOptions,
+) {
   if (!ctx.from || !/^[0-9a-f-]{36}$/i.test(bookingId)) return null;
-  const booking = await opts.prisma.booking.findFirst({ where: {
-    id: bookingId, botId: ctx.botMeta.id, customerTgId: BigInt(ctx.from.id),
-    status: { in: ["PENDING", "CONFIRMED"] },
-  } });
+  const booking = await opts.prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      botId: ctx.botMeta.id,
+      customerTgId: BigInt(ctx.from.id),
+      status: { in: ["PENDING", "CONFIRMED"] },
+    },
+  });
   if (!booking) await ctx.reply("Запись не найдена / Band topilmadi");
   return booking;
 }

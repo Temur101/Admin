@@ -4,7 +4,11 @@ import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
 import { isActualBotAdmin } from "../shared/user-service.js";
 import { cancelBooking } from "./booking-service.js";
-import { bookingNotification, enqueueAdminNotifications, dispatchQueuedNotifications } from "../shared/notification-outbox.js";
+import {
+  bookingNotification,
+  enqueueAdminNotifications,
+  dispatchQueuedNotifications,
+} from "../shared/notification-outbox.js";
 import { contactKeyboard } from "../shared/client-menu.js";
 import { resetClientFlow } from "../shared/flow-reset.js";
 import { registerAdminBookingHandlers, handleAdminBookingText } from "./admin-booking.js";
@@ -24,7 +28,6 @@ import {
   startQuickBookFlow,
   type QuickBookComposerOptions,
 } from "./quickbook-handlers.js";
-
 
 export function registerQuickBookHandlers(
   bot: import("grammy").Bot<PlatformBotContext>,
@@ -52,14 +55,17 @@ export function registerQuickBookHandlers(
     if (session.slotTimeIso && session.serviceId && session.resourceId) {
       const { serviceId, resourceId } = session;
       if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
-      ctx.session.quickbook = { serviceId, resourceId, isAdminBooking: session.isAdminBooking, runId: session.runId };
+      ctx.session.quickbook = {
+        serviceId,
+        resourceId,
+        isAdminBooking: session.isAdminBooking,
+        runId: session.runId,
+      };
       await showBookingDates(ctx, serviceId, resourceId, 0);
       return;
     }
     await startQuickBookFlow(ctx, prisma, redis);
   });
-
-
 
   bot.hears(/^(📅 Записи|📅 Buyurtmalar)$/, async (ctx) => {
     if (!ctx.from) return;
@@ -156,14 +162,25 @@ export function registerQuickBookHandlers(
     }
 
     const eventKey = `booking:${bookingId}:acknowledged`;
-    await prisma.$transaction(async tx => {
+    await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${booking.botId}:${booking.staffId}`}));`;
       const current = await tx.booking.findUniqueOrThrow({ where: { id: bookingId } });
       if (current.status === "CANCELLED") return;
-      if (current.status === "PENDING") await tx.booking.update({ where: { id: bookingId }, data: { status: "CONFIRMED" } });
-      await enqueueAdminNotifications(tx, ctx.botMeta.id, eventKey, bookingNotification(current, "BOOKING_CONFIRMED"));
+      if (current.status === "PENDING")
+        await tx.booking.update({ where: { id: bookingId }, data: { status: "CONFIRMED" } });
+      await enqueueAdminNotifications(
+        tx,
+        ctx.botMeta.id,
+        eventKey,
+        bookingNotification(current, "BOOKING_CONFIRMED"),
+      );
     });
-    await dispatchQueuedNotifications({ prisma, transport: opts.transport, logger: opts.logger, eventKey });
+    await dispatchQueuedNotifications({
+      prisma,
+      transport: opts.transport,
+      logger: opts.logger,
+      eventKey,
+    });
 
     await ctx.reply(t(lang, "qb_confirmed_reply"));
   });

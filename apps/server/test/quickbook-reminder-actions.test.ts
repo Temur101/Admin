@@ -179,12 +179,16 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
     });
 
     // Customer gets confirmation reply
-    const clientMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === CLIENT_ID);
+    const clientMsgs = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === CLIENT_ID);
     expect(clientMsgs).toHaveLength(1);
     expect(String(clientMsgs[0]?.payload.text)).toContain("Спасибо за подтверждение");
 
     // Admin gets confirmation notification
-    const adminMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
+    const adminMsgs = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === ADMIN_ID);
     expect(adminMsgs).toHaveLength(1);
     const adminText = String(adminMsgs[0]?.payload.text);
     expect(adminText).toContain("Клиент подтвердил запись");
@@ -211,9 +215,13 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
       },
     });
 
-    const clientRepeat = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === CLIENT_ID);
+    const clientRepeat = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === CLIENT_ID);
     expect(clientRepeat).toHaveLength(1);
-    const adminRepeat = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
+    const adminRepeat = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === ADMIN_ID);
     expect(adminRepeat).toHaveLength(0);
   });
 
@@ -254,12 +262,16 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
     });
 
     // Customer gets cancellation confirmation
-    const clientMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === CLIENT_ID);
+    const clientMsgs = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === CLIENT_ID);
     expect(clientMsgs).toHaveLength(1);
     expect(String(clientMsgs[0]?.payload.text)).toContain("отменена");
 
     // Admin gets cancellation notification
-    const adminMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
+    const adminMsgs = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === ADMIN_ID);
     expect(adminMsgs).toHaveLength(1);
     const adminText = String(adminMsgs[0]?.payload.text);
     expect(adminText).toContain("Запись отменена клиентом");
@@ -289,7 +301,9 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
       },
     });
 
-    const adminRepeat = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
+    const adminRepeat = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === ADMIN_ID);
     expect(adminRepeat).toHaveLength(0);
   });
 
@@ -333,14 +347,18 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
       },
     });
 
-    const adminMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
+    const adminMsgs = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === ADMIN_ID);
     expect(adminMsgs).toHaveLength(1);
     const adminText = String(adminMsgs[0]?.payload.text);
     expect(adminText).toContain("СКРЫТА");
     expect(adminText).toContain("+998 90 *** ** 67");
     expect(adminText).not.toContain("+998901234567");
     // Has payment inline button
-    const markup = adminMsgs[0]?.payload.reply_markup as { inline_keyboard?: Array<Array<{ text: string; callback_data: string }>> };
+    const markup = adminMsgs[0]?.payload.reply_markup as {
+      inline_keyboard?: Array<Array<{ text: string; callback_data: string }>>;
+    };
     expect(markup?.inline_keyboard?.[0]?.[0]?.callback_data).toBe("admin:pay");
   });
 
@@ -384,7 +402,9 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
       },
     });
 
-    const adminMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
+    const adminMsgs = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === ADMIN_ID);
     expect(adminMsgs).toHaveLength(1);
     const adminText = String(adminMsgs[0]?.payload.text);
     expect(adminText).toContain("Mijoz qabulni tasdiqladi");
@@ -427,11 +447,15 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
       },
     });
 
-    const strangerMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === STRANGER_ID);
+    const strangerMsgs = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === STRANGER_ID);
     expect(strangerMsgs).toHaveLength(1);
     expect(String(strangerMsgs[0]?.payload.text)).toContain("Доступ запрещен");
 
-    const adminMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
+    const adminMsgs = transport
+      .callsOf("sendMessage")
+      .filter((c) => c.payload.chat_id === ADMIN_ID);
     expect(adminMsgs).toHaveLength(0);
   });
 
@@ -487,8 +511,15 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
       });
 
       // Lock key should NOT remain set since delivery failed
-      expect(await prisma.notificationDelivery.count({ where: { eventKey: `booking:${booking.id}:acknowledged`, status: "PENDING" } })).toBe(1);
-      await prisma.notificationDelivery.updateMany({ where: { eventKey: `booking:${booking.id}:acknowledged` }, data: { availableAt: new Date(0) } });
+      expect(
+        await prisma.notificationDelivery.count({
+          where: { eventKey: `booking:${booking.id}:acknowledged`, status: "PENDING" },
+        }),
+      ).toBe(1);
+      await prisma.notificationDelivery.updateMany({
+        where: { eventKey: `booking:${booking.id}:acknowledged` },
+        data: { availableAt: new Date(0) },
+      });
 
       // 2nd click: Telegram recovers -> admin notification succeeds!
       failAdminSend = false;
@@ -509,10 +540,16 @@ describe("QuickBook Reminder Actions: Confirm & Cancel Admin Notifications", () 
         },
       });
 
-      const adminMsgs = transport.callsOf("sendMessage").filter((c) => c.payload.chat_id === ADMIN_ID);
+      const adminMsgs = transport
+        .callsOf("sendMessage")
+        .filter((c) => c.payload.chat_id === ADMIN_ID);
       expect(adminMsgs).toHaveLength(1);
       expect(String(adminMsgs[0]?.payload.text)).toContain("Клиент подтвердил запись");
-      expect(await prisma.notificationDelivery.count({ where: { eventKey: `booking:${booking.id}:acknowledged`, status: "SENT" } })).toBe(1);
+      expect(
+        await prisma.notificationDelivery.count({
+          where: { eventKey: `booking:${booking.id}:acknowledged`, status: "SENT" },
+        }),
+      ).toBe(1);
     } finally {
       transport.transformerFor = origTransformer;
     }

@@ -103,10 +103,7 @@ async function processFileReceipt(
     ctx.botMeta.paidUntil = res.newPaidUntil?.toISOString() ?? null;
     ctx.session.payment = undefined;
 
-    await sendReply(
-      ctx,
-      t(lang, "receipt_submitted_success"),
-    );
+    await sendReply(ctx, t(lang, "receipt_submitted_success"));
 
     notifyPlatformOwner(
       {
@@ -267,10 +264,7 @@ export function registerReceiptHandlers(
       ctx.botMeta.paidUntil = res.newPaidUntil?.toISOString() ?? null;
       ctx.session.payment = undefined;
 
-      await sendReply(
-        ctx,
-        t(lang, "receipt_submitted_success"),
-      );
+      await sendReply(ctx, t(lang, "receipt_submitted_success"));
 
       notifyPlatformOwner(
         {

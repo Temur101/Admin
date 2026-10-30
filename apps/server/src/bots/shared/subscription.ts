@@ -4,7 +4,13 @@ export type SubscriptionEvent =
   | { type: "TICK" }
   | { type: "RECEIPT_SUBMITTED"; months: number }
   | { type: "RECEIPT_APPROVED" }
-  | { type: "RECEIPT_REJECTED"; prevPaidUntil: Date | null; prevStatus?: SubStatus; months?: number; optimisticGranted?: boolean }
+  | {
+      type: "RECEIPT_REJECTED";
+      prevPaidUntil: Date | null;
+      prevStatus?: SubStatus;
+      months?: number;
+      optimisticGranted?: boolean;
+    }
   | { type: "MANUAL_EXTEND"; until: Date }
   | { type: "MANUAL_UNBLOCK" };
 
@@ -25,7 +31,7 @@ export interface TransitionResult {
 export function addMonths(date: Date, months: number): Date {
   const result = new Date(date.getTime());
   const targetYear = result.getUTCFullYear() + Math.floor((result.getUTCMonth() + months) / 12);
-  const targetMonth = ((result.getUTCMonth() + months) % 12 + 12) % 12;
+  const targetMonth = (((result.getUTCMonth() + months) % 12) + 12) % 12;
   const originalDate = result.getUTCDate();
 
   result.setUTCFullYear(targetYear, targetMonth, 1);
@@ -71,7 +77,12 @@ export function transitionSubscription(
     }
 
     case "RECEIPT_SUBMITTED": {
-      return { nextStatus: currentStatus, nextPaidUntil: paidUntil, nextFailedAttempts: failedReceiptAttempts, changed: false };
+      return {
+        nextStatus: currentStatus,
+        nextPaidUntil: paidUntil,
+        nextFailedAttempts: failedReceiptAttempts,
+        changed: false,
+      };
     }
 
     case "RECEIPT_APPROVED": {
