@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { InlineKeyboard } from "grammy";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
@@ -15,12 +16,13 @@ export async function startAdminBookingFlow(
 ): Promise<void> {
   if (!ctx.from) return;
   const { prisma, redis } = opts;
-  const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
+  const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id, "CREATE_MANUAL_BOOKING");
   if (!isAdmin) return;
 
   await startQuickBookFlow(ctx, prisma, redis);
   if (ctx.session.quickbook) {
     ctx.session.quickbook.isAdminBooking = true;
+    ctx.session.quickbook.runId = randomUUID().slice(0, 12);
   } else {
     ctx.session.quickbook = { isAdminBooking: true };
   }
@@ -93,8 +95,9 @@ export async function showAdminBookingSummary(ctx: PlatformBotContext): Promise<
       ? `📋 <b>Mijoz buyurtmasi ma'lumotlari:</b>\n\n👤 Mijoz: ${session.customerName}\n📞 Telefon: ${session.phone}\n✂️ Xizmat: ${serviceName}\n👤 Mutaxassis: ${staffName}\n⏰ Vaqt: ${timeFormatted}\n\nBuyurtmani tasdiqlaysizmi?`
       : `📋 <b>Данные записи клиента (ручная запись):</b>\n\n👤 Клиент: ${session.customerName}\n📞 Телефон: ${session.phone}\n✂️ Услуга: ${serviceName}\n👤 Мастер: ${staffName}\n⏰ Время: ${timeFormatted}\n\nПодтвердить создание записи?`;
 
+  session.runId ??= randomUUID().slice(0, 12);
   const kb = new InlineKeyboard()
-    .text(lang === "UZ" ? "✅ Yozish" : "✅ Записать клиента", "qb:adm:confirm")
+    .text(lang === "UZ" ? "✅ Yozish" : "✅ Записать клиента", `qb:adm:confirm:${session.runId}`)
     .text(lang === "UZ" ? "❌ Bekor qilish" : "❌ Отмена", "qb:adm:cancel");
 
   await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
@@ -116,12 +119,13 @@ export function registerAdminBookingHandlers(
     await ctx.reply(ctx.session.lang === "UZ" ? "Yozuv bekor qilindi." : "Запись отменена.");
   });
 
-  bot.callbackQuery(/^qb:adm:confirm$/, async (ctx) => {
+  bot.callbackQuery(/^qb:adm:confirm(?::([a-zA-Z0-9_-]+))?$/, async (ctx) => {
     if (!ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
+    if (!(await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id, "CREATE_MANUAL_BOOKING"))) return;
     const session = ctx.session.quickbook;
     if (
-      !session ||
+      !session?.isAdminBooking || session.step !== "admin_summary" || !session.runId || session.runId !== ctx.match[1] ||
       !session.serviceId ||
       !session.resourceId ||
       !session.slotTimeIso ||

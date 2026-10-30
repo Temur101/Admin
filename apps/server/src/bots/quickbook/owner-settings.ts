@@ -1,6 +1,7 @@
 import { InlineKeyboard } from "grammy";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { formatTashkentDateTime } from "../shared/payment-service.js";
+import type { BotAdminAction } from "../shared/permissions.js";
 import { isActualBotAdmin } from "../shared/user-service.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import {
@@ -15,12 +16,16 @@ export function registerOwnerSettingsHandlers(
   opts: QuickBookComposerOptions,
 ): void {
   const { prisma } = opts;
+  const allowed = async (ctx: PlatformBotContext, action: BotAdminAction) => {
+    if (ctx.from && await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id, action)) return true;
+    if (ctx.callbackQuery) await ctx.answerCallbackQuery({ text: "Доступ запрещен / Ruxsat yo‘q", show_alert: true }).catch(() => {});
+    return false;
+  };
 
   // 1. TimeBlocks Menu
   bot.hears(/^(🔒 Блокировки|🔒 Blokirovkalar)$/, async (ctx) => {
     if (!ctx.from) return;
-    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
-    if (!isAdmin) return;
+    if (!(await allowed(ctx, "MANAGE_TIME_BLOCKS"))) return;
 
     const lang = ctx.session.lang ?? "RU";
     const now = new Date();
@@ -78,8 +83,7 @@ export function registerOwnerSettingsHandlers(
     const blockId = ctx.match[1];
     if (!blockId || !ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
-    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
-    if (!isAdmin) return;
+    if (!(await allowed(ctx, "MANAGE_TIME_BLOCKS"))) return;
 
     await deleteTimeBlock(prisma, { botId: ctx.botMeta.id, blockId });
     await ctx.reply(
@@ -89,6 +93,7 @@ export function registerOwnerSettingsHandlers(
 
   // Add TimeBlock quick menu
   bot.callbackQuery(/^tb:menu:add$/, async (ctx) => {
+    if (!(await allowed(ctx, "MANAGE_TIME_BLOCKS"))) return;
     await ctx.answerCallbackQuery().catch(() => {});
     const lang = ctx.session.lang ?? "RU";
     const config = getQuickBookConfig(ctx.botMeta.settings);
@@ -108,6 +113,7 @@ export function registerOwnerSettingsHandlers(
 
   // Close today/tomorrow for selected resource
   bot.callbackQuery(/^tb:add:res:(.+)$/, async (ctx) => {
+    if (!(await allowed(ctx, "MANAGE_TIME_BLOCKS"))) return;
     const resourceId = ctx.match[1];
     if (!resourceId || !ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
@@ -126,6 +132,7 @@ export function registerOwnerSettingsHandlers(
 
   // Create block execution
   bot.callbackQuery(/^tb:create:([^:]+):(today|tomorrow)$/, async (ctx) => {
+    if (!(await allowed(ctx, "MANAGE_TIME_BLOCKS"))) return;
     const resourceId = ctx.match[1];
     const when = ctx.match[2];
     if (!resourceId || !ctx.from) return;
@@ -162,8 +169,7 @@ export function registerOwnerSettingsHandlers(
   // 2. Owner Settings Menu
   bot.hears(/^(⚙️ Настройки|⚙️ Sozlamalar)$/, async (ctx) => {
     if (!ctx.from) return;
-    const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
-    if (!isAdmin) return;
+    if (!(await allowed(ctx, "MANAGE_SETTINGS"))) return;
 
     const lang = ctx.session.lang ?? "RU";
     const config = getQuickBookConfig(ctx.botMeta.settings);

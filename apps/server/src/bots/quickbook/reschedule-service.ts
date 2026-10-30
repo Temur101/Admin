@@ -55,11 +55,8 @@ export async function rescheduleBooking(
     return { success: false, error: "NOT_FOUND" };
   }
 
-  if (userId !== undefined && userId !== null && userId !== 0) {
-    const isOwner = booking.customerTgId === BigInt(userId);
-    if (!isOwner && !isAdmin) {
-      return { success: false, error: "FORBIDDEN" };
-    }
+  if (!isAdmin && (userId == null || userId === 0 || booking.customerTgId !== BigInt(userId))) {
+    return { success: false, error: "FORBIDDEN" };
   }
 
   if (booking.status !== "PENDING" && booking.status !== "CONFIRMED") {

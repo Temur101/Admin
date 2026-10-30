@@ -143,8 +143,9 @@ async function showRescheduleDates(
   ctx: PlatformBotContext,
   bookingId: string,
   page: number,
-  _opts: QuickBookComposerOptions,
+  opts: QuickBookComposerOptions,
 ): Promise<void> {
+  if (!(await findClientBooking(ctx, bookingId, opts))) return;
   const config = getQuickBookConfig(ctx.botMeta.settings);
   const horizon = config.bookingHorizonDays;
   const pages = Math.ceil(horizon / BOOKING_DATES_PAGE_SIZE);
@@ -182,9 +183,7 @@ async function showRescheduleSlots(
   const lang = ctx.session.lang ?? "RU";
   const config = getQuickBookConfig(ctx.botMeta.settings);
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-  });
+  const booking = await findClientBooking(ctx, bookingId, opts);
   if (!booking) {
     await ctx.reply("Запись не найдена / Band topilmadi");
     return;
@@ -213,4 +212,14 @@ async function showRescheduleSlots(
   });
 
   await ctx.reply(t(lang, "qb_choose_time"), { reply_markup: keyboard });
+}
+
+async function findClientBooking(ctx: PlatformBotContext, bookingId: string, opts: QuickBookComposerOptions) {
+  if (!ctx.from || !/^[0-9a-f-]{36}$/i.test(bookingId)) return null;
+  const booking = await opts.prisma.booking.findFirst({ where: {
+    id: bookingId, botId: ctx.botMeta.id, customerTgId: BigInt(ctx.from.id),
+    status: { in: ["PENDING", "CONFIRMED"] },
+  } });
+  if (!booking) await ctx.reply("Запись не найдена / Band topilmadi");
+  return booking;
 }
