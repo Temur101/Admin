@@ -1,3 +1,4 @@
+import { escapeTelegramHtml as html, telegramHtmlPages } from "../../core/telegram-text.js";
 import { resetClientFlow } from "../shared/flow-reset.js";
 import { releaseHeldBooking } from "./booking-session.js";
 import { randomUUID } from "node:crypto";
@@ -94,15 +95,15 @@ export async function showAdminBookingSummary(ctx: PlatformBotContext): Promise<
 
   const text =
     lang === "UZ"
-      ? `📋 <b>Mijoz buyurtmasi ma'lumotlari:</b>\n\n👤 Mijoz: ${session.customerName}\n📞 Telefon: ${session.phone}\n✂️ Xizmat: ${serviceName}\n👤 Mutaxassis: ${staffName}\n⏰ Vaqt: ${timeFormatted}\n\nBuyurtmani tasdiqlaysizmi?`
-      : `📋 <b>Данные записи клиента (ручная запись):</b>\n\n👤 Клиент: ${session.customerName}\n📞 Телефон: ${session.phone}\n✂️ Услуга: ${serviceName}\n👤 Мастер: ${staffName}\n⏰ Время: ${timeFormatted}\n\nПодтвердить создание записи?`;
+      ? `📋 <b>Mijoz buyurtmasi ma'lumotlari:</b>\n\n👤 Mijoz: ${html(session.customerName)}\n📞 Telefon: ${html(session.phone)}\n✂️ Xizmat: ${html(serviceName)}\n👤 Mutaxassis: ${html(staffName)}\n⏰ Vaqt: ${timeFormatted}\n\nBuyurtmani tasdiqlaysizmi?`
+      : `📋 <b>Данные записи клиента (ручная запись):</b>\n\n👤 Клиент: ${html(session.customerName)}\n📞 Телефон: ${html(session.phone)}\n✂️ Услуга: ${html(serviceName)}\n👤 Мастер: ${html(staffName)}\n⏰ Время: ${timeFormatted}\n\nПодтвердить создание записи?`;
 
   session.runId ??= randomUUID().slice(0, 12);
   const kb = new InlineKeyboard()
     .text(lang === "UZ" ? "✅ Yozish" : "✅ Записать клиента", `qb:adm:confirm:${session.runId}`)
     .text(lang === "UZ" ? "❌ Bekor qilish" : "❌ Отмена", "qb:adm:cancel");
 
-  await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
+  for (const page of telegramHtmlPages(text)) await ctx.reply(page, { parse_mode: "HTML", reply_markup: kb });
 }
 
 export function registerAdminBookingHandlers(

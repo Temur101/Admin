@@ -1,3 +1,4 @@
+import { escapeTelegramHtml as html, telegramHtmlPages } from "../../core/telegram-text.js";
 import { randomBytes } from "node:crypto";
 import { tashkentDateString } from "./booking-horizon.js";
 import { parseTashkentDate } from "./slot-generator.js";
@@ -184,11 +185,11 @@ export function registerOwnerSettingsHandlers(
     const loc = lang === "UZ" ? "uz" : "ru";
 
     const servicesStr = config.services
-      .map((s) => `• ${s.name[loc]}: ${s.priceUzs.toLocaleString("ru-RU")} сум`)
+      .map((s) => `• ${html(s.name[loc])}: ${s.priceUzs.toLocaleString("ru-RU")} сум`)
       .join("\n");
 
     const workHoursStr = config.resources
-      .map((r) => `• ${r.name[loc]}: ${r.workHours.start} - ${r.workHours.end}`)
+      .map((r) => `• ${html(r.name[loc])}: ${r.workHours.start} - ${r.workHours.end}`)
       .join("\n");
 
     const text =
@@ -196,6 +197,6 @@ export function registerOwnerSettingsHandlers(
         ? `⚙️ <b>Bot sozlamalari:</b>\n\n<b>Xizmatlar narxi:</b>\n${servicesStr}\n\n<b>Ish vaqtlari:</b>\n${workHoursStr}\n\n<i>To'liq va qulay tahrirlash uchun veb-boshqaruv panelidan foydalaning.</i>`
         : `⚙️ <b>Настройки бота:</b>\n\n<b>Цены услуг:</b>\n${servicesStr}\n\n<b>Рабочие часы:</b>\n${workHoursStr}\n\n<i>Для быстрого изменения цен и часов используйте веб-панель или обратитесь к администратору.</i>`;
 
-    await ctx.reply(text, { parse_mode: "HTML" });
+    for (const page of telegramHtmlPages(text)) await ctx.reply(page, { parse_mode: "HTML" });
   });
 }

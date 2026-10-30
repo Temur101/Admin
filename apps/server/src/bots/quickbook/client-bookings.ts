@@ -1,3 +1,4 @@
+import { escapeTelegramHtml as html, telegramHtmlPages } from "../../core/telegram-text.js";
 import { randomBytes } from "node:crypto";
 import { InlineKeyboard } from "grammy";
 import type { PlatformBotContext } from "../../gateway/types.js";
@@ -47,12 +48,12 @@ export async function showMyBookings(
     const staffName = staff?.name[loc] || b.staffId;
     const timeFormatted = formatTashkentDateTime(b.slotTime);
 
-    const text = `🔹 <b>${serviceName}</b>\n👤 ${staffName}\n⏰ ${timeFormatted}`;
+    const text = `🔹 <b>${html(serviceName)}</b>\n👤 ${html(staffName)}\n⏰ ${timeFormatted}`;
     const kb = new InlineKeyboard()
       .text(t(lang, "btn_reschedule_booking"), `qb:my:resched:${b.id}`)
       .text(t(lang, "btn_cancel_booking"), `qb:my:cancel:${b.id}`);
 
-    await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
+    for (const page of telegramHtmlPages(text)) await ctx.reply(page, { parse_mode: "HTML", reply_markup: kb });
   }
 }
 

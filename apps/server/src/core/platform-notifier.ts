@@ -1,3 +1,4 @@
+import { escapeTelegramHtml as html } from "./telegram-text.js";
 import type { PrismaClient } from "@prisma/client";
 import {
   createBotApi,
@@ -73,22 +74,22 @@ export async function notifyPlatformOwner(
       const amountFmt = event.amountUzs.toLocaleString("ru-RU").replace(/\u00A0/g, " ");
       message =
         `🔔 <b>Новый чек на проверку!</b>\n\n` +
-        `🤖 <b>Бот:</b> ${event.botName}\n` +
-        `👤 <b>Клиент:</b> ${event.clientName} (${event.phone})\n` +
+        `🤖 <b>Бот:</b> ${html(event.botName)}\n` +
+        `👤 <b>Клиент:</b> ${html(event.clientName)} (${html(event.phone)})\n` +
         `💳 <b>Тариф:</b> ${event.tariffMonths} мес — ${amountFmt} сум\n\n` +
-        `🔗 <a href="${adminOrigin}/receipts">Открыть в веб-админке</a>`;
+        `🔗 <a href="${html(adminOrigin)}/receipts">Открыть в веб-админке</a>`;
     } else if (event.type === "BOT_REGISTERED") {
       message =
         `🤖 <b>Создан новый бот!</b>\n\n` +
-        `🏷 <b>Тип:</b> ${event.botType}\n` +
-        `🏢 <b>Организация:</b> ${event.clientName}\n` +
-        (event.botUsername ? `💬 <b>Username:</b> @${event.botUsername}\n\n` : `\n`) +
-        `🔗 <a href="${adminOrigin}/bots/${event.botId}">Карточка бота в админке</a>`;
+        `🏷 <b>Тип:</b> ${html(event.botType)}\n` +
+        `🏢 <b>Организация:</b> ${html(event.clientName)}\n` +
+        (event.botUsername ? `💬 <b>Username:</b> @${html(event.botUsername)}\n\n` : `\n`) +
+        `🔗 <a href="${html(adminOrigin)}/bots/${html(event.botId)}">Карточка бота в админке</a>`;
     } else if (event.type === "BOT_BLOCKED") {
       message =
         `🚫 <b>Бот заблокирован!</b>\n\n` +
-        `🤖 <b>Бот:</b> ${event.botName}\n` +
-        `⚠️ <b>Причина:</b> ${event.reason}`;
+        `🤖 <b>Бот:</b> ${html(event.botName)}\n` +
+        `⚠️ <b>Причина:</b> ${html(event.reason)}`;
     }
 
     await api.sendMessage(chatId, message, { parse_mode: "HTML" });
