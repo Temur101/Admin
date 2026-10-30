@@ -3,7 +3,11 @@ import type { Redis } from "ioredis";
 import type { QuickBookConfig } from "@lcqb/contracts";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
-import { notifyAdmins } from "../shared/notification.js";
+import {
+  enqueueAdminNotifications,
+  dispatchQueuedNotifications,
+  bookingNotification,
+} from "../shared/notification-outbox.js";
 import { parseAndNormalizePhone } from "../shared/phone.js";
 import { releaseSlotLock } from "./slot-lock.js";
 import { getAlternativeSlots, type TimeSlot } from "./slot-generator.js";
@@ -58,11 +62,7 @@ export type CreateBookingResult =
   | {
       success: false;
       error:
-        | "SLOT_TAKEN"
-        | "SLOT_IN_PAST"
-        | "OUTSIDE_HORIZON"
-        | "NOT_IN_SCHEDULE"
-        | "SLOT_IN_BREAK";
+        "SLOT_TAKEN" | "SLOT_IN_PAST" | "OUTSIDE_HORIZON" | "NOT_IN_SCHEDULE" | "SLOT_IN_BREAK";
       alternativeSlots: TimeSlot[];
     };
 
@@ -98,7 +98,6 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
   const slotDate = typeof slotTime === "string" ? new Date(slotTime) : slotTime;
   const serviceName = lang === "UZ" ? service.name.uz : service.name.ru;
-  const staffName = lang === "UZ" ? staff.name.uz : staff.name.ru;
   const dateStr = getTashkentTimeParts(slotDate).dateStr;
 
   const eligibility = validateBookingSlotEligibility({
@@ -132,6 +131,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
   try {
     const booking = await prisma.$transaction(
       async (tx) => {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${`calendar:${botId}`}));`;
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${staffId}`}));`;
 
         // Check for conflicting TimeBlock
@@ -172,7 +172,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
         const source = params.source ?? (customerTgId != null ? "TELEGRAM" : "MANUAL");
 
-        return tx.booking.create({
+        const created = await tx.booking.create({
           data: {
             botId,
             customerTgId: customerTgId != null ? BigInt(customerTgId) : null,
@@ -190,6 +190,13 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
             createdByTgId: params.createdByTgId != null ? BigInt(params.createdByTgId) : null,
           },
         });
+        await enqueueAdminNotifications(
+          tx,
+          botId,
+          `booking:${created.id}:created`,
+          bookingNotification(created, "BOOKING"),
+        );
+        return created;
       },
       { maxWait: 15000, timeout: 20000 },
     );
@@ -211,23 +218,11 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       logger.warn({ err: (err as Error).message }, "Could not schedule reminder in Redis");
     });
 
-    const timeFormatted = formatTashkentDateTime(slotDate);
-    await notifyAdmins(
-      botId,
-      {
-        kind: "BOOKING",
-        name: customerName,
-        phone: normalizedPhone,
-        phoneVerified,
-        service: serviceName,
-        staff: staffName,
-        time: timeFormatted,
-        serviceId,
-        staffId,
-      },
-      { prisma, transport, logger },
-    ).catch((err) => {
-      logger.error({ err: (err as Error).message }, "Failed to notify admins of new booking");
+    await dispatchQueuedNotifications({
+      prisma,
+      transport,
+      logger,
+      eventKey: `booking:${booking.id}:created`,
     });
 
     return { success: true, booking };

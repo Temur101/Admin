@@ -1,3 +1,7 @@
+import { escapeTelegramHtml as html, telegramHtmlPages } from "../../core/telegram-text.js";
+import { resetClientFlow } from "../shared/flow-reset.js";
+import { releaseHeldBooking } from "./booking-session.js";
+import { randomUUID } from "node:crypto";
 import { InlineKeyboard } from "grammy";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
@@ -15,12 +19,18 @@ export async function startAdminBookingFlow(
 ): Promise<void> {
   if (!ctx.from) return;
   const { prisma, redis } = opts;
-  const isAdmin = await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id);
+  const isAdmin = await isActualBotAdmin(
+    prisma,
+    ctx.botMeta.id,
+    ctx.from.id,
+    "CREATE_MANUAL_BOOKING",
+  );
   if (!isAdmin) return;
 
   await startQuickBookFlow(ctx, prisma, redis);
   if (ctx.session.quickbook) {
     ctx.session.quickbook.isAdminBooking = true;
+    ctx.session.quickbook.runId = randomUUID().slice(0, 12);
   } else {
     ctx.session.quickbook = { isAdminBooking: true };
   }
@@ -40,7 +50,11 @@ export async function handleAdminBookingText(
 
   if (session.step === "admin_name") {
     if (text.length < 1 || text.length > 255 || text.startsWith("/")) {
-      await ctx.reply(lang === "UZ" ? "⚠️ Iltimos, mijoz ismini kiriting:" : "⚠️ Пожалуйста, введите корректное имя клиента:");
+      await ctx.reply(
+        lang === "UZ"
+          ? "⚠️ Iltimos, mijoz ismini kiriting:"
+          : "⚠️ Пожалуйста, введите корректное имя клиента:",
+      );
       return true;
     }
     session.customerName = text;
@@ -90,14 +104,16 @@ export async function showAdminBookingSummary(ctx: PlatformBotContext): Promise<
 
   const text =
     lang === "UZ"
-      ? `📋 <b>Mijoz buyurtmasi ma'lumotlari:</b>\n\n👤 Mijoz: ${session.customerName}\n📞 Telefon: ${session.phone}\n✂️ Xizmat: ${serviceName}\n👤 Mutaxassis: ${staffName}\n⏰ Vaqt: ${timeFormatted}\n\nBuyurtmani tasdiqlaysizmi?`
-      : `📋 <b>Данные записи клиента (ручная запись):</b>\n\n👤 Клиент: ${session.customerName}\n📞 Телефон: ${session.phone}\n✂️ Услуга: ${serviceName}\n👤 Мастер: ${staffName}\n⏰ Время: ${timeFormatted}\n\nПодтвердить создание записи?`;
+      ? `📋 <b>Mijoz buyurtmasi ma'lumotlari:</b>\n\n👤 Mijoz: ${html(session.customerName)}\n📞 Telefon: ${html(session.phone)}\n✂️ Xizmat: ${html(serviceName)}\n👤 Mutaxassis: ${html(staffName)}\n⏰ Vaqt: ${timeFormatted}\n\nBuyurtmani tasdiqlaysizmi?`
+      : `📋 <b>Данные записи клиента (ручная запись):</b>\n\n👤 Клиент: ${html(session.customerName)}\n📞 Телефон: ${html(session.phone)}\n✂️ Услуга: ${html(serviceName)}\n👤 Мастер: ${html(staffName)}\n⏰ Время: ${timeFormatted}\n\nПодтвердить создание записи?`;
 
+  session.runId ??= randomUUID().slice(0, 12);
   const kb = new InlineKeyboard()
-    .text(lang === "UZ" ? "✅ Yozish" : "✅ Записать клиента", "qb:adm:confirm")
+    .text(lang === "UZ" ? "✅ Yozish" : "✅ Записать клиента", `qb:adm:confirm:${session.runId}`)
     .text(lang === "UZ" ? "❌ Bekor qilish" : "❌ Отмена", "qb:adm:cancel");
 
-  await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
+  for (const page of telegramHtmlPages(text))
+    await ctx.reply(page, { parse_mode: "HTML", reply_markup: kb });
 }
 
 export function registerAdminBookingHandlers(
@@ -112,16 +128,21 @@ export function registerAdminBookingHandlers(
 
   bot.callbackQuery(/^qb:adm:cancel$/, async (ctx) => {
     await ctx.answerCallbackQuery().catch(() => {});
-    delete ctx.session.quickbook;
+    if (!(await resetClientFlow(ctx, redis, logger))) return;
     await ctx.reply(ctx.session.lang === "UZ" ? "Yozuv bekor qilindi." : "Запись отменена.");
   });
 
-  bot.callbackQuery(/^qb:adm:confirm$/, async (ctx) => {
+  bot.callbackQuery(/^qb:adm:confirm(?::([a-zA-Z0-9_-]+))?$/, async (ctx) => {
     if (!ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
+    if (!(await isActualBotAdmin(prisma, ctx.botMeta.id, ctx.from.id, "CREATE_MANUAL_BOOKING")))
+      return;
     const session = ctx.session.quickbook;
     if (
-      !session ||
+      !session?.isAdminBooking ||
+      session.step !== "admin_summary" ||
+      !session.runId ||
+      session.runId !== ctx.match[1] ||
       !session.serviceId ||
       !session.resourceId ||
       !session.slotTimeIso ||
@@ -155,6 +176,7 @@ export function registerAdminBookingHandlers(
     });
 
     if (res.success) {
+      await releaseHeldBooking(ctx, redis).catch(() => {});
       delete ctx.session.quickbook;
       await ctx.reply(t(lang, "admin_manual_booking_created"));
     } else {

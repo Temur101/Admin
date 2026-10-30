@@ -1,3 +1,4 @@
+import { flushNotificationOutbox } from "../bots/shared/notification-outbox.js";
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import type { TelegramTransport } from "../adapters/telegram/transport.js";
@@ -52,9 +53,7 @@ export class BackgroundWorkerScheduler {
     if (this.opts.runImmediately !== false) {
       this.triggerSubscriptionTick();
       this.triggerReminderTick();
-      if (this.opts.inboxService) {
-        this.triggerRecoveryTick();
-      }
+      this.triggerRecoveryTick();
     }
 
     this.subscriptionTimer = setInterval(() => {
@@ -65,11 +64,9 @@ export class BackgroundWorkerScheduler {
       this.triggerReminderTick();
     }, remInterval);
 
-    if (this.opts.inboxService) {
-      this.recoveryTimer = setInterval(() => {
-        this.triggerRecoveryTick();
-      }, recInterval);
-    }
+    this.recoveryTimer = setInterval(() => {
+      this.triggerRecoveryTick();
+    }, recInterval);
 
     this.opts.logger.info(
       { subInterval, remInterval, recInterval },
@@ -130,11 +127,11 @@ export class BackgroundWorkerScheduler {
   }
 
   public triggerRecoveryTick(): Promise<unknown> {
-    if (!this.isRunning || !this.opts.inboxService) return Promise.resolve();
+    if (!this.isRunning) return Promise.resolve();
     if (this.activeRecoveryTask) return this.activeRecoveryTask;
 
-    const task = this.opts.inboxService
-      .recoverPending(50)
+    const task = flushNotificationOutbox(this.opts)
+      .then(() => this.opts.inboxService?.recoverPending(50) ?? 0)
       .then((count) => {
         if (count > 0) {
           this.opts.logger.info({ count }, "Periodic webhook recovery processed items");

@@ -4,7 +4,13 @@ export type SubscriptionEvent =
   | { type: "TICK" }
   | { type: "RECEIPT_SUBMITTED"; months: number }
   | { type: "RECEIPT_APPROVED" }
-  | { type: "RECEIPT_REJECTED"; prevPaidUntil: Date | null; prevStatus?: SubStatus; months?: number }
+  | {
+      type: "RECEIPT_REJECTED";
+      prevPaidUntil: Date | null;
+      prevStatus?: SubStatus;
+      months?: number;
+      optimisticGranted?: boolean;
+    }
   | { type: "MANUAL_EXTEND"; until: Date }
   | { type: "MANUAL_UNBLOCK" };
 
@@ -25,7 +31,7 @@ export interface TransitionResult {
 export function addMonths(date: Date, months: number): Date {
   const result = new Date(date.getTime());
   const targetYear = result.getUTCFullYear() + Math.floor((result.getUTCMonth() + months) / 12);
-  const targetMonth = ((result.getUTCMonth() + months) % 12 + 12) % 12;
+  const targetMonth = (((result.getUTCMonth() + months) % 12) + 12) % 12;
   const originalDate = result.getUTCDate();
 
   result.setUTCFullYear(targetYear, targetMonth, 1);
@@ -71,22 +77,11 @@ export function transitionSubscription(
     }
 
     case "RECEIPT_SUBMITTED": {
-      if (currentStatus === "BLOCKED") {
-        // Payment submission is disallowed when blocked
-        return {
-          nextStatus: currentStatus,
-          nextPaidUntil: paidUntil,
-          nextFailedAttempts: failedReceiptAttempts,
-          changed: false,
-        };
-      }
-      const baseDate = paidUntil && paidUntil > now ? paidUntil : now;
-      const nextPaidUntil = addMonths(baseDate, event.months);
       return {
-        nextStatus: "ACTIVE",
-        nextPaidUntil,
+        nextStatus: currentStatus,
+        nextPaidUntil: paidUntil,
         nextFailedAttempts: failedReceiptAttempts,
-        changed: true,
+        changed: false,
       };
     }
 
@@ -101,9 +96,9 @@ export function transitionSubscription(
 
     case "RECEIPT_REJECTED": {
       const nextFailedAttempts = failedReceiptAttempts + 1;
-      let nextPaidUntil: Date | null = event.prevPaidUntil;
+      let nextPaidUntil: Date | null = event.optimisticGranted ? event.prevPaidUntil : paidUntil;
 
-      if (event.months && paidUntil) {
+      if (event.optimisticGranted && event.months && paidUntil) {
         nextPaidUntil = addMonths(paidUntil, -event.months);
       }
 

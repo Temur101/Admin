@@ -65,12 +65,12 @@ describe("Subscription State Machine (Table-Driven)", () => {
       expectedChanged: false,
     },
     {
-      name: "EXPIRED + RECEIPT_SUBMITTED (1 month) -> becomes ACTIVE (optimistic extension)",
+      name: "EXPIRED + RECEIPT_SUBMITTED -> remains expired until approval",
       initialStatus: "EXPIRED",
       event: { type: "RECEIPT_SUBMITTED", months: 1 },
       ctx: { now, trialEndsAt: pastDate, paidUntil: pastDate, failedReceiptAttempts: 0 },
-      expectedStatus: "ACTIVE",
-      expectedChanged: true,
+      expectedStatus: "EXPIRED",
+      expectedChanged: false,
     },
     {
       name: "BLOCKED + RECEIPT_SUBMITTED -> stays BLOCKED (payments blocked)",
@@ -92,7 +92,7 @@ describe("Subscription State Machine (Table-Driven)", () => {
     {
       name: "ACTIVE + RECEIPT_REJECTED (attempt 1, rollback to past) -> becomes GRACE_PERIOD",
       initialStatus: "ACTIVE",
-      event: { type: "RECEIPT_REJECTED", prevPaidUntil: pastDate },
+      event: { type: "RECEIPT_REJECTED", prevPaidUntil: pastDate, optimisticGranted: true },
       ctx: { now, trialEndsAt: pastDate, paidUntil: futureDate, failedReceiptAttempts: 0 },
       expectedStatus: "GRACE_PERIOD",
       expectedChanged: true,
@@ -101,7 +101,7 @@ describe("Subscription State Machine (Table-Driven)", () => {
     {
       name: "GRACE_PERIOD + RECEIPT_REJECTED (attempt 2) -> becomes BLOCKED",
       initialStatus: "GRACE_PERIOD",
-      event: { type: "RECEIPT_REJECTED", prevPaidUntil: pastDate },
+      event: { type: "RECEIPT_REJECTED", prevPaidUntil: pastDate, optimisticGranted: true },
       ctx: { now, trialEndsAt: pastDate, paidUntil: pastDate, failedReceiptAttempts: 1 },
       expectedStatus: "BLOCKED",
       expectedChanged: true,

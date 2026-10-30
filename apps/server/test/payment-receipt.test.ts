@@ -117,8 +117,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
     it("should reject .exe file disguised as .png", () => {
       // Windows executable PE header: MZ (4D 5A ...)
       const exeBuffer = Buffer.from([
-        0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00,
-        0x04, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00,
+        0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00,
+        0x00,
       ]);
 
       const result = validateImageBuffer(exeBuffer);
@@ -129,8 +129,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
     it("should reject PDF file with pdf_unsupported error", () => {
       // PDF header: %PDF (25 50 44 46)
       const pdfBuffer = Buffer.from([
-        0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37,
-        0x0a, 0x25, 0xd0, 0xd4, 0xc5, 0xd8, 0x0a, 0x34,
+        0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0x0a, 0x25, 0xd0, 0xd4, 0xc5, 0xd8, 0x0a,
+        0x34,
       ]);
 
       const result = validateImageBuffer(pdfBuffer);
@@ -141,8 +141,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
     it("should successfully validate genuine PNG, JPEG, and WEBP buffers", () => {
       // PNG
       const pngBuffer = Buffer.from([
-        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-        0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+        0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44,
+        0x52,
       ]);
       expect(validateImageBuffer(pngBuffer)).toEqual({
         valid: true,
@@ -152,8 +152,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
       // JPEG
       const jpegBuffer = Buffer.from([
-        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46,
-        0x49, 0x46, 0x00, 0x01,
+        0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01,
       ]);
       expect(validateImageBuffer(jpegBuffer)).toEqual({
         valid: true,
@@ -163,8 +162,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
       // WEBP
       const webpBuffer = Buffer.from([
-        0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00,
-        0x57, 0x45, 0x42, 0x50,
+        0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
       ]);
       expect(validateImageBuffer(webpBuffer)).toEqual({
         valid: true,
@@ -232,8 +230,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
       // Mock transport returning exe buffer for downloadFile
       const exeBuffer = Buffer.from([
-        0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00,
-        0x04, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00, 0x00,
+        0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0xff, 0xff, 0x00,
+        0x00,
       ]);
       transport.setMockFile("photos/doc_fake_png.png", exeBuffer);
       transport.clear();
@@ -308,7 +306,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
       calls = transport.callsOf("sendMessage");
       expect(calls).toHaveLength(1);
-      expect(String(calls[0]?.payload.text)).toContain("Оплата принята на проверку");
+      expect(String(calls[0]?.payload.text)).toContain("Чек принят на проверку");
 
       // Verify DB record
       const receipts = await prisma.paymentReceipt.findMany({ where: { botId } });
@@ -319,13 +317,13 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       expect(receipts[0]?.amount).toBe(500_000);
       expect(receipts[0]?.textNote).toBe("Перевел 500 000 сум в 14:35 через Payme с карты *1234");
 
-      // Verify subscription optimistically updated to ACTIVE
+      // Sending a receipt does not grant access.
       const sub = await prisma.subscription.findUnique({ where: { botId } });
-      expect(sub?.status).toBe("ACTIVE");
-      expect(sub?.paidUntil).not.toBeNull();
+      expect(sub?.status).toBe("TRIAL");
+      expect(sub?.paidUntil).toBeNull();
     });
 
-    it("should accept valid photo receipt and activate subscription", async () => {
+    it("should accept a photo receipt without activating the subscription", async () => {
       const bot = botPool.getOrCreateBot(resolvedBot);
 
       // Select tariff 1 month
@@ -363,7 +361,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
       const calls = transport.callsOf("sendMessage");
       expect(calls).toHaveLength(1);
-      expect(String(calls[0]?.payload.text)).toContain("Оплата принята на проверку");
+      expect(String(calls[0]?.payload.text)).toContain("Чек принят на проверку");
 
       const receipt = await prisma.paymentReceipt.findFirst({ where: { botId } });
       expect(receipt).not.toBeNull();
@@ -399,7 +397,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
 
       // Should be extended from futurePaidUntil (2026-10-20), resulting in 2026-11-20
       const expectedDate = addMonths(futurePaidUntil, 1);
-      expect(result.newPaidUntil.toISOString()).toBe(expectedDate.toISOString());
+      expect(result.newPaidUntil?.toISOString()).toBe(futurePaidUntil.toISOString());
+      await approveReceipt({ prisma, redis, receiptId: result.receipt.id, now });
 
       const sub = await prisma.subscription.findUnique({ where: { botId } });
       expect(sub?.paidUntil?.toISOString()).toBe(expectedDate.toISOString());
@@ -433,10 +432,10 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
         now: baseTime,
       });
 
-      expect(paidUntil1.toISOString()).toBe(addMonths(baseTime, 6).toISOString());
+      expect(paidUntil1?.toISOString()).toBe("2026-09-30T10:00:00.000Z");
 
       let sub = await prisma.subscription.findUnique({ where: { botId } });
-      expect(sub?.status).toBe("ACTIVE");
+      expect(sub?.status).toBe("EXPIRED");
 
       // 3. Reject receipt 1 -> rollback to EXPIRED, attempt = 1 -> GRACE_PERIOD
       transport.clear();
@@ -457,7 +456,9 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       // Check Russian notification
       let pushCalls = transport.callsOf("sendMessage");
       expect(pushCalls).toHaveLength(1);
-      expect(String(pushCalls[0]?.payload.text)).toContain("У вас осталась 1 попытка для отправки оплаты");
+      expect(String(pushCalls[0]?.payload.text)).toContain(
+        "У вас осталась 1 попытка для отправки оплаты",
+      );
 
       // 4. Submit second payment attempt
       const { receipt: receipt2 } = await submitPaymentReceipt({
@@ -473,7 +474,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       });
 
       sub = await prisma.subscription.findUnique({ where: { botId } });
-      expect(sub?.status).toBe("ACTIVE");
+      expect(sub?.status).toBe("GRACE_PERIOD");
 
       // Switch admin to UZ language to test Uzbek push notification
       await prisma.botUser.update({
@@ -601,6 +602,7 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
         prisma,
         redis,
         receiptId: r1.id,
+        now: initialDate,
       });
 
       let sub = await prisma.subscription.findUnique({ where: { botId } });
@@ -622,8 +624,8 @@ describe("Stage 6: Payment and Receipts Integration Tests", () => {
       });
 
       sub = await prisma.subscription.findUnique({ where: { botId } });
-      // Paid until should be initialDate + 1m + 6m = 7m
-      const expected7m = addMonths(expected1m, 6);
+      // The second receipt is still pending: preserve only the approved first month.
+      const expected7m = expected1m;
       expect(sub?.paidUntil?.toISOString()).toBe(expected7m.toISOString());
 
       // Reject Receipt 2 -> should roll back to after Receipt 1 (+1 month)

@@ -221,6 +221,9 @@ export function registerBotsOpsRoutes(
         where: { botId: id, status: "FAILED" },
       });
 
+      const failedNotificationCount = await prisma.notificationDelivery.count({
+        where: { botId: id, status: "FAILED" },
+      });
       const connection = await checkBotConnection(bot, {
         mode: env.BOT_MODE,
         publicBaseUrl: env.PUBLIC_BASE_URL,
@@ -240,9 +243,42 @@ export function registerBotsOpsRoutes(
           lastErrorAt: bot.lastErrorAt?.toISOString() ?? null,
           subscriptionStatus: bot.subscription?.status ?? "UNKNOWN",
           failedInboxCount,
+          failedNotificationCount,
           connection,
         },
       });
+    },
+  );
+
+  app.get<{ Querystring: { botId?: string } }>(
+    "/api/v1/system/notification-errors",
+    { preHandler: [authenticateAdmin] },
+    async (req, reply) => {
+      const deliveries = await prisma.notificationDelivery.findMany({
+        where: { status: "FAILED", ...(req.query.botId ? { botId: req.query.botId } : {}) },
+        select: { id: true, botId: true, attempts: true, lastError: true, createdAt: true },
+        take: 50,
+        orderBy: { createdAt: "desc" },
+      });
+      return reply.send({ ok: true, deliveries });
+    },
+  );
+  app.post<{ Params: { id: string } }>(
+    "/api/v1/system/notification-errors/:id/retry",
+    { preHandler: [authenticateAdmin] },
+    async (req, reply) => {
+      const result = await prisma.notificationDelivery.updateMany({
+        where: { id: req.params.id, status: "FAILED" },
+        data: {
+          status: "PENDING",
+          attempts: 0,
+          availableAt: new Date(),
+          lockedUntil: null,
+          leaseToken: null,
+          lastError: null,
+        },
+      });
+      return reply.code(result.count ? 200 : 404).send({ ok: result.count === 1 });
     },
   );
 

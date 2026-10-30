@@ -51,10 +51,12 @@ export async function sendReceiptApprovedNotification(
       if (admin.unreachableAt) continue;
       const lang = admin.lang ?? "RU";
       const text = t(lang, "receipt_approved_push");
-      const res = await safeTelegramCall(
-        () => api.sendMessage(Number(admin.tgId), text),
-        { transport, logger, botId: receipt.bot.id, chatId: admin.tgId },
-      );
+      const res = await safeTelegramCall(() => api.sendMessage(Number(admin.tgId), text), {
+        transport,
+        logger,
+        botId: receipt.bot.id,
+        chatId: admin.tgId,
+      });
       if (res.ok) delivered++;
     }
   } catch (err) {
@@ -91,7 +93,9 @@ export async function sendReceiptRejectedNotification(
       const lang = admin.lang ?? "RU";
       let text: string;
 
-      if (newStatus === "GRACE_PERIOD") {
+      if (newStatus === "TRIAL") {
+        text = t(lang, "receipt_rejected_trial_push", { reason });
+      } else if (newStatus === "GRACE_PERIOD") {
         text = t(lang, "receipt_rejected_grace_push", { reason });
       } else if (newStatus === "BLOCKED") {
         text = t(lang, "receipt_rejected_blocked_push", {
@@ -105,10 +109,12 @@ export async function sendReceiptRejectedNotification(
         });
       }
 
-      const res = await safeTelegramCall(
-        () => api.sendMessage(Number(admin.tgId), text),
-        { transport, logger, botId: receipt.bot.id, chatId: admin.tgId },
-      );
+      const res = await safeTelegramCall(() => api.sendMessage(Number(admin.tgId), text), {
+        transport,
+        logger,
+        botId: receipt.bot.id,
+        chatId: admin.tgId,
+      });
       if (res.ok) delivered++;
     }
   } catch (err) {

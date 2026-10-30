@@ -1,3 +1,4 @@
+import { escapeTelegramHtml as html } from "./telegram-text.js";
 import type { PrismaClient } from "@prisma/client";
 import {
   createBotApi,
@@ -26,7 +27,7 @@ export type PlatformEvent =
       botId: string;
     }
   | {
-      type: "BOT_BLOCKED";
+      type: "BOT_BLOCKED" | "DELIVERY_FAILED";
       botName: string;
       reason: string;
     };
@@ -53,7 +54,10 @@ export async function notifyPlatformOwner(
       try {
         token = decryptSecret(settings.alertBotTokenEnc, env.TOKEN_ENCRYPTION_KEY);
       } catch (err) {
-        logger?.warn({ err: (err as Error).message }, "Failed to decrypt alert bot token from settings");
+        logger?.warn(
+          { err: (err as Error).message },
+          "Failed to decrypt alert bot token from settings",
+        );
       }
     }
 
@@ -73,22 +77,24 @@ export async function notifyPlatformOwner(
       const amountFmt = event.amountUzs.toLocaleString("ru-RU").replace(/\u00A0/g, " ");
       message =
         `🔔 <b>Новый чек на проверку!</b>\n\n` +
-        `🤖 <b>Бот:</b> ${event.botName}\n` +
-        `👤 <b>Клиент:</b> ${event.clientName} (${event.phone})\n` +
+        `🤖 <b>Бот:</b> ${html(event.botName)}\n` +
+        `👤 <b>Клиент:</b> ${html(event.clientName)} (${html(event.phone)})\n` +
         `💳 <b>Тариф:</b> ${event.tariffMonths} мес — ${amountFmt} сум\n\n` +
-        `🔗 <a href="${adminOrigin}/receipts">Открыть в веб-админке</a>`;
+        `🔗 <a href="${html(adminOrigin)}/receipts">Открыть в веб-админке</a>`;
     } else if (event.type === "BOT_REGISTERED") {
       message =
         `🤖 <b>Создан новый бот!</b>\n\n` +
-        `🏷 <b>Тип:</b> ${event.botType}\n` +
-        `🏢 <b>Организация:</b> ${event.clientName}\n` +
-        (event.botUsername ? `💬 <b>Username:</b> @${event.botUsername}\n\n` : `\n`) +
-        `🔗 <a href="${adminOrigin}/bots/${event.botId}">Карточка бота в админке</a>`;
-    } else if (event.type === "BOT_BLOCKED") {
+        `🏷 <b>Тип:</b> ${html(event.botType)}\n` +
+        `🏢 <b>Организация:</b> ${html(event.clientName)}\n` +
+        (event.botUsername ? `💬 <b>Username:</b> @${html(event.botUsername)}\n\n` : `\n`) +
+        `🔗 <a href="${html(adminOrigin)}/bots/${html(event.botId)}">Карточка бота в админке</a>`;
+    } else if (event.type === "BOT_BLOCKED" || event.type === "DELIVERY_FAILED") {
       message =
-        `🚫 <b>Бот заблокирован!</b>\n\n` +
-        `🤖 <b>Бот:</b> ${event.botName}\n` +
-        `⚠️ <b>Причина:</b> ${event.reason}`;
+        (event.type === "BOT_BLOCKED"
+          ? `🚫 <b>Бот заблокирован!</b>\n\n`
+          : `⚠️ <b>Ошибка доставки уведомления</b>\n\n`) +
+        `🤖 <b>Бот:</b> ${html(event.botName)}\n` +
+        `⚠️ <b>Причина:</b> ${html(event.reason)}`;
     }
 
     await api.sendMessage(chatId, message, { parse_mode: "HTML" });
