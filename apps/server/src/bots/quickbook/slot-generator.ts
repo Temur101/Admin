@@ -23,6 +23,7 @@ export interface GenerateSlotsOptions {
   redis?: Redis;
   now?: Date;
   lang?: "RU" | "UZ";
+  excludeBookingId?: string;
 }
 
 /**
@@ -77,7 +78,7 @@ function formatMinutesToLabel(minutes: number): string {
  * Generates available booking time slots for a given date, service and resource.
  */
 export async function generateAvailableSlots(opts: GenerateSlotsOptions): Promise<TimeSlot[]> {
-  const { botId, config, serviceId, staffId, dateStr, prisma, redis } = opts;
+  const { botId, config, serviceId, staffId, dateStr, prisma, redis, excludeBookingId } = opts;
   const now = opts.now ?? new Date();
   const lang = opts.lang ?? "RU";
   if (!isBookingDateAllowed(dateStr, config, now)) return [];
@@ -104,6 +105,7 @@ export async function generateAvailableSlots(opts: GenerateSlotsOptions): Promis
     prisma.booking.findMany({
       where: {
         botId,
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
         slotTime: {
           gte: dayStartUtc,
           lt: dayEndUtc,

@@ -110,11 +110,15 @@ export function registerClientBookingsHandlers(
 
   bot.callbackQuery(/^qb:rs:c:(.+):(.+)$/, async (ctx) => {
     const bookingId = ctx.match[1];
-    const slotIso = ctx.match[2];
-    if (!bookingId || !slotIso || !ctx.from) return;
+    const timeParam = ctx.match[2];
+    if (!bookingId || !timeParam || !ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
     const lang = ctx.session.lang ?? "RU";
     const config = getQuickBookConfig(ctx.botMeta.settings);
+
+    const slotIso = /^\d+$/.test(timeParam)
+      ? new Date(Number(timeParam) * 1000).toISOString()
+      : timeParam;
 
     const res = await rescheduleBooking({
       prisma,
@@ -199,18 +203,22 @@ async function showRescheduleSlots(
     prisma,
     redis,
     lang,
+    excludeBookingId: bookingId,
   });
 
   if (slots.length === 0) {
-    await ctx.reply(t(lang, "qb_no_slots"));
+    const kb = new InlineKeyboard().text(t(lang, "btn_back"), `qb:my:resched:${bookingId}`);
+    await ctx.reply(t(lang, "qb_no_slots"), { reply_markup: kb });
     return;
   }
 
   const keyboard = new InlineKeyboard();
   slots.forEach((slot, index) => {
-    keyboard.text(slot.timeLabel, `qb:rs:c:${bookingId}:${slot.slotTimeIso}`);
+    const slotSec = Math.floor(slot.slotTime.getTime() / 1000);
+    keyboard.text(slot.timeLabel, `qb:rs:c:${bookingId}:${slotSec}`);
     if (index % 3 === 2) keyboard.row();
   });
+  keyboard.row().text(t(lang, "btn_back"), `qb:my:resched:${bookingId}`);
 
   await ctx.reply(t(lang, "qb_choose_time"), { reply_markup: keyboard });
 }
