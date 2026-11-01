@@ -1,5 +1,6 @@
 import { flushNotificationOutbox } from "../bots/shared/notification-outbox.js";
-import { applyDueChanges, ensureInitialMinLead } from "../bots/quickbook/setting-changes.js";
+import { applyDueChanges } from "../bots/quickbook/setting-changes.js";
+import { ensureInitialMinLead } from "../bots/quickbook/initial-min-lead.js";
 import type { TenantResolver } from "../gateway/tenant-resolver.js";
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";

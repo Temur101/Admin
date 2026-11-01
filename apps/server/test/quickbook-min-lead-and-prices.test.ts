@@ -4,11 +4,11 @@ import { buildApp } from "../src/index.js";
 import {
   applyDueChanges,
   cancelPendingChange,
-  ensureInitialMinLead,
   loadEffectiveConfig,
   scheduleSettingChange,
   validateChangeValue,
 } from "../src/bots/quickbook/setting-changes.js";
+import { ensureInitialMinLead } from "../src/bots/quickbook/initial-min-lead.js";
 import { findNextWorkingDate } from "../src/bots/quickbook/setting-schedule.js";
 import { generateAvailableSlots } from "../src/bots/quickbook/slot-generator.js";
 import { createBooking, cancelBooking } from "../src/bots/quickbook/booking-service.js";
@@ -23,8 +23,7 @@ describe("QuickBook: min lead time & service prices (Stages 2–10)", () => {
     const fx = await readinessFixture();
     try {
       const sentCount = () => fx.transport.callsOf("sendMessage").length;
-      const lastText = () =>
-        String(fx.transport.callsOf("sendMessage").at(-1)?.payload.text ?? "");
+      const lastText = () => String(fx.transport.callsOf("sendMessage").at(-1)?.payload.text ?? "");
 
       // Client and STAFF cannot open Settings or trigger limit callbacks
       const before = sentCount();
@@ -145,10 +144,7 @@ describe("QuickBook: min lead time & service prices (Stages 2–10)", () => {
       const count1 = await ensureInitialMinLead(fx.prisma, nowFri);
       expect(count1).toBe(1);
       // Repeated initialization is idempotent and does not reset or shift effectiveAt
-      const count2 = await ensureInitialMinLead(
-        fx.prisma,
-        new Date("2026-10-31T10:00:00+05:00"),
-      );
+      const count2 = await ensureInitialMinLead(fx.prisma, new Date("2026-10-31T10:00:00+05:00"));
       expect(count2).toBe(0);
 
       // Before effective date, legacy behaviour (no minLeadMinutes) still applies
@@ -198,12 +194,7 @@ describe("QuickBook: min lead time & service prices (Stages 2–10)", () => {
 
       // Year rollover: 2026-12-31 (Thursday) -> 2027-01-01 (Friday)
       expect(
-        findNextWorkingDate(
-          weekdayConfig,
-          "s1",
-          [],
-          new Date("2026-12-31T15:00:00+05:00"),
-        ),
+        findNextWorkingDate(weekdayConfig, "s1", [], new Date("2026-12-31T15:00:00+05:00")),
       ).toBe("2027-01-01");
 
       // Ordinary bookings filling the day do NOT turn a working day into a day off
@@ -232,9 +223,7 @@ describe("QuickBook: min lead time & service prices (Stages 2–10)", () => {
         author: { tgId: actors.owner },
         now: nowFri,
       });
-      expect(s2Change.ok && !s2Change.unchanged && s2Change.plan.effectiveDate).toBe(
-        "2026-10-31",
-      );
+      expect(s2Change.ok && !s2Change.unchanged && s2Change.plan.effectiveDate).toBe("2026-10-31");
 
       // Independent changes: scheduling s1 price and MIN_LEAD do not overwrite s2 price change
       const s1Change = await scheduleSettingChange(fx.prisma, {
@@ -245,9 +234,7 @@ describe("QuickBook: min lead time & service prices (Stages 2–10)", () => {
         author: { tgId: actors.owner },
         now: nowFri,
       });
-      expect(s1Change.ok && !s1Change.unchanged && s1Change.plan.effectiveDate).toBe(
-        "2026-11-02",
-      );
+      expect(s1Change.ok && !s1Change.unchanged && s1Change.plan.effectiveDate).toBe("2026-11-02");
       const leadChange = await scheduleSettingChange(fx.prisma, {
         botId: fx.bot.id,
         kind: "MIN_LEAD",
@@ -377,8 +364,16 @@ describe("QuickBook: min lead time & service prices (Stages 2–10)", () => {
 
       // Concurrent applyDueChanges calls are safe and apply exactly once
       const [applied1, applied2] = await Promise.all([
-        applyDueChanges(fx.prisma, { now: atMidnight, redis: fx.redis, tenantResolver: fx.resolver }),
-        applyDueChanges(fx.prisma, { now: atMidnight, redis: fx.redis, tenantResolver: fx.resolver }),
+        applyDueChanges(fx.prisma, {
+          now: atMidnight,
+          redis: fx.redis,
+          tenantResolver: fx.resolver,
+        }),
+        applyDueChanges(fx.prisma, {
+          now: atMidnight,
+          redis: fx.redis,
+          tenantResolver: fx.resolver,
+        }),
       ]);
       expect(applied1 + applied2).toBe(2);
     } finally {

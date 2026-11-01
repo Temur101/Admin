@@ -1,80 +1,49 @@
+import { freshConfig, showOwnerSettings } from "./owner-settings-view.js";
+export { showOwnerSettings };
 import { InlineKeyboard, type Bot } from "grammy";
 import { randomBytes } from "node:crypto";
-import { escapeTelegramHtml as html, telegramHtmlPages } from "../../core/telegram-text.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { callbackId, resolveCallbackId } from "../shared/callback-id.js";
 import { isActualBotAdmin } from "../shared/user-service.js";
 import { tashkentDateString } from "./booking-horizon.js";
-import { getQuickBookConfig } from "./config-resolver.js";
-import { effectivePhrase, fmtLead, fmtUzs, leadPreview, limText, pricePreview, type LimLang } from "./limits-texts.js";
+import {
+  effectivePhrase,
+  fmtLead,
+  fmtUzs,
+  leadPreview,
+  limText,
+  pricePreview,
+  type LimLang,
+} from "./limits-texts.js";
 import type { QuickBookComposerOptions } from "./quickbook-handlers.js";
 import {
   cancelPendingChange,
-  listPendingChanges,
-  loadEffectiveConfig,
   planSettingChange,
   scheduleSettingChange,
   validateChangeValue,
   type SettingChangeError,
 } from "./setting-changes.js";
-import { addDaysToDateString, formatDateDmy } from "./setting-schedule.js";
+import { addDaysToDateString } from "./setting-schedule.js";
 
 const STATE_TTL_MS = 10 * 60_000;
 type Kind = "MIN_LEAD" | "SERVICE_PRICE";
 const langOf = (ctx: PlatformBotContext): LimLang => ctx.session.lang ?? "RU";
 
-async function freshConfig(ctx: PlatformBotContext, opts: QuickBookComposerOptions) {
-  return (await loadEffectiveConfig(opts.prisma, ctx.botMeta.id)) ?? getQuickBookConfig(ctx.botMeta.settings);
-}
-
 /** Rights are re-read from PostgreSQL on every action (also for old buttons and typed input). */
 async function ensureOwner(ctx: PlatformBotContext, opts: QuickBookComposerOptions) {
-  if (ctx.from && (await isActualBotAdmin(opts.prisma, ctx.botMeta.id, ctx.from.id, "MANAGE_SETTINGS"))) {
+  if (
+    ctx.from &&
+    (await isActualBotAdmin(opts.prisma, ctx.botMeta.id, ctx.from.id, "MANAGE_SETTINGS"))
+  ) {
     return true;
   }
   delete ctx.session.limits;
   if (ctx.callbackQuery) {
-    await ctx.answerCallbackQuery({ text: limText(langOf(ctx)).denied, show_alert: true }).catch(() => {});
+    await ctx
+      .answerCallbackQuery({ text: limText(langOf(ctx)).denied, show_alert: true })
+      .catch(() => {});
   }
   return false;
-}
-
-export async function showOwnerSettings(ctx: PlatformBotContext, opts: QuickBookComposerOptions): Promise<void> {
-  delete ctx.session.limits;
-  const lang = langOf(ctx);
-  const L = limText(lang);
-  const loc = lang === "UZ" ? "uz" : "ru";
-  const unit = lang === "UZ" ? "so'm" : "сум";
-  const config = await freshConfig(ctx, opts);
-  const pending = await listPendingChanges(opts.prisma, ctx.botMeta.id);
-  const name = (id: string) => config.services.find((s) => s.id === id)?.name[loc] ?? id;
-  const date = (d: Date) => formatDateDmy(tashkentDateString(d));
-
-  const lines = [L.title, "", L.lead(fmtLead(lang, config.minLeadMinutes)), "", L.prices];
-  for (const s of config.services) lines.push(`• ${html(s.name[loc])}: ${fmtUzs(s.priceUzs)} ${unit}`);
-  if (pending.length > 0) {
-    lines.push("", L.pending);
-    for (const c of pending) {
-      const line =
-        c.kind === "MIN_LEAD"
-          ? L.pendingLead(fmtLead(lang, c.oldValue), fmtLead(lang, c.newValue), date(c.effectiveAt))
-          : L.pendingPrice(html(name(c.targetId)), fmtUzs(c.oldValue ?? 0), fmtUzs(c.newValue), date(c.effectiveAt));
-      lines.push(line);
-    }
-  }
-  lines.push("", L.hours);
-  for (const r of config.resources) lines.push(`• ${html(r.name[loc])}: ${r.workHours.start} - ${r.workHours.end}`);
-  lines.push("", L.hint);
-
-  const kb = new InlineKeyboard().text(L.btnLead, "lim:lead").row().text(L.btnPrices, "lim:pr");
-  for (const c of pending) {
-    const label = (c.kind === "MIN_LEAD" ? "⏱" : name(c.targetId)).slice(0, 24);
-    kb.row().text(L.btnReplace(label), `lim:rp:${c.id}`).row().text(L.btnDrop(label), `lim:cx:${c.id}`);
-  }
-  const pages = telegramHtmlPages(lines.join("\n"));
-  for (const [i, page] of pages.entries()) {
-    await ctx.reply(page, { parse_mode: "HTML", ...(i === pages.length - 1 ? { reply_markup: kb } : {}) });
-  }
 }
 
 async function replyError(ctx: PlatformBotContext, error: SettingChangeError, kind: Kind) {
@@ -130,12 +99,22 @@ async function preview(
   const text =
     kind === "MIN_LEAD"
       ? leadPreview(lang, plan.current, value, phrase)
-      : pricePreview(lang, service?.name[lang === "UZ" ? "uz" : "ru"] ?? "", plan.current ?? 0, value, phrase);
+      : pricePreview(
+          lang,
+          service?.name[lang === "UZ" ? "uz" : "ru"] ?? "",
+          plan.current ?? 0,
+          value,
+          phrase,
+        );
   const kb = new InlineKeyboard().text(L.btnConfirm, `lim:ok:${token}`).text(L.btnCancel, "lim:no");
   await ctx.reply(text, { reply_markup: kb });
 }
 
-async function startPriceInput(ctx: PlatformBotContext, opts: QuickBookComposerOptions, serviceId: string): Promise<void> {
+async function startPriceInput(
+  ctx: PlatformBotContext,
+  opts: QuickBookComposerOptions,
+  serviceId: string,
+): Promise<void> {
   const lang = langOf(ctx);
   const config = await freshConfig(ctx, opts);
   const service = config.services.find((s) => s.id === serviceId);
@@ -143,8 +122,15 @@ async function startPriceInput(ctx: PlatformBotContext, opts: QuickBookComposerO
     await ctx.reply(limText(lang).stale);
     return;
   }
-  ctx.session.limits = { step: "price_input", kind: "SERVICE_PRICE", serviceId, expiresAt: Date.now() + STATE_TTL_MS };
-  await ctx.reply(limText(lang).pricePrompt(service.name[lang === "UZ" ? "uz" : "ru"], fmtUzs(service.priceUzs)));
+  ctx.session.limits = {
+    step: "price_input",
+    kind: "SERVICE_PRICE",
+    serviceId,
+    expiresAt: Date.now() + STATE_TTL_MS,
+  };
+  await ctx.reply(
+    limText(lang).pricePrompt(service.name[lang === "UZ" ? "uz" : "ru"], fmtUzs(service.priceUzs)),
+  );
 }
 
 async function showLeadOptions(ctx: PlatformBotContext): Promise<void> {
@@ -160,7 +146,10 @@ async function showLeadOptions(ctx: PlatformBotContext): Promise<void> {
   await ctx.reply(L.leadChoose, { reply_markup: kb });
 }
 
-export function registerOwnerLimitsHandlers(bot: Bot<PlatformBotContext>, opts: QuickBookComposerOptions): void {
+export function registerOwnerLimitsHandlers(
+  bot: Bot<PlatformBotContext>,
+  opts: QuickBookComposerOptions,
+): void {
   const { prisma } = opts;
   const cb = async (ctx: PlatformBotContext) => {
     await ctx.answerCallbackQuery().catch(() => {});
@@ -178,7 +167,11 @@ export function registerOwnerLimitsHandlers(bot: Bot<PlatformBotContext>, opts: 
   });
   bot.callbackQuery("lim:ld:o", async (ctx) => {
     if (!(await cb(ctx))) return;
-    ctx.session.limits = { step: "lead_input", kind: "MIN_LEAD", expiresAt: Date.now() + STATE_TTL_MS };
+    ctx.session.limits = {
+      step: "lead_input",
+      kind: "MIN_LEAD",
+      expiresAt: Date.now() + STATE_TTL_MS,
+    };
     await ctx.reply(limText(langOf(ctx)).leadPrompt);
   });
   bot.callbackQuery("lim:pr", async (ctx) => {
@@ -191,7 +184,8 @@ export function registerOwnerLimitsHandlers(bot: Bot<PlatformBotContext>, opts: 
       return;
     }
     const kb = new InlineKeyboard();
-    for (const s of config.services) kb.text(`${s.name[loc]} — ${fmtUzs(s.priceUzs)}`, `lim:ps:${callbackId(s.id)}`).row();
+    for (const s of config.services)
+      kb.text(`${s.name[loc]} — ${fmtUzs(s.priceUzs)}`, `lim:ps:${callbackId(s.id)}`).row();
     kb.text(L.btnBack, "lim:menu");
     await ctx.reply(L.priceChoose, { reply_markup: kb });
   });
@@ -224,7 +218,14 @@ export function registerOwnerLimitsHandlers(bot: Bot<PlatformBotContext>, opts: 
       changeId: ctx.match[1]!,
       author: { tgId: ctx.from.id },
     });
-    await ctx.reply(limText(langOf(ctx))[ok ? "cancelled" : "cancelNone"]);
+    const required =
+      !ok &&
+      (await prisma.botSettingChange.findFirst({
+        where: { id: ctx.match[1], botId: ctx.botMeta.id, kind: "MIN_LEAD", status: "PENDING" },
+      }));
+    await ctx.reply(
+      limText(langOf(ctx))[ok ? "cancelled" : required ? "minimumRequired" : "cancelNone"],
+    );
     if (ok) await showOwnerSettings(ctx, opts);
   });
   bot.callbackQuery("lim:no", async (ctx) => {
@@ -266,7 +267,10 @@ export function registerOwnerLimitsHandlers(bot: Bot<PlatformBotContext>, opts: 
       await ctx.reply(L.unchanged);
       return;
     }
-    if (planned.plan.current !== (st.oldValue ?? null) || planned.plan.effectiveDate !== st.effectiveDate) {
+    if (
+      planned.plan.current !== (st.oldValue ?? null) ||
+      planned.plan.effectiveDate !== st.effectiveDate
+    ) {
       await ctx.reply(L.reconfirm);
       await preview(ctx, opts, st.kind, st.serviceId, st.newValue);
       return;

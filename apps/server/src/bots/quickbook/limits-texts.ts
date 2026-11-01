@@ -19,9 +19,7 @@ export function fmtLead(lang: LimLang, minutes: number | null | undefined): stri
   if (minutes == null) return lang === "UZ" ? "cheklanmagan" : "не ограничено";
   const hours = minutes / 60;
   if (Number.isInteger(hours)) {
-    return lang === "UZ"
-      ? `${hours} soat`
-      : `${hours} ${ruPlural(hours, "час", "часа", "часов")}`;
+    return lang === "UZ" ? `${hours} soat` : `${hours} ${ruPlural(hours, "час", "часа", "часов")}`;
   }
   return lang === "UZ"
     ? `${minutes} daqiqa`
@@ -87,8 +85,7 @@ const RU = {
   prices: "<b>Цены услуг:</b>",
   pending: "<b>Ожидающие изменения:</b>",
   pendingLead: (a: string, b: string, d: string) => `⏱ Мин. время: ${a} → ${b} (с ${d})`,
-  pendingPrice: (n: string, a: string, b: string, d: string) =>
-    `💰 ${n}: ${a} → ${b} сум (с ${d})`,
+  pendingPrice: (n: string, a: string, b: string, d: string) => `💰 ${n}: ${a} → ${b} сум (с ${d})`,
   hours: "<b>Рабочие часы:</b>",
   hint: "<i>Состав услуг и мастеров, названия, длительность и расписание меняются только в веб-панели.</i>",
   btnLead: "⏱ Мин. время до записи",
@@ -116,6 +113,8 @@ const RU = {
   notSaved: "Изменение не сохранено.",
   cancelled: "Ожидающее изменение отменено.",
   cancelNone: "Это изменение уже не ожидает применения.",
+  minimumRequired:
+    "Минимальный срок в 1 час обязателен. Его включение отменить нельзя; можно выбрать больший срок.",
   reconfirm: "Данные изменились, пока вы подтверждали. Проверьте новый итог и подтвердите ещё раз.",
   noServices: "Услуги не настроены. Добавьте их в веб-панели.",
 };
@@ -146,16 +145,16 @@ const UZ: typeof RU = {
   priceInvalid: `Manfiy bo'lmagan butun son kerak, ${fmtUzs(MAX_PRICE_UZS)} dan oshmasin. Qayta urinib ko'ring.`,
   stale: "Ma'lumotlar eskirgan. «Sozlamalar»ni qayta oching.",
   denied: "Ruxsat yo'q",
-  noWorkingDay:
-    "Keyingi ish kunini aniqlab bo'lmadi. Mutaxassislar jadvalini veb-panelda sozlang.",
+  noWorkingDay: "Keyingi ish kunini aniqlab bo'lmadi. Mutaxassislar jadvalini veb-panelda sozlang.",
   unchanged:
     "Yangi qiymat joriy qiymat bilan bir xil — o'zgarish yo'q. Kutilayotgan o'zgarishni «Sozlamalar»da bekor qilish mumkin.",
   saved: "✅ Saqlandi.",
   notSaved: "O'zgarish saqlanmadi.",
   cancelled: "Kutilayotgan o'zgarish bekor qilindi.",
   cancelNone: "Bu o'zgarish endi kutilmaydi.",
-  reconfirm:
-    "Tasdiqlash vaqtida ma'lumotlar o'zgardi. Yangi natijani tekshirib, qayta tasdiqlang.",
+  minimumRequired:
+    "Kamida 1 soatlik muddat majburiy. Uni yoqishni bekor qilib bo'lmaydi; uzoqroq muddatni tanlashingiz mumkin.",
+  reconfirm: "Tasdiqlash vaqtida ma'lumotlar o'zgardi. Yangi natijani tekshirib, qayta tasdiqlang.",
   noServices: "Xizmatlar sozlanmagan. Ularni veb-panelda qo'shing.",
 };
 
