@@ -13,6 +13,7 @@ import type { Logger } from "../core/logger.js";
 import type { TelegramTransport } from "../adapters/telegram/transport.js";
 import type { PollingManager } from "../gateway/polling-manager.js";
 import { InitialBotSettingsError, resolveInitialBotSettings } from "./initial-bot-settings.js";
+import { quickBookSettingsView } from "../bots/quickbook/web-config-save.js";
 import { registerBotsOpsRoutes } from "./bots-ops.js";
 import { registerBotsLifecycleRoutes } from "./bots-lifecycle.js";
 import type { Redis } from "ioredis";
@@ -123,6 +124,7 @@ export function registerBotsRoutes(
           lastErrorAt: bot.lastErrorAt?.toISOString() ?? null,
           inviteLink: null,
           settings: bot.settings,
+          ...(bot.botType === "QUICKBOOK" ? await quickBookSettingsView(prisma, bot.id) : {}),
           createdAt: bot.createdAt.toISOString(),
           subscription: bot.subscription
             ? {

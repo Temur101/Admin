@@ -26,5 +26,6 @@ export async function resetClientFlow(
   ctx.session.quiz = undefined;
   ctx.session.quickbook = undefined;
   ctx.session.payment = undefined;
+  ctx.session.reschedule = undefined;
   return true;
 }

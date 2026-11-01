@@ -167,6 +167,7 @@ export function registerAnalyticsRoutes(
             customerName: b.customerName,
             customerPhone: b.customerPhone,
             serviceName: b.serviceName,
+            priceUzs: b.priceUzs,
             slotTime: b.slotTime.toISOString(),
             source: b.source,
             status: b.status,

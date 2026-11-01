@@ -10,13 +10,9 @@ import {
   type Redis,
 } from "../src/index.js";
 import { env } from "../src/core/env.js";
-import {
-  createBooking,
-} from "../src/bots/quickbook/booking-service.js";
+import { createBooking } from "../src/bots/quickbook/booking-service.js";
 import { rescheduleBooking } from "../src/bots/quickbook/reschedule-service.js";
-import {
-  createTimeBlock,
-} from "../src/bots/quickbook/time-block-service.js";
+import { createTimeBlock } from "../src/bots/quickbook/time-block-service.js";
 import { findAffectedBookings } from "../src/bots/quickbook/conflict-checker.js";
 import { generateAvailableSlots } from "../src/bots/quickbook/slot-generator.js";
 import { runBookingReminderWorker } from "../src/workers/booking-reminder-worker.js";
@@ -397,7 +393,13 @@ describe("Stage 2 QuickBook Features: Manual Booking, Client Reschedule, TimeBlo
     expect(patchRes.statusCode).toBe(200);
     const updatedBot = await prisma.bot.findUnique({ where: { id: botId } });
     const settings = (updatedBot?.settings ?? {}) as unknown as QuickBookConfig;
-    expect(settings.services[0]?.priceUzs).toBe(75000);
+    expect(settings.services[0]?.priceUzs).toBe(50000);
+    const priceChange = await prisma.botSettingChange.findFirstOrThrow({
+      where: { botId, kind: "SERVICE_PRICE", targetId: "haircut", status: "PENDING" },
+    });
+    expect(priceChange.oldValue).toBe(50000);
+    expect(priceChange.newValue).toBe(75000);
+    expect(priceChange.effectiveAt.getTime()).toBeGreaterThan(Date.now());
     expect(settings.customTexts?.welcome?.ru).toBe("Добро пожаловать в барбершоп!");
 
     // Audit log was recorded

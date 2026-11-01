@@ -4,7 +4,10 @@ import type { PlatformBotContext } from "../../gateway/types.js";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
 import { t } from "../shared/i18n.js";
-import { notifyAdmins } from "../shared/notification.js";
+import {
+  enqueueAdminNotifications,
+  dispatchQueuedNotifications,
+} from "../shared/notification-outbox.js";
 import { parseAndNormalizePhone } from "./phone.js";
 import { quizAttemptId } from "./quiz-session.js";
 import { sendQuizSummaryPrompt } from "./quiz-prompts.js";
@@ -64,26 +67,45 @@ export async function handleLeadCatchContact(
     return false;
   }
 
+  const sender = ctx.from;
+  const normalizedPhone = phone.normalized;
   const id = quizAttemptId(ctx);
   let lead;
   try {
-    lead = await prisma.lead.upsert({
-      where: { id },
-      update: { id },
-      create: {
-        id,
-        botId: ctx.botMeta.id,
-        customerTgId: BigInt(ctx.from.id),
-        customerName: ctx.from.first_name ?? null,
-        customerUsername: ctx.from.username ?? null,
-        phoneRaw: phone.normalized,
-        phoneVerified,
-        answers: quiz.answers as unknown as Prisma.InputJsonValue,
-        isMasked: false,
-      },
+    lead = await prisma.$transaction(async (tx) => {
+      const savedLead = await tx.lead.upsert({
+        where: { id },
+        update: { id },
+        create: {
+          id,
+          botId: ctx.botMeta.id,
+          customerTgId: BigInt(sender.id),
+          customerName: sender.first_name ?? null,
+          customerUsername: sender.username ?? null,
+          phoneRaw: normalizedPhone,
+          phoneVerified,
+          answers: quiz.answers as unknown as Prisma.InputJsonValue,
+          isMasked: false,
+        },
+      });
+      if (savedLead.botId !== ctx.botMeta.id || savedLead.customerTgId !== BigInt(ctx.from!.id))
+        throw new Error("Lead attempt ownership mismatch");
+      const answers: Record<string, string> = {};
+      for (const [key, value] of Object.entries(
+        savedLead.answers as unknown as typeof quiz.answers,
+      ))
+        answers[value.question || key] = value.answer;
+      await enqueueAdminNotifications(tx, ctx.botMeta.id, `lead:${savedLead.id}`, {
+        kind: "LEAD",
+        leadId: savedLead.id,
+        name: savedLead.customerName,
+        phone: savedLead.phoneRaw,
+        phoneVerified: savedLead.phoneVerified,
+        username: savedLead.customerUsername,
+        answers,
+      });
+      return savedLead;
     });
-    if (lead.botId !== ctx.botMeta.id || lead.customerTgId !== BigInt(ctx.from.id))
-      throw new Error("Lead attempt ownership mismatch");
   } catch (err) {
     opts.logger.error(
       { err: err instanceof Error ? err.message : String(err), botId: ctx.botMeta.id },
@@ -93,36 +115,12 @@ export async function handleLeadCatchContact(
     return false;
   }
 
-  if (!quiz.notifiedLeadId) {
-    const answers: Record<string, string> = {};
-    const saved = lead.answers as unknown as typeof quiz.answers;
-    for (const [key, value] of Object.entries(saved)) {
-      answers[value.question || key] = value.answer;
-    }
-    try {
-      const sentCount = await notifyAdmins(
-        ctx.botMeta.id,
-        {
-          kind: "LEAD",
-          leadId: lead.id,
-          name: lead.customerName,
-          phone: lead.phoneRaw,
-          phoneVerified: lead.phoneVerified ?? phoneVerified,
-          username: lead.customerUsername,
-          answers,
-        },
-        { prisma, transport: opts.transport, logger: opts.logger },
-      );
-      if (sentCount > 0) {
-        quiz.notifiedLeadId = lead.id;
-      }
-    } catch (err) {
-      opts.logger.error(
-        { err: err instanceof Error ? err.message : String(err), botId: ctx.botMeta.id },
-        "Failed to dispatch admin lead notification",
-      );
-    }
-  }
+  await dispatchQueuedNotifications({
+    prisma,
+    transport: opts.transport,
+    logger: opts.logger,
+    eventKey: `lead:${lead.id}`,
+  });
 
   await reply(t(lang, "quiz_thank_you"), { reply_markup: navigationKeyboard(ctx) });
   if (ctx.session.quiz === quiz) ctx.session.quiz = undefined;

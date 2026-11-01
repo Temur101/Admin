@@ -1,4 +1,5 @@
 import {
+  MIN_LEAD_MINUTES_FLOOR,
   createEmptyQuickBookConfig,
   createEmptyQuizConfig,
   type CreateBotRequest,
@@ -22,7 +23,11 @@ export function resolveInitialBotSettings(
     if (!template) throw new InitialBotSettingsError(404, "Шаблон не найден. Обновите каталог.");
     if (template.botType !== request.botType)
       throw new InitialBotSettingsError(400, "Этот шаблон предназначен для другого типа бота.");
-    return structuredClone(template.config);
+    const config = structuredClone(template.config);
+    if ("services" in config && config.minLeadMinutes === undefined) {
+      config.minLeadMinutes = MIN_LEAD_MINUTES_FLOOR;
+    }
+    return config;
   }
   return request.botType === "QUICKBOOK"
     ? createEmptyQuickBookConfig(request.resourceType)

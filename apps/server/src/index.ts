@@ -170,6 +170,7 @@ export async function buildApp(opts?: AppOptions): Promise<FastifyInstance> {
     transport,
     logger,
     inboxService,
+    tenantResolver,
     recoveryIntervalMs: opts?.schedulerOptions?.recoveryIntervalMs,
     subscriptionIntervalMs: opts?.schedulerOptions?.subscriptionIntervalMs,
     reminderIntervalMs: opts?.schedulerOptions?.reminderIntervalMs,

@@ -1,17 +1,26 @@
 import type { QuickBookConfig, ResourceType } from "@lcqb/contracts";
-import { RESOURCE_LABELS } from "@lcqb/contracts";
+import { MIN_LEAD_MINUTES_FLOOR, RESOURCE_LABELS } from "@lcqb/contracts";
+import type { PendingSettingChange } from "../../../api/bots.js";
 import { Input } from "../../common/Input.js";
+
+function formatDmy(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-");
+  return y && m && d ? `${d}.${m}.${y}` : dateStr;
+}
+
 export function BookingParameters({
   config,
   update,
+  pendingLead,
 }: {
   config: QuickBookConfig;
   update: (value: Partial<QuickBookConfig>) => void;
+  pendingLead?: PendingSettingChange;
 }) {
   return (
     <section className="rounded-2xl border border-ui-border bg-ui-surface p-4 space-y-4">
       <h4 className="font-semibold">Как принимать запись</h4>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <label className="space-y-2 text-sm text-ui-secondary">
           Тип ресурсов
           <select
@@ -45,6 +54,19 @@ export function BookingParameters({
           value={config.bookingHorizonDays}
           onChange={(e) => update({ bookingHorizonDays: Number(e.target.value) })}
           helperText="От 1 до 60 календарных дней, включая сегодня, по времени Ташкента. Например, 1 — только сегодня."
+        />
+        <Input
+          label="Мин. время до онлайн-записи (мин)"
+          type="number"
+          min={MIN_LEAD_MINUTES_FLOOR}
+          max={10080}
+          value={config.minLeadMinutes ?? MIN_LEAD_MINUTES_FLOOR}
+          onChange={(e) => update({ minLeadMinutes: Number(e.target.value) })}
+          helperText={
+            pendingLead
+              ? `Сейчас: ${config.minLeadMinutes ?? "не ограничено"} мин. Ожидает: ${pendingLead.newValue} мин с ${formatDmy(pendingLead.effectiveDate)}.`
+              : "Не меньше 60 минут. Изменение вступает в силу со следующего рабочего дня."
+          }
         />
       </div>
       <details className="text-sm text-ui-secondary">

@@ -22,3 +22,7 @@ export function isBookingDateAllowed(
   const { start, end } = bookingWindow(config, now);
   return date.getTime() >= start && date.getTime() < end;
 }
+/** Earliest slot start a client may book: now + effective minimum lead (0 for legacy bots). */
+export function earliestBookableMs(config: QuickBookConfig, now = new Date()): number {
+  return now.getTime() + (config.minLeadMinutes ?? 0) * 60_000;
+}

@@ -3,13 +3,18 @@ import type { Redis } from "ioredis";
 import type { QuickBookConfig } from "@lcqb/contracts";
 import type { TelegramTransport } from "../../adapters/telegram/transport.js";
 import type { Logger } from "../../core/logger.js";
-import { notifyAdmins } from "../shared/notification.js";
+import {
+  enqueueAdminNotifications,
+  dispatchQueuedNotifications,
+  bookingNotification,
+} from "../shared/notification-outbox.js";
 import { parseAndNormalizePhone } from "../shared/phone.js";
 import { releaseSlotLock } from "./slot-lock.js";
 import { getAlternativeSlots, type TimeSlot } from "./slot-generator.js";
 import { formatTashkentDateTime } from "../shared/payment-service.js";
 import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS } from "./booking-constants.js";
 import { getTashkentTimeParts, validateBookingSlotEligibility } from "./booking-validator.js";
+import { BookingPolicyError, checkBookingPolicy, lockBookingPolicy } from "./booking-policy.js";
 
 export { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS, formatTashkentDateTime };
 export { getTashkentTimeParts, validateBookingSlotEligibility };
@@ -38,6 +43,8 @@ export interface CreateBookingParams {
   now?: Date;
   source?: "TELEGRAM" | "MANUAL";
   createdByTgId?: number | bigint | null;
+  /** Price the customer/owner saw on the confirmation; a mismatch demands a fresh confirmation. */
+  expectedPriceUzs?: number;
 }
 
 export type CreateBookingError =
@@ -46,6 +53,7 @@ export type CreateBookingError =
   | "STAFF_NOT_FOUND"
   | "SERVICE_NOT_SUPPORTED"
   | "SLOT_IN_PAST"
+  | "TOO_SOON"
   | "OUTSIDE_HORIZON"
   | "NOT_IN_SCHEDULE"
   | "SLOT_IN_BREAK"
@@ -55,11 +63,13 @@ export type CreateBookingResult =
   | { success: true; booking: Booking }
   | { success: false; error: "INVALID_PHONE" }
   | { success: false; error: "SERVICE_NOT_FOUND" | "STAFF_NOT_FOUND" | "SERVICE_NOT_SUPPORTED" }
+  | { success: false; error: "PRICE_CHANGED"; priceUzs: number }
   | {
       success: false;
       error:
         | "SLOT_TAKEN"
         | "SLOT_IN_PAST"
+        | "TOO_SOON"
         | "OUTSIDE_HORIZON"
         | "NOT_IN_SCHEDULE"
         | "SLOT_IN_BREAK";
@@ -80,9 +90,10 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     serviceId,
     staffId,
     slotTime,
-    config,
     lang = "RU",
   } = params;
+  let config = params.config;
+  const isManual = (params.source ?? (customerTgId != null ? "TELEGRAM" : "MANUAL")) === "MANUAL";
 
   const parsedPhone = parseAndNormalizePhone(customerPhone);
   if (!parsedPhone.isValid || !parsedPhone.normalized) {
@@ -90,49 +101,28 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
   }
   const normalizedPhone = parsedPhone.normalized;
 
-  const service = config.services.find((s) => s.id === serviceId);
-  if (!service) return { success: false, error: "SERVICE_NOT_FOUND" };
-
-  const staff = config.resources.find((r) => r.id === staffId);
-  if (!staff) return { success: false, error: "STAFF_NOT_FOUND" };
-
   const slotDate = typeof slotTime === "string" ? new Date(slotTime) : slotTime;
-  const serviceName = lang === "UZ" ? service.name.uz : service.name.ru;
-  const staffName = lang === "UZ" ? staff.name.uz : staff.name.ru;
   const dateStr = getTashkentTimeParts(slotDate).dateStr;
-
-  const eligibility = validateBookingSlotEligibility({
-    config,
-    service,
-    staff,
-    slotDate,
-    now: params.now,
-  });
-
-  if (!eligibility.valid) {
-    if (eligibility.error === "SERVICE_NOT_SUPPORTED") {
-      return { success: false, error: "SERVICE_NOT_SUPPORTED" };
-    }
-    const alternativeSlots = await getAlternativeSlots({
-      botId,
-      config,
-      serviceId,
-      staffId,
-      dateStr,
-      prisma,
-      redis,
-      now: params.now,
-      lang,
-    });
-    return { success: false, error: eligibility.error, alternativeSlots };
-  }
-
-  const endTime = new Date(slotDate.getTime() + service.durationMin * 60000);
 
   try {
     const booking = await prisma.$transaction(
       async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${staffId}`}));`;
+        await lockBookingPolicy(tx, botId, staffId);
+        const {
+          config: liveConfig,
+          service: liveService,
+          endTime,
+        } = await checkBookingPolicy(tx, {
+          botId,
+          serviceId,
+          staffId,
+          slotDate,
+          now: params.now,
+          skipMinLead: isManual,
+          expectedPriceUzs: params.expectedPriceUzs,
+        });
+        config = liveConfig;
+        const serviceName = lang === "UZ" ? liveService.name.uz : liveService.name.ru;
 
         // Check for conflicting TimeBlock
         const timeBlock = tx.timeBlock?.findFirst
@@ -172,7 +162,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
         const source = params.source ?? (customerTgId != null ? "TELEGRAM" : "MANUAL");
 
-        return tx.booking.create({
+        const created = await tx.booking.create({
           data: {
             botId,
             customerTgId: customerTgId != null ? BigInt(customerTgId) : null,
@@ -182,7 +172,8 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
             serviceId,
             serviceName,
             staffId,
-            durationMin: service.durationMin,
+            durationMin: liveService.durationMin,
+            priceUzs: liveService.priceUzs,
             slotTime: slotDate,
             endTime,
             status: "CONFIRMED",
@@ -190,6 +181,13 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
             createdByTgId: params.createdByTgId != null ? BigInt(params.createdByTgId) : null,
           },
         });
+        await enqueueAdminNotifications(
+          tx,
+          botId,
+          `booking:${created.id}:created`,
+          bookingNotification(created, "BOOKING"),
+        );
+        return created;
       },
       { maxWait: 15000, timeout: 20000 },
     );
@@ -201,7 +199,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
         slotTime: slotDate,
         userId: customerTgId,
         lockToken: params.lockToken,
-        durationMin: service.durationMin,
+        durationMin: booking.durationMin,
         slotIntervalMin: config.slotIntervalMin,
       }).catch(() => {});
     }
@@ -211,27 +209,42 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       logger.warn({ err: (err as Error).message }, "Could not schedule reminder in Redis");
     });
 
-    const timeFormatted = formatTashkentDateTime(slotDate);
-    await notifyAdmins(
-      botId,
-      {
-        kind: "BOOKING",
-        name: customerName,
-        phone: normalizedPhone,
-        phoneVerified,
-        service: serviceName,
-        staff: staffName,
-        time: timeFormatted,
-        serviceId,
-        staffId,
-      },
-      { prisma, transport, logger },
-    ).catch((err) => {
-      logger.error({ err: (err as Error).message }, "Failed to notify admins of new booking");
+    await dispatchQueuedNotifications({
+      prisma,
+      transport,
+      logger,
+      eventKey: `booking:${booking.id}:created`,
     });
 
     return { success: true, booking };
   } catch (err: unknown) {
+    if (err instanceof BookingPolicyError) {
+      if (err.code === "PRICE_CHANGED")
+        return { success: false, error: "PRICE_CHANGED", priceUzs: err.priceUzs! };
+      if (
+        err.code === "SERVICE_NOT_FOUND" ||
+        err.code === "STAFF_NOT_FOUND" ||
+        err.code === "SERVICE_NOT_SUPPORTED"
+      ) {
+        return { success: false, error: err.code };
+      }
+      return {
+        success: false,
+        error: err.code,
+        alternativeSlots: await getAlternativeSlots({
+          botId,
+          config: err.config ?? config,
+          serviceId,
+          staffId,
+          dateStr,
+          prisma,
+          redis,
+          now: params.now,
+          lang,
+          skipMinLead: isManual,
+        }),
+      };
+    }
     const errorMsg = (err as Error).message ?? "";
     const errObj = typeof err === "object" && err !== null ? (err as Record<string, unknown>) : {};
     const errCode =
@@ -264,6 +277,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
         redis,
         now: params.now,
         lang,
+        skipMinLead: isManual,
       });
 
       return {

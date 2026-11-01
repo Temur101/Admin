@@ -1,7 +1,7 @@
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import type { QuickBookConfig } from "@lcqb/contracts";
-import { isBookingDateAllowed } from "./booking-horizon.js";
+import { earliestBookableMs, isBookingDateAllowed } from "./booking-horizon.js";
 import { isSlotLocked } from "./slot-lock.js";
 
 export interface TimeSlot {
@@ -24,6 +24,8 @@ export interface GenerateSlotsOptions {
   now?: Date;
   lang?: "RU" | "UZ";
   excludeBookingId?: string;
+  /** Owner manual booking: ignore the client minimum lead time. */
+  skipMinLead?: boolean;
 }
 
 /**
@@ -138,8 +140,9 @@ export async function generateAvailableSlots(opts: GenerateSlotsOptions): Promis
   const slots: TimeSlot[] = [];
   const intervalMin = config.slotIntervalMin ?? 30;
 
-  // Calculate now in Tashkent timestamp
+  // Slots start on the schedule grid; only those not earlier than now + min lead are offered
   const nowMs = now.getTime();
+  const earliestMs = opts.skipMinLead ? nowMs : Math.max(nowMs, earliestBookableMs(config, now));
 
   for (const res of resources) {
     // Check work day
@@ -172,7 +175,7 @@ export async function generateAvailableSlots(opts: GenerateSlotsOptions): Promis
       const slotEndMs = slotStartMs + service.durationMin * 60 * 1000;
 
       // Check if slot is in the past (must be strictly in the future)
-      if (slotStartMs <= nowMs) {
+      if (slotStartMs <= nowMs || slotStartMs < earliestMs) {
         continue;
       }
 

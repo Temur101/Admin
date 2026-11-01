@@ -1,4 +1,6 @@
-import type { BotAdminRole, Lang, LeadStatus, PrismaClient } from "@prisma/client";
+import { buildLeadQueueView, type LeadQueueOptions } from "./lead-queue-view.js";
+import { formatLeadStatusLabel } from "./lead-status.js";
+import type { BotAdminRole, Lang, PrismaClient } from "@prisma/client";
 import { InlineKeyboard, Keyboard } from "grammy";
 import type { ResolvedBot } from "../../gateway/types.js";
 import { t, type TranslationKey } from "./i18n.js";
@@ -99,24 +101,7 @@ export function formatSubscriptionStatusText(
   return { text, keyboard };
 }
 
-export function formatLeadStatusLabel(status: LeadStatus | undefined, lang: Lang): string {
-  switch (status) {
-    case "IN_PROGRESS":
-      return t(lang, "lead_status_in_progress");
-    case "DONE":
-      return t(lang, "lead_status_done");
-    case "REJECTED":
-      return t(lang, "lead_status_rejected");
-    default:
-      return t(lang, "lead_status_new");
-  }
-}
-
-export interface AdminEntriesViewOptions {
-  statusFilter?: LeadStatus;
-  isOwner?: boolean;
-  receivesLeads?: boolean;
-}
+export type AdminEntriesViewOptions = LeadQueueOptions;
 
 export async function buildAdminEntriesView(
   prisma: PrismaClient,
@@ -124,28 +109,9 @@ export async function buildAdminEntriesView(
   lang: Lang | null | undefined,
   opts?: AdminEntriesViewOptions,
 ): Promise<{ text: string; keyboard?: InlineKeyboard }> {
-  const l = lang ?? "RU";
-  const text = await fetchRecentEntriesText(prisma, botMeta, l, opts);
-
-  if (botMeta.botType !== "LEADCATCH") {
-    return { text };
-  }
-
-  const kb = new InlineKeyboard()
-    .text(l === "UZ" ? "Barchasi" : "Все", "admin:leads:ALL")
-    .text("🆕", "admin:leads:NEW")
-    .text("⏳", "admin:leads:IN_PROGRESS")
-    .text("✅", "admin:leads:DONE")
-    .text("❌", "admin:leads:REJECTED");
-
-  if (opts?.isOwner) {
-    kb.row().text(
-      opts.receivesLeads !== false ? t(l, "btn_toggle_leads_on") : t(l, "btn_toggle_leads_off"),
-      "admin:toggle_leads",
-    );
-  }
-
-  return { text, keyboard: kb };
+  if (botMeta.botType === "LEADCATCH")
+    return buildLeadQueueView(prisma, botMeta, lang ?? "RU", opts);
+  return { text: await fetchRecentEntriesText(prisma, botMeta, lang, opts) };
 }
 
 export async function fetchRecentEntriesText(
@@ -161,7 +127,7 @@ export async function fetchRecentEntriesText(
     const leads = await prisma.lead.findMany({
       where: {
         botId: botMeta.id,
-        ...(opts?.statusFilter ? { status: opts.statusFilter } : {}),
+        ...(opts?.statusFilter && opts.statusFilter !== "ALL" ? { status: opts.statusFilter } : {}),
       },
       orderBy: { createdAt: "desc" },
       take: 20,
@@ -217,7 +183,11 @@ export async function fetchRecentEntriesText(
     const name = isMasked ? maskName(b.customerName) : b.customerName || "—";
     const phone = isMasked ? maskPhone(b.customerPhone) : b.customerPhone;
     const verified = b.phoneVerified ? "✓" : "✎";
-    return `${idx + 1}. [${time}] ${b.serviceName} (${b.staffId}): ${name} | ${phone} (${verified})`;
+    const price =
+      b.priceUzs == null
+        ? ""
+        : ` | ${b.priceUzs.toLocaleString("ru-RU").replace(/[\u00A0\u202F]/g, " ")} ${l === "UZ" ? "so'm" : "сум"}`;
+    return `${idx + 1}. [${time}] ${b.serviceName} (${b.staffId}): ${name} | ${phone} (${verified})${price}`;
   });
 
   return `${t(l, "recent_entries_title")}\n\n${items.join("\n")}`;

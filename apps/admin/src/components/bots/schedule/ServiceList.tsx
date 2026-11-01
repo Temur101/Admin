@@ -1,12 +1,20 @@
 import { Plus } from "lucide-react";
 import type { QuickBookService } from "@lcqb/contracts";
+import type { PendingSettingChange } from "../../../api/bots.js";
 import { Button } from "../../common/Button.js";
 import { Input } from "../../common/Input.js";
+
+function formatDmy(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-");
+  return y && m && d ? `${d}.${m}.${y}` : dateStr;
+}
+
 interface ServiceListProps {
   services: QuickBookService[];
   onChange: (services: QuickBookService[]) => void;
+  pendingPrices?: PendingSettingChange[];
 }
-export function ServiceList({ services, onChange }: ServiceListProps) {
+export function ServiceList({ services, onChange, pendingPrices }: ServiceListProps) {
   const update = (index: number, value: QuickBookService) =>
     onChange(services.map((service, i) => (i === index ? value : service)));
   return (
@@ -108,7 +116,12 @@ export function ServiceList({ services, onChange }: ServiceListProps) {
               step={1}
               value={service.priceUzs}
               onChange={(e) => update(index, { ...service, priceUzs: Number(e.target.value) })}
-              helperText="0 — бесплатно. Цена указывается целым числом."
+              helperText={(() => {
+                const p = pendingPrices?.find((c) => c.targetId === service.id);
+                return p
+                  ? `Сейчас: ${service.priceUzs.toLocaleString("ru-RU")} сум. Ожидает: ${p.newValue.toLocaleString("ru-RU")} сум с ${formatDmy(p.effectiveDate)}.`
+                  : "0 — бесплатно. Изменение цены существующей услуги вступает в силу со следующего рабочего дня.";
+              })()}
             />
           </div>
         </section>

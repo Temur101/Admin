@@ -1,10 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { PrismaClient, Booking } from "@prisma/client";
 import type { Redis } from "ioredis";
-import {
-  ManualBookingRequestSchema,
-  QuickBookConfigSchema,
-} from "@lcqb/contracts";
+import { ManualBookingRequestSchema, QuickBookConfigSchema } from "@lcqb/contracts";
 import { authenticateAdmin } from "./auth.js";
 import { cancelBooking, createBooking } from "../bots/quickbook/booking-service.js";
 import type { TelegramTransport } from "../adapters/telegram/transport.js";
@@ -32,6 +29,7 @@ function serializeBooking(b: Booking) {
     staffId: b.staffId,
     serviceId: b.serviceId,
     serviceName: b.serviceName,
+    priceUzs: b.priceUzs,
     customerTgId: b.customerTgId ? b.customerTgId.toString() : null,
     customerName: b.customerName ?? "",
     customerPhone: b.customerPhone,
@@ -181,6 +179,7 @@ export function registerBookingsRoutes(
         bookingId,
         botId: id,
         isAdmin: true,
+        notifications: { transport, logger },
       });
 
       if (!result.success) {

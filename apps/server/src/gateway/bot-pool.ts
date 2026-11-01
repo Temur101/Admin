@@ -11,6 +11,7 @@ import type { Logger } from "../core/logger.js";
 import type { PlatformBotContext, PlatformBotSession, ResolvedBot } from "./types.js";
 import { registerLeadCatchBot, startLeadCatchQuiz } from "../bots/leadcatch/index.js";
 import { registerQuickBookBot, startQuickBookFlow } from "../bots/quickbook/index.js";
+import { loadEffectiveSettings } from "../bots/quickbook/setting-changes.js";
 import type { PrismaClient } from "@prisma/client";
 import { registerSharedBotHandlers } from "../bots/shared/handlers.js";
 import { env } from "../core/env.js";
@@ -143,8 +144,13 @@ export class BotPool {
     }
 
     // Dynamic per-update metadata resolution
-    bot.use((ctx, next) => {
+    bot.use(async (ctx, next) => {
       ctx.botMeta = this.metaStorage.getStore() ?? this.latestMeta.get(resolved.id) ?? resolved;
+      if (ctx.botMeta.botType === "QUICKBOOK" && this.prisma) {
+        // Fresh DB read (never the cached meta) so due changes apply the moment their date arrives.
+        const effective = await loadEffectiveSettings(this.prisma, ctx.botMeta.id);
+        if (effective) ctx.botMeta = { ...ctx.botMeta, settings: effective };
+      }
       const target = /^\/\w+@(\w+)(?:\s|$)/.exec(ctx.message?.text ?? "")?.[1];
       if (target && target.toLowerCase() !== ctx.me.username.toLowerCase()) return;
       return next();

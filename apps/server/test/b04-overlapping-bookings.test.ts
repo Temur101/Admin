@@ -4,15 +4,8 @@ import { env } from "../src/core/env.js";
 import { logger } from "../src/core/logger.js";
 import { MockTelegramTransport } from "../src/adapters/telegram/mock-transport.js";
 import { encryptSecret, sha256Hex } from "../src/core/crypto.js";
-import {
-  createBooking,
-  cancelBooking,
-} from "../src/bots/quickbook/booking-service.js";
-import {
-  acquireSlotLock,
-  releaseSlotLock,
-  isSlotLocked,
-} from "../src/bots/quickbook/slot-lock.js";
+import { createBooking, cancelBooking } from "../src/bots/quickbook/booking-service.js";
+import { acquireSlotLock, releaseSlotLock, isSlotLocked } from "../src/bots/quickbook/slot-lock.js";
 import {
   getTestPrismaClient,
   createTestRedisClient,
@@ -320,6 +313,7 @@ describe("B04: Overlapping Bookings Prevention", () => {
         botTokenEnc: encryptSecret(botToken2, env.TOKEN_ENCRYPTION_KEY),
         botTokenHash: sha256Hex(botToken2),
         webhookSecret: "secret_other",
+        settings: customConfig,
       },
     });
 

@@ -1,0 +1,32 @@
+# Keep local data and unrelated materials out of future Docker build contexts.
+# This file does not itself create a production Docker deployment.
+.git
+node_modules
+**/node_modules
+dist
+**/dist
+build
+**/build
+coverage
+**/coverage
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+.local_data
+.backups
+uploads
+**/uploads
+tools
+.agents
+.codex
+audit
+brag-output-*
+docs/archive
+*.log
+**/*.log
+*.dump
+**/*.dump
+*.backup
+**/*.backup

@@ -8,12 +8,10 @@ import type { PlatformBotContext } from "../../gateway/types.js";
 import { callbackId, resolveCallbackId } from "../shared/callback-id.js";
 import { t } from "../shared/i18n.js";
 import { getQuickBookConfig } from "./config-resolver.js";
-import { acquireSlotLock } from "./slot-lock.js";
-import { generateAvailableSlots, getAlternativeSlots } from "./slot-generator.js";
-import { validateBookingSlotEligibility } from "./booking-validator.js";
+import { registerSlotSelectHandler } from "./booking-slot-select.js";
+import { generateAvailableSlots } from "./slot-generator.js";
 import {
   handleQuickBookContact,
-  renderAlternativeSlots,
   sendQuickBookEditMenu,
   startQuickBookFlow,
   type QuickBookComposerOptions,
@@ -24,13 +22,22 @@ export function registerBookingSelectionHandlers(
   opts: QuickBookComposerOptions,
 ): void {
   const { prisma, redis } = opts;
+  const mode = (ctx: PlatformBotContext) => ({
+    isAdminBooking: ctx.session.quickbook?.isAdminBooking,
+    runId: ctx.session.quickbook?.runId,
+  });
+  const restart = async (ctx: PlatformBotContext) => {
+    const saved = mode(ctx);
+    await startQuickBookFlow(ctx, prisma, redis);
+    if (ctx.session.quickbook) Object.assign(ctx.session.quickbook, saved);
+  };
   const stale = (ctx: PlatformBotContext) => ctx.reply(t(ctx.session.lang, "qb_stale_selection"));
 
   const showResourcesForService = async (ctx: PlatformBotContext, serviceId: string) => {
     const config = getQuickBookConfig(ctx.botMeta.settings);
-    const wasAdmin = ctx.session.quickbook?.isAdminBooking;
+    const savedMode = mode(ctx);
     if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
-    ctx.session.quickbook = { serviceId, isAdminBooking: wasAdmin };
+    ctx.session.quickbook = { serviceId, ...savedMode };
     const lang = ctx.session.lang ?? "RU";
     const eligibleResources = config.resources.filter(
       (r) => !r.serviceIds || r.serviceIds.length === 0 || r.serviceIds.includes(serviceId),
@@ -49,9 +56,7 @@ export function registerBookingSelectionHandlers(
       const name = lang === "UZ" ? res.name.uz : res.name.ru;
       keyboard.text(name, `qb:res:${callbackId(serviceId)}:${callbackId(res.id)}`).row();
     }
-    keyboard
-      .text(t(lang, "btn_back"), "qb:back:srv")
-      .text(t(lang, "btn_restart"), "qb:restart");
+    keyboard.text(t(lang, "btn_back"), "qb:back:srv").text(t(lang, "btn_restart"), "qb:restart");
 
     await ctx.reply(t(lang, "qb_choose_resource", { label }), { reply_markup: keyboard });
   };
@@ -87,9 +92,9 @@ export function registerBookingSelectionHandlers(
       return;
     }
 
-    const wasAdmin = ctx.session.quickbook?.isAdminBooking;
+    const savedMode = mode(ctx);
     if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
-    ctx.session.quickbook = { serviceId, resourceId, isAdminBooking: wasAdmin };
+    ctx.session.quickbook = { serviceId, resourceId, ...savedMode };
     await showBookingDates(ctx, serviceId, resourceId, page);
   });
 
@@ -105,8 +110,9 @@ export function registerBookingSelectionHandlers(
       return;
     }
 
+    const savedMode = mode(ctx);
     if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
-    ctx.session.quickbook = { serviceId, resourceId, dateStr };
+    ctx.session.quickbook = { serviceId, resourceId, dateStr, ...savedMode };
     const lang = ctx.session.lang ?? "RU";
     const slots = await generateAvailableSlots({
       botId: ctx.botMeta.id,
@@ -117,6 +123,7 @@ export function registerBookingSelectionHandlers(
       prisma,
       redis,
       lang,
+      skipMinLead: savedMode.isAdminBooking,
     });
 
     if (slots.length === 0) {
@@ -146,95 +153,11 @@ export function registerBookingSelectionHandlers(
     await ctx.reply(t(lang, "qb_choose_time"), { reply_markup: keyboard });
   });
 
-  bot.callbackQuery(/^qb:slot:([^:]+):([^:]+):(.+)$/, async (ctx) => {
-    await ctx.answerCallbackQuery().catch(() => {});
-    const config = getQuickBookConfig(ctx.botMeta.settings);
-    const serviceId = resolveCallbackId(config.services, ctx.match[1]);
-    const staffId = resolveCallbackId(config.resources, ctx.match[2]);
-    const slotTimeIso = ctx.match[3];
-    if (!serviceId || !staffId || !slotTimeIso || !ctx.from) {
-      await stale(ctx);
-      return;
-    }
-
-    const lang = ctx.session.lang ?? "RU";
-    const srv = config.services.find((s) => s.id === serviceId);
-    const staff = config.resources.find((resource) => resource.id === staffId);
-    const date = new Date(slotTimeIso);
-    if (
-      !srv ||
-      !staff ||
-      !Number.isFinite(date.getTime()) ||
-      !validateBookingSlotEligibility({ config, service: srv, staff, slotDate: date }).valid
-    ) {
-      await stale(ctx);
-      return;
-    }
-
-    const held = ctx.session.quickbook;
-    if (
-      held?.serviceId === serviceId &&
-      held.resourceId === staffId &&
-      held.slotTimeIso === slotTimeIso &&
-      held.lockToken &&
-      (held.lockedUntil ?? 0) > Date.now()
-    ) {
-      await ctx.reply(t(lang, "qb_prompt_phone"), { reply_markup: contactKeyboard(ctx) });
-      return;
-    }
-    if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
-
-    const lockRes = await acquireSlotLock(redis, {
-      botId: ctx.botMeta.id,
-      staffId,
-      slotTime: slotTimeIso,
-      userId: ctx.from.id,
-      ttlSec: 60,
-      durationMin: srv?.durationMin,
-      slotIntervalMin: config.slotIntervalMin,
-    });
-
-    if (!lockRes.acquired) {
-      const altSlots = await getAlternativeSlots({
-        botId: ctx.botMeta.id,
-        config,
-        serviceId,
-        staffId,
-        dateStr: slotTimeIso.slice(0, 10),
-        prisma,
-        redis,
-        lang,
-      });
-      await renderAlternativeSlots(ctx, altSlots, serviceId, staffId);
-      return;
-    }
-
-    const wasAdmin = ctx.session.quickbook?.isAdminBooking;
-    ctx.session.quickbook = {
-      isAdminBooking: wasAdmin,
-      serviceId,
-      resourceId: staffId,
-      slotTimeIso,
-      lockedUntil: Date.now() + 60000,
-      lockToken: lockRes.lockToken,
-      lockDurationMin: srv.durationMin,
-      lockIntervalMin: config.slotIntervalMin,
-      step: wasAdmin ? "admin_name" : undefined,
-    };
-
-    if (wasAdmin) {
-      await ctx.reply(lang === "UZ" ? "👤 Mijozning ismini kiriting:" : "👤 Введите имя клиента:");
-      return;
-    }
-
-    await ctx.reply(t(lang, "qb_prompt_phone"), {
-      reply_markup: contactKeyboard(ctx),
-    });
-  });
+  registerSlotSelectHandler(bot, opts, { mode, stale });
 
   bot.callbackQuery(/^qb:restart(?::(.+))?$/, async (ctx) => {
     await ctx.answerCallbackQuery().catch(() => {});
-    await startQuickBookFlow(ctx, prisma, redis);
+    await restart(ctx);
   });
 
   bot.callbackQuery(/^qb:back:(.+)$/, async (ctx) => {
@@ -243,7 +166,7 @@ export function registerBookingSelectionHandlers(
     const target = parts[0];
     const config = getQuickBookConfig(ctx.botMeta.settings);
     if (target === "srv") {
-      await startQuickBookFlow(ctx, prisma, redis);
+      await restart(ctx);
       return;
     }
     if (target === "res") {
@@ -257,14 +180,14 @@ export function registerBookingSelectionHandlers(
     }
     if (target === "date") {
       const serviceId = resolveCallbackId(config.services, parts[1]);
-      const resourceId =
-        parts[2] === "any" ? "any" : resolveCallbackId(config.resources, parts[2]);
+      const resourceId = parts[2] === "any" ? "any" : resolveCallbackId(config.resources, parts[2]);
       if (!serviceId || !resourceId) {
         await stale(ctx);
         return;
       }
+      const savedMode = mode(ctx);
       if (!(await resetClientFlow(ctx, redis, opts.logger))) return;
-      ctx.session.quickbook = { serviceId, resourceId };
+      ctx.session.quickbook = { serviceId, resourceId, ...savedMode };
       await showBookingDates(ctx, serviceId, resourceId, 0);
       return;
     }

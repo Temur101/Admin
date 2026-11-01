@@ -7,7 +7,7 @@ import { env } from "../../core/env.js";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { buildTariffInlineKeyboard, resolveTariffPrices } from "./admin-menu.js";
 import { t } from "./i18n.js";
-import { formatTashkentDateTime, submitPaymentReceipt } from "./payment-service.js";
+import { submitPaymentReceipt } from "./payment-service.js";
 import { saveReceiptImage, validateImageBuffer } from "./receipt-storage.js";
 import { notifyPlatformOwner } from "../../core/platform-notifier.js";
 import type { Logger } from "../../core/logger.js";
@@ -100,15 +100,10 @@ async function processFileReceipt(
     });
 
     ctx.botMeta.subscriptionStatus = res.newStatus;
-    ctx.botMeta.paidUntil = res.newPaidUntil.toISOString();
+    ctx.botMeta.paidUntil = res.newPaidUntil?.toISOString() ?? null;
     ctx.session.payment = undefined;
 
-    await sendReply(
-      ctx,
-      t(lang, "receipt_submitted_success", {
-        date: formatTashkentDateTime(res.newPaidUntil),
-      }),
-    );
+    await sendReply(ctx, t(lang, "receipt_submitted_success"));
 
     notifyPlatformOwner(
       {
@@ -266,13 +261,10 @@ export function registerReceiptHandlers(
       });
 
       ctx.botMeta.subscriptionStatus = res.newStatus;
-      ctx.botMeta.paidUntil = res.newPaidUntil.toISOString();
+      ctx.botMeta.paidUntil = res.newPaidUntil?.toISOString() ?? null;
       ctx.session.payment = undefined;
 
-      await sendReply(
-        ctx,
-        t(lang, "receipt_submitted_success", { date: formatTashkentDateTime(res.newPaidUntil) }),
-      );
+      await sendReply(ctx, t(lang, "receipt_submitted_success"));
 
       notifyPlatformOwner(
         {

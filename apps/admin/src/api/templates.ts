@@ -20,10 +20,18 @@ export async function applyTemplate(botId: string, templateId: string): Promise<
   return data.settings;
 }
 
-export async function updateBotSettings(botId: string, settings: unknown): Promise<unknown> {
-  const data = await apiRequest<{ ok: true; settings: unknown }>(`/api/v1/bots/${botId}/settings`, {
-    method: "PUT",
-    body: JSON.stringify(settings),
-  });
+export async function updateBotSettings(
+  botId: string,
+  settings: unknown,
+  revision?: string,
+): Promise<unknown> {
+  const qs = revision ? `?revision=${encodeURIComponent(revision)}` : "";
+  const data = await apiRequest<{ ok: true; settings: unknown }>(
+    `/api/v1/bots/${botId}/settings${qs}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    },
+  );
   return data.settings;
 }

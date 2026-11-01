@@ -36,6 +36,7 @@ export interface BookingNotifyPayload {
   time: string;
   serviceId?: string;
   staffId?: string;
+  priceUzs?: number | null;
 }
 
 export interface BookingConfirmedNotifyPayload {
@@ -48,6 +49,7 @@ export interface BookingConfirmedNotifyPayload {
   time: string;
   serviceId?: string;
   staffId?: string;
+  priceUzs?: number | null;
 }
 
 export interface BookingCancelledNotifyPayload {
@@ -60,6 +62,7 @@ export interface BookingCancelledNotifyPayload {
   time: string;
   serviceId?: string;
   staffId?: string;
+  priceUzs?: number | null;
 }
 
 export interface BookingRescheduledNotifyPayload {
@@ -72,6 +75,7 @@ export interface BookingRescheduledNotifyPayload {
   time: string;
   serviceId?: string;
   staffId?: string;
+  priceUzs?: number | null;
 }
 
 export type AdminNotifyPayload =
@@ -88,6 +92,7 @@ export interface NotifyAdminsOptions {
   prisma: PrismaClient;
   transport: TelegramTransport;
   logger: Logger;
+  recipientTgId?: bigint;
 }
 
 export async function notifyAdmins(
@@ -110,6 +115,7 @@ export async function notifyAdmins(
   }
 
   const eligibleUsers = bot.users.filter((u) => {
+    if (opts.recipientTgId != null && u.tgId !== opts.recipientTgId) return false;
     if (u.unreachableAt) return false;
     if (payload.kind === "LEAD" && u.receivesLeads === false) return false;
     return true;
@@ -183,6 +189,10 @@ export async function notifyAdmins(
           ? ""
           : ` (${t(lang, payload.phoneVerified ? "phone_verified_badge" : "phone_unverified_badge")})`;
 
+      const priceText =
+        payload.priceUzs == null
+          ? ""
+          : `\n💰 ${lang === "UZ" ? "Narxi" : "Стоимость"}: ${payload.priceUzs.toLocaleString("ru-RU").replace(/[\u00A0\u202F]/g, " ")} ${lang === "UZ" ? "so'm" : "сум"}`;
       if (masked) {
         text = t(lang, maskedKey, {
           name: maskName(payload.name),
@@ -199,6 +209,7 @@ export async function notifyAdmins(
           staff: staffDisplay,
           time: payload.time,
         });
+        text += priceText;
       }
     }
 
@@ -261,10 +272,18 @@ export async function notifyAdmins(
   }
 
   if (payload.kind === "LEAD" && payload.leadId && leadRefs.length > 0 && prisma.lead?.update) {
+    const previous = await prisma.lead.findUnique({ where: { id: payload.leadId } });
+    const oldRefs = Array.isArray(previous?.notificationRefs)
+      ? (previous.notificationRefs as unknown as LeadNotificationRef[])
+      : [];
+    const mergedRefs = [
+      ...oldRefs.filter((r) => !leadRefs.some((n) => n.chatId === r.chatId)),
+      ...leadRefs,
+    ];
     await prisma.lead
       .update({
         where: { id: payload.leadId },
-        data: { notificationRefs: leadRefs as unknown as object },
+        data: { notificationRefs: mergedRefs as unknown as object },
       })
       .catch(() => {});
   }

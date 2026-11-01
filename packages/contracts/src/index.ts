@@ -95,12 +95,15 @@ export type QuizAnswer = z.infer<typeof QuizAnswerSchema>;
 export const ResourceTypeSchema = z.enum(["STAFF", "TABLE", "ROOM"]);
 export type ResourceType = z.infer<typeof ResourceTypeSchema>;
 
+export const MIN_LEAD_MINUTES_FLOOR = 60;
+export const MAX_PRICE_UZS = 100_000_000;
+
 export const QuickBookServiceSchema = z.object({
   id: z.string().min(1),
   name: LocalizedTextSchema,
   description: LocalizedTextSchema.optional(),
   durationMin: z.number().int().min(5).max(480),
-  priceUzs: z.number().int().nonnegative(),
+  priceUzs: z.number().int().min(0).max(MAX_PRICE_UZS),
 });
 export type QuickBookService = z.infer<typeof QuickBookServiceSchema>;
 
@@ -127,6 +130,8 @@ export const QuickBookConfigSchema = z.object({
   resources: z.array(QuickBookResourceSchema).min(1),
   slotIntervalMin: z.number().int().min(5).max(120).default(30),
   bookingHorizonDays: z.number().int().min(1).max(60).default(14),
+  /** Current minimum lead before online booking; undefined = legacy bot, rule not enabled yet. */
+  minLeadMinutes: z.number().int().min(MIN_LEAD_MINUTES_FLOOR).max(10080).optional(),
   timezone: z.string().default("Asia/Tashkent"),
   customTexts: z.record(z.string(), LocalizedTextSchema).optional(),
 });
@@ -225,6 +230,7 @@ export function createEmptyQuickBookConfig(resourceType: ResourceType = "STAFF")
     resources: [],
     slotIntervalMin: 30,
     bookingHorizonDays: 14,
+    minLeadMinutes: MIN_LEAD_MINUTES_FLOOR,
     timezone: "Asia/Tashkent",
   };
 }

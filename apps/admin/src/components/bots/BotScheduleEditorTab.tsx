@@ -4,7 +4,7 @@ import { bookingSetupIssues } from "@lcqb/contracts/validation";
 import { useEditorChanges } from "../../hooks/useEditorChanges.js";
 import { ApiErrorAlert } from "../common/ApiErrorAlert.js";
 import { QuickBookDraftConfigSchema, createEmptyQuickBookConfig } from "@lcqb/contracts";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { QuickBookConfig } from "@lcqb/contracts";
 import type { BotDetails } from "../../api/bots.js";
@@ -33,14 +33,23 @@ export function BotScheduleEditorTab({ bot }: BotScheduleEditorTabProps) {
   const [jsonText, setJsonText] = useState(() => JSON.stringify(config, null, 2));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [formRevision, setFormRevision] = useState(bot.settingsRevision);
 
   const { dirty, markSaved } = useEditorChanges(`bot:${bot.id}`, config, jsonText, mode);
 
   const saveMut = useMutation({
-    mutationFn: (newSettings: unknown) => updateBotSettings(bot.id, newSettings),
-    onSuccess: (_saved, submitted) => {
-      markSaved(submitted);
-      void queryClient.invalidateQueries({ queryKey: ["bot", bot.id] });
+    mutationFn: (newSettings: unknown) =>
+      formRevision
+        ? updateBotSettings(bot.id, newSettings, formRevision)
+        : updateBotSettings(bot.id, newSettings),
+    onSuccess: async (saved, submitted) => {
+      const parsed = QuickBookDraftConfigSchema.safeParse(saved);
+      if (parsed.success) {
+        setConfig(parsed.data);
+        setJsonText(JSON.stringify(parsed.data, null, 2));
+      }
+      markSaved(parsed.success ? parsed.data : submitted);
+      await queryClient.invalidateQueries({ queryKey: ["bot", bot.id] });
       setSuccessMsg("Расписание и услуги QuickBook успешно сохранены.");
       setErrorMsg(null);
     },
@@ -49,6 +58,17 @@ export function BotScheduleEditorTab({ bot }: BotScheduleEditorTabProps) {
       setSuccessMsg(null);
     },
   });
+
+  useEffect(() => {
+    if (dirty || saveMut.isPending || formRevision === bot.settingsRevision) return;
+    const settings = bot.settings as { quickbook?: unknown } | null;
+    const parsed = QuickBookDraftConfigSchema.safeParse(settings?.quickbook ?? settings);
+    if (!parsed.success) return;
+    setConfig(parsed.data);
+    setJsonText(JSON.stringify(parsed.data, null, 2));
+    setFormRevision(bot.settingsRevision);
+    markSaved(parsed.data);
+  }, [bot.settings, bot.settingsRevision, dirty, saveMut.isPending, formRevision]);
 
   const handleModeChange = (newMode: "visual" | "json") => {
     if (newMode === mode) return;
@@ -134,6 +154,33 @@ export function BotScheduleEditorTab({ bot }: BotScheduleEditorTabProps) {
         </Alert>
       )}
 
+      {bot.pendingChanges && bot.pendingChanges.length > 0 && (
+        <Alert type="info" title="Ожидающие изменения (вступят со следующего рабочего дня)">
+          <ul className="list-disc pl-5 space-y-1 text-sm">
+            {bot.pendingChanges.map((c) => {
+              const [y, m, d] = c.effectiveDate.split("-");
+              const dateLabel = y && m && d ? `${d}.${m}.${y}` : c.effectiveDate;
+              if (c.kind === "MIN_LEAD") {
+                return (
+                  <li key={c.id}>
+                    Мин. время до онлайн-записи: сейчас {c.oldValue ?? "не ограничено"} мин →{" "}
+                    <b>{c.newValue} мин</b> (с {dateLabel})
+                  </li>
+                );
+              }
+              const srv = config.services.find((s) => s.id === c.targetId);
+              return (
+                <li key={c.id}>
+                  Услуга «{srv?.name.ru || c.targetId}»: сейчас{" "}
+                  {(c.oldValue ?? 0).toLocaleString("ru-RU")} сум →{" "}
+                  <b>{c.newValue.toLocaleString("ru-RU")} сум</b> (с {dateLabel})
+                </li>
+              );
+            })}
+          </ul>
+        </Alert>
+      )}
+
       {errorMsg && (
         <Alert type="error" title="Ошибка">
           {errorMsg}
@@ -143,12 +190,17 @@ export function BotScheduleEditorTab({ bot }: BotScheduleEditorTabProps) {
       <fieldset disabled={saveMut.isPending} className="min-w-0">
         {mode === "visual" ? (
           <div className="space-y-6">
-            <BookingParameters config={config} update={updateConfig} />
+            <BookingParameters
+              config={config}
+              update={updateConfig}
+              pendingLead={bot.pendingChanges?.find((c) => c.kind === "MIN_LEAD")}
+            />
             <BookingPreview config={config} />
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
               <ServiceList
                 services={config.services}
+                pendingPrices={bot.pendingChanges?.filter((c) => c.kind === "SERVICE_PRICE")}
                 onChange={(services) =>
                   updateConfig({
                     services,

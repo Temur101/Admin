@@ -5,3 +5,4 @@ tools
 uploads
 *.log
 pnpm-lock.yaml
+docs/archive/

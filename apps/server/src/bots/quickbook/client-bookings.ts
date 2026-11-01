@@ -1,3 +1,5 @@
+import { escapeTelegramHtml as html, telegramHtmlPages } from "../../core/telegram-text.js";
+import { randomBytes } from "node:crypto";
 import { InlineKeyboard } from "grammy";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { t } from "../shared/i18n.js";
@@ -6,6 +8,7 @@ import { cancelBooking } from "./booking-cancel-service.js";
 import { rescheduleBooking } from "./reschedule-service.js";
 import { generateAvailableSlots } from "./slot-generator.js";
 import { getQuickBookConfig } from "./config-resolver.js";
+import { priceLine, tooSoonNotice } from "./limits-texts.js";
 import { bookingWindow, tashkentDateString } from "./booking-horizon.js";
 import { BOOKING_DATES_PAGE_SIZE } from "./booking-dates.js";
 import type { QuickBookComposerOptions } from "./quickbook-handlers.js";
@@ -46,12 +49,18 @@ export async function showMyBookings(
     const staffName = staff?.name[loc] || b.staffId;
     const timeFormatted = formatTashkentDateTime(b.slotTime);
 
-    const text = `🔹 <b>${serviceName}</b>\n👤 ${staffName}\n⏰ ${timeFormatted}`;
+    const text = [
+      `🔹 <b>${html(serviceName)}</b>\n👤 ${html(staffName)}\n⏰ ${timeFormatted}`,
+      priceLine(lang, b.priceUzs),
+    ]
+      .filter(Boolean)
+      .join("\n");
     const kb = new InlineKeyboard()
       .text(t(lang, "btn_reschedule_booking"), `qb:my:resched:${b.id}`)
       .text(t(lang, "btn_cancel_booking"), `qb:my:cancel:${b.id}`);
 
-    await ctx.reply(text, { parse_mode: "HTML", reply_markup: kb });
+    for (const page of telegramHtmlPages(text))
+      await ctx.reply(page, { parse_mode: "HTML", reply_markup: kb });
   }
 }
 
@@ -75,6 +84,7 @@ export function registerClientBookingsHandlers(
       bookingId,
       botId: ctx.botMeta.id,
       userId: ctx.from.id,
+      notifications: { transport, logger },
     });
 
     if (!res.success) {
@@ -108,17 +118,63 @@ export function registerClientBookingsHandlers(
     await showRescheduleSlots(ctx, bookingId, dateStr, opts);
   });
 
-  bot.callbackQuery(/^qb:rs:c:(.+):(.+)$/, async (ctx) => {
+  bot.callbackQuery(/^qb:rs:c:([a-f0-9]{12}):(\d{13})$/, async (ctx) => {
+    const selection = ctx.session.reschedule;
+    const slotIso = new Date(Number(ctx.match[2])).toISOString();
+    if (
+      !selection ||
+      selection.token !== ctx.match[1] ||
+      selection.expiresAt < Date.now() ||
+      !selection.slots.includes(slotIso)
+    ) {
+      await ctx
+        .answerCallbackQuery({ text: t(ctx.session.lang, "qb_stale_selection"), show_alert: true })
+        .catch(() => {});
+      return;
+    }
+    const bookingId = selection.bookingId;
+    if (!bookingId || !slotIso || !ctx.from) return;
+    await ctx.answerCallbackQuery().catch(() => {});
+    const lang = ctx.session.lang ?? "RU";
+    const config = getQuickBookConfig(ctx.botMeta.settings);
+
+    const res = await rescheduleBooking({
+      prisma,
+      redis,
+      transport,
+      logger,
+      botId: ctx.botMeta.id,
+      bookingId,
+      newSlotTime: slotIso,
+      userId: ctx.from.id,
+      config,
+      lang,
+    });
+
+    if (res.success) {
+      delete ctx.session.reschedule;
+      await ctx.reply(
+        t(lang, "reschedule_success", { time: formatTashkentDateTime(new Date(slotIso)) }),
+      );
+    } else if (res.error === "TOO_SOON") {
+      // Original booking is untouched; explain and offer currently valid slots.
+      await ctx.reply(tooSoonNotice(lang, config.minLeadMinutes));
+      await showRescheduleSlots(ctx, bookingId, tashkentDateString(new Date(slotIso)), opts);
+    } else {
+      await ctx.reply(t(lang, "reschedule_failed"));
+    }
+  });
+
+  bot.callbackQuery(/^qb:rs:c:([0-9a-f-]{36}):(\d+)$/, async (ctx) => {
     const bookingId = ctx.match[1];
     const timeParam = ctx.match[2];
     if (!bookingId || !timeParam || !ctx.from) return;
     await ctx.answerCallbackQuery().catch(() => {});
     const lang = ctx.session.lang ?? "RU";
     const config = getQuickBookConfig(ctx.botMeta.settings);
-
-    const slotIso = /^\d+$/.test(timeParam)
-      ? new Date(Number(timeParam) * 1000).toISOString()
-      : timeParam;
+    const slotIso = new Date(
+      Number(timeParam) * (timeParam.length === 10 ? 1000 : 1),
+    ).toISOString();
 
     const res = await rescheduleBooking({
       prisma,
@@ -137,6 +193,10 @@ export function registerClientBookingsHandlers(
       await ctx.reply(
         t(lang, "reschedule_success", { time: formatTashkentDateTime(new Date(slotIso)) }),
       );
+    } else if (res.error === "TOO_SOON") {
+      // Original booking is untouched; explain and offer currently valid slots.
+      await ctx.reply(tooSoonNotice(lang, config.minLeadMinutes));
+      await showRescheduleSlots(ctx, bookingId, tashkentDateString(new Date(slotIso)), opts);
     } else {
       await ctx.reply(t(lang, "reschedule_failed"));
     }
@@ -147,8 +207,9 @@ async function showRescheduleDates(
   ctx: PlatformBotContext,
   bookingId: string,
   page: number,
-  _opts: QuickBookComposerOptions,
+  opts: QuickBookComposerOptions,
 ): Promise<void> {
+  if (!(await findClientBooking(ctx, bookingId, opts))) return;
   const config = getQuickBookConfig(ctx.botMeta.settings);
   const horizon = config.bookingHorizonDays;
   const pages = Math.ceil(horizon / BOOKING_DATES_PAGE_SIZE);
@@ -186,9 +247,7 @@ async function showRescheduleSlots(
   const lang = ctx.session.lang ?? "RU";
   const config = getQuickBookConfig(ctx.botMeta.settings);
 
-  const booking = await prisma.booking.findUnique({
-    where: { id: bookingId },
-  });
+  const booking = await findClientBooking(ctx, bookingId, opts);
   if (!booking) {
     await ctx.reply("Запись не найдена / Band topilmadi");
     return;
@@ -212,13 +271,37 @@ async function showRescheduleSlots(
     return;
   }
 
+  const token = randomBytes(6).toString("hex");
+  ctx.session.reschedule = {
+    bookingId,
+    token,
+    expiresAt: Date.now() + 5 * 60000,
+    slots: slots.map((s) => s.slotTimeIso),
+  };
   const keyboard = new InlineKeyboard();
   slots.forEach((slot, index) => {
-    const slotSec = Math.floor(slot.slotTime.getTime() / 1000);
-    keyboard.text(slot.timeLabel, `qb:rs:c:${bookingId}:${slotSec}`);
+    keyboard.text(slot.timeLabel, `qb:rs:c:${token}:${slot.slotTime.getTime()}`);
     if (index % 3 === 2) keyboard.row();
   });
   keyboard.row().text(t(lang, "btn_back"), `qb:my:resched:${bookingId}`);
 
   await ctx.reply(t(lang, "qb_choose_time"), { reply_markup: keyboard });
+}
+
+async function findClientBooking(
+  ctx: PlatformBotContext,
+  bookingId: string,
+  opts: QuickBookComposerOptions,
+) {
+  if (!ctx.from || !/^[0-9a-f-]{36}$/i.test(bookingId)) return null;
+  const booking = await opts.prisma.booking.findFirst({
+    where: {
+      id: bookingId,
+      botId: ctx.botMeta.id,
+      customerTgId: BigInt(ctx.from.id),
+      status: { in: ["PENDING", "CONFIRMED"] },
+    },
+  });
+  if (!booking) await ctx.reply("Запись не найдена / Band topilmadi");
+  return booking;
 }

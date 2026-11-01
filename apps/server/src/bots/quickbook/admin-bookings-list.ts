@@ -1,15 +1,20 @@
+import { escapeTelegramHtml as html, telegramHtmlPages } from "../../core/telegram-text.js";
+import { maskName, maskPhone } from "../shared/masking.js";
+import { isMaskedStatus } from "../shared/subscription.js";
 import type { Booking, PrismaClient } from "@prisma/client";
 import type { QuickBookConfig } from "@lcqb/contracts";
 import type { PlatformBotContext } from "../../gateway/types.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import { getTashkentTimeParts } from "./booking-validator.js";
 import { parseTashkentDate } from "./slot-generator.js";
+import { fmtUzs } from "./limits-texts.js";
 
 function formatAdminBookingLine(
   b: Booking,
   index: number,
   config: QuickBookConfig,
   lang: "RU" | "UZ",
+  masked: boolean,
 ): string {
   const loc = lang === "UZ" ? "uz" : "ru";
   const timeStr = b.slotTime.toLocaleDateString("ru-RU", {
@@ -24,10 +29,13 @@ function formatAdminBookingLine(
   const serviceName = service?.name[loc] || b.serviceName;
   const staffName = staff?.name[loc] || b.staffId;
   const src = b.source === "MANUAL" ? (lang === "UZ" ? " [Qo'lda]" : " [Ручная]") : "";
-  const customer = b.customerName ? `${b.customerName} (${b.customerPhone})` : b.customerPhone;
+  const name = masked ? maskName(b.customerName) : b.customerName;
+  const phone = masked ? maskPhone(b.customerPhone) : b.customerPhone;
+  const customer = name ? `${html(name)} (${html(phone)})` : html(phone);
   const serviceLabel = lang === "UZ" ? "Xizmat" : "Услуга";
 
-  return `${index + 1}. ${timeStr} — ${customer}\n   ${serviceLabel}: ${serviceName} (${staffName})${src}`;
+  const price = b.priceUzs == null ? "" : ` — ${fmtUzs(b.priceUzs)} ${lang === "UZ" ? "so'm" : "сум"}`;
+  return `${index + 1}. ${timeStr} — ${customer}\n   ${serviceLabel}: ${html(serviceName)} (${html(staffName)})${price}${src}`;
 }
 
 export async function handleAdminBookingsList(
@@ -52,9 +60,7 @@ export async function handleAdminBookingsList(
   const lang = ctx.session.lang ?? "RU";
 
   if (bookings.length === 0) {
-    await ctx.reply(
-      isUz ? "Yaqin orada buyurtmalar yo'q." : "Предстоящих записей пока нет.",
-    );
+    await ctx.reply(isUz ? "Yaqin orada buyurtmalar yo'q." : "Предстоящих записей пока нет.");
     return;
   }
 
@@ -69,7 +75,7 @@ export async function handleAdminBookingsList(
       ? "📅 <b>Kutilayotgan buyurtmalar:</b>"
       : "📅 <b>Предстоящие записи:</b>";
     const upcomingLines = upcoming.map((b, i) =>
-      formatAdminBookingLine(b, i, config, lang),
+      formatAdminBookingLine(b, i, config, lang, isMaskedStatus(ctx.botMeta.subscriptionStatus)),
     );
     sections.push(`${upcomingHeader}\n\n${upcomingLines.join("\n\n")}`);
   } else if (pastToday.length > 0) {
@@ -84,12 +90,11 @@ export async function handleAdminBookingsList(
       ? "⏳ <b>Bugungi o'tgan buyurtmalar:</b>"
       : "⏳ <b>Прошедшие записи за сегодня:</b>";
     const pastLines = pastToday.map((b, i) =>
-      formatAdminBookingLine(b, i, config, lang),
+      formatAdminBookingLine(b, i, config, lang, isMaskedStatus(ctx.botMeta.subscriptionStatus)),
     );
     sections.push(`${pastHeader}\n\n${pastLines.join("\n\n")}`);
   }
 
-  await ctx.reply(sections.join("\n\n──────────────────\n\n"), {
-    parse_mode: "HTML",
-  });
+  for (const page of telegramHtmlPages(sections.join("\n\n──────────────────\n\n")))
+    await ctx.reply(page, { parse_mode: "HTML" });
 }

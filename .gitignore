@@ -9,12 +9,19 @@ node_modules/
 
 # Local data & binaries
 .local_data/
+.backups/
 tools/
 uploads/
 *.log
 memurai-log.txt
 *.rdb
 .agents/
+
+# Generated demo assets, audit evidence and database dumps
+/brag-output-*/
+/audit/
+*.dump
+*.backup
 
 # Build outputs
 dist/

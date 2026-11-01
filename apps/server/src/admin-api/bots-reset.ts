@@ -13,6 +13,7 @@ import { env } from "../core/env.js";
 import type { TenantResolver } from "../gateway/tenant-resolver.js";
 import type { Logger } from "../core/logger.js";
 import type { PollingManager } from "../gateway/polling-manager.js";
+import { replaceConfigInTx } from "../bots/quickbook/web-config-save.js";
 
 interface BotParams {
   id: string;
@@ -64,12 +65,16 @@ export function registerBotsResetRoutes(
         emptyConfig = createEmptyQuizConfig();
       }
 
-      await prisma.bot.update({
-        where: { id },
-        data: {
-          settings: emptyConfig as Prisma.InputJsonValue,
-          isActive: false,
-        },
+      await prisma.$transaction(async (tx) => {
+        if (bot.botType === "QUICKBOOK") {
+          await replaceConfigInTx(tx, id, emptyConfig as Record<string, unknown>, {});
+        } else {
+          await tx.bot.update({
+            where: { id },
+            data: { settings: emptyConfig as Prisma.InputJsonValue },
+          });
+        }
+        await tx.bot.update({ where: { id }, data: { isActive: false } });
       });
 
       let clearedSessions = 0;

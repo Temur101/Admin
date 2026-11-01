@@ -1,3 +1,4 @@
+import { attachOutboxFixture } from "./helpers/outbox-fixture.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Bot } from "grammy";
 import { pino } from "pino";
@@ -57,6 +58,7 @@ beforeEach(async () => {
       }),
     },
   } as unknown as PrismaClient;
+  attachOutboxFixture(prisma);
   transport = new MockTelegramTransport();
   bot = new Bot<PlatformBotContext>("123456:quiz-text-answer-test-token");
   bot.api.config.use(transport.transformerFor("b1"));

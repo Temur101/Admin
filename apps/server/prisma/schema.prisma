@@ -101,6 +101,8 @@ model Bot {
   settingsLogs    BotSettingsLog[]
   receipts        PaymentReceipt[]
   inbox           WebhookInbox[]
+  notificationDeliveries NotificationDelivery[]
+  settingChanges  BotSettingChange[]
 }
 
 model Subscription {
@@ -158,6 +160,7 @@ model PaymentReceipt {
   textNote        String?
   months          Int
   amount          Int
+  optimisticGranted Boolean @default(false)
   prevPaidUntil   DateTime?     @db.Timestamptz
   prevStatus      SubStatus
   grantedUntil    DateTime      @db.Timestamptz
@@ -206,6 +209,8 @@ model Booking {
   serviceName         String        @db.VarChar(255)
   staffId             String        @db.VarChar(64)
   durationMin         Int
+  /// Price (UZS) the customer saw and confirmed. NULL = unknown (legacy rows), never 0-by-default.
+  priceUzs            Int?
   slotTime            DateTime      @db.Timestamptz
   endTime             DateTime?     @db.Timestamptz
   status              BookingStatus @default(PENDING)
@@ -288,3 +293,61 @@ model WebhookInbox {
   @@index([botId, status])
 }
 
+
+model NotificationDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  botId String @db.Uuid
+  bot Bot @relation(fields: [botId], references: [id], onDelete: Cascade)
+  eventKey String @db.VarChar(255)
+  recipientTgId BigInt
+  payload Json
+  status String @default("PENDING") @db.VarChar(16)
+  attempts Int @default(0)
+  availableAt DateTime @default(now()) @db.Timestamptz
+  lockedUntil DateTime? @db.Timestamptz
+  leaseToken String? @db.Uuid
+  lastError String?
+  deliveredAt DateTime? @db.Timestamptz
+  createdAt DateTime @default(now()) @db.Timestamptz
+  @@unique([eventKey, recipientTgId])
+  @@index([status, availableAt, lockedUntil])
+  @@index([botId, status])
+}
+
+enum SettingChangeKind {
+  MIN_LEAD
+  SERVICE_PRICE
+}
+
+enum SettingChangeStatus {
+  PENDING
+  APPLIED
+  REPLACED
+  CANCELLED
+}
+
+/// Delayed (next working day) QuickBook setting changes plus their history.
+/// At most one PENDING row per (botId, kind, targetId): partial unique index
+/// `bot_setting_change_pending_uq` is created in the migration SQL.
+model BotSettingChange {
+  id                String              @id @default(uuid()) @db.Uuid
+  botId             String              @db.Uuid
+  bot               Bot                 @relation(fields: [botId], references: [id], onDelete: Cascade)
+  kind              SettingChangeKind
+  /// serviceId for SERVICE_PRICE, empty string for MIN_LEAD
+  targetId          String              @default("") @db.VarChar(64)
+  oldValue          Int?
+  newValue          Int
+  /// 00:00 Asia/Tashkent of the promised date
+  effectiveAt       DateTime            @db.Timestamptz
+  status            SettingChangeStatus @default(PENDING)
+  createdByTgId     BigInt?
+  createdByAdminId  String?             @db.Uuid
+  createdAt         DateTime            @default(now()) @db.Timestamptz
+  resolvedAt        DateTime?           @db.Timestamptz
+  resolvedByTgId    BigInt?
+  resolvedByAdminId String?             @db.Uuid
+  resolution        String?             @db.VarChar(255)
+
+  @@index([botId, status, effectiveAt])
+}

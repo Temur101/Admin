@@ -1,3 +1,4 @@
+import { NotificationFailures } from "./NotificationFailures.js";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw, CheckCircle2, Activity } from "lucide-react";
@@ -85,6 +86,7 @@ export function BotDiagnosticsTab({ bot }: BotDiagnosticsTabProps) {
       )}
 
       <BotConnectionStatus botId={bot.id} isActive={bot.isActive} />
+      <NotificationFailures botId={bot.id} count={health?.failedNotificationCount ?? 0} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="p-5 bg-ui-surface border border-ui-border rounded-2xl space-y-3">
@@ -145,9 +147,7 @@ export function BotDiagnosticsTab({ bot }: BotDiagnosticsTabProps) {
                 <span className="text-ui-muted">Статус здоровья токена:</span>
                 <span
                   className={`font-semibold ${
-                    health.healthStatus === "NEEDS_ATTENTION"
-                      ? "text-ui-danger"
-                      : "text-ui-success"
+                    health.healthStatus === "NEEDS_ATTENTION" ? "text-ui-danger" : "text-ui-success"
                   }`}
                 >
                   {health.healthStatus === "NEEDS_ATTENTION" ? "Требует внимания" : "В норме (OK)"}
@@ -161,6 +161,14 @@ export function BotDiagnosticsTab({ bot }: BotDiagnosticsTabProps) {
                   }`}
                 >
                   {health.failedInboxCount}
+                </span>
+              </div>
+              <div className="flex justify-between p-2.5 rounded-xl bg-ui-subtle border border-ui-border">
+                <span className="text-ui-muted">Недоставленные уведомления:</span>
+                <span
+                  className={health.failedNotificationCount ? "text-ui-danger" : "text-ui-success"}
+                >
+                  {health.failedNotificationCount ?? 0}
                 </span>
               </div>
               {health.lastErrorMsg && (

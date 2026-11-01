@@ -45,12 +45,14 @@ describe("Создание ботов без обязательной отрас
     "применяет выбранный шаблон %s и сохраняет его независимой копией",
     (templateId, botType) => {
       const template = TEMPLATES_CATALOG.find((item) => item.id === templateId)!;
+      const expected =
+        botType === "QUICKBOOK" ? { ...template.config, minLeadMinutes: 60 } : template.config;
       const config = resolveInitialBotSettings({ botType, templateId });
-      expect(config).toEqual(template.config);
+      expect(config).toEqual(expected);
       expect(config).not.toBe(template.config);
       if ("services" in config) config.services[0]!.name.ru = "Изменено";
       else config.nodes[0]!.title.ru = "Изменено";
-      expect(resolveInitialBotSettings({ botType, templateId })).toEqual(template.config);
+      expect(resolveInitialBotSettings({ botType, templateId })).toEqual(expected);
     },
   );
   it("отклоняет неизвестный шаблон и шаблон другого типа", () => {
