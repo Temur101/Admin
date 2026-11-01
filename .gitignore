@@ -17,6 +17,12 @@ memurai-log.txt
 *.rdb
 .agents/
 
+# Generated demo assets, audit evidence and database dumps
+/brag-output-*/
+/audit/
+*.dump
+*.backup
+
 # Build outputs
 dist/
 build/
