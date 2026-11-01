@@ -1,5 +1,5 @@
 import type { QuickBookConfig, QuickBookResource, QuickBookService } from "@lcqb/contracts";
-import { bookingWindow } from "./booking-horizon.js";
+import { bookingWindow, earliestBookableMs } from "./booking-horizon.js";
 import { parseTimeToMinutes } from "./slot-generator.js";
 
 /**
@@ -34,6 +34,8 @@ export function validateBookingSlotEligibility(params: {
   staff: QuickBookResource;
   slotDate: Date;
   now?: Date;
+  /** Manual bookings by the owner are not bound by the client minimum lead time. */
+  skipMinLead?: boolean;
 }):
   | { valid: true }
   | {
@@ -41,6 +43,7 @@ export function validateBookingSlotEligibility(params: {
       error:
         | "SERVICE_NOT_SUPPORTED"
         | "SLOT_IN_PAST"
+        | "TOO_SOON"
         | "OUTSIDE_HORIZON"
         | "NOT_IN_SCHEDULE"
         | "SLOT_IN_BREAK";
@@ -56,6 +59,11 @@ export function validateBookingSlotEligibility(params: {
   // 2. Past time (slot must be strictly in the future)
   if (slotDate.getTime() <= now.getTime()) {
     return { valid: false, error: "SLOT_IN_PAST" };
+  }
+
+  // 2b. Minimum lead time (effective value; legacy bots without it keep the old behaviour)
+  if (!params.skipMinLead && slotDate.getTime() < earliestBookableMs(config, now)) {
+    return { valid: false, error: "TOO_SOON" };
   }
 
   // 3. Booking horizon

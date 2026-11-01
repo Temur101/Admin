@@ -9,6 +9,7 @@ import { isActualBotAdmin } from "../shared/user-service.js";
 import { formatTashkentDateTime } from "../shared/payment-service.js";
 import { parseAndNormalizePhone } from "../shared/phone.js";
 import { createBooking } from "./booking-service.js";
+import { fmtUzs, priceChangedNotice } from "./limits-texts.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import { startQuickBookFlow } from "./quickbook-handlers.js";
 import type { QuickBookComposerOptions } from "./quickbook-handlers.js";
@@ -86,7 +87,10 @@ export async function handleAdminBookingText(
   return false;
 }
 
-export async function showAdminBookingSummary(ctx: PlatformBotContext): Promise<void> {
+export async function showAdminBookingSummary(
+  ctx: PlatformBotContext,
+  priceOverride?: number,
+): Promise<void> {
   const session = ctx.session.quickbook;
   if (!session || !session.serviceId || !session.resourceId || !session.slotTimeIso) {
     return;
@@ -101,11 +105,18 @@ export async function showAdminBookingSummary(ctx: PlatformBotContext): Promise<
   const serviceName = service?.name[loc] || session.serviceId;
   const staffName = staff?.name[loc] || session.resourceId;
   const timeFormatted = formatTashkentDateTime(new Date(session.slotTimeIso));
+  session.priceUzs = priceOverride ?? service?.priceUzs;
+  const priceText =
+    session.priceUzs === undefined
+      ? ""
+      : lang === "UZ"
+        ? `\n💰 Narxi: ${fmtUzs(session.priceUzs)} so'm`
+        : `\n💰 Стоимость: ${fmtUzs(session.priceUzs)} сум`;
 
   const text =
     lang === "UZ"
-      ? `📋 <b>Mijoz buyurtmasi ma'lumotlari:</b>\n\n👤 Mijoz: ${html(session.customerName)}\n📞 Telefon: ${html(session.phone)}\n✂️ Xizmat: ${html(serviceName)}\n👤 Mutaxassis: ${html(staffName)}\n⏰ Vaqt: ${timeFormatted}\n\nBuyurtmani tasdiqlaysizmi?`
-      : `📋 <b>Данные записи клиента (ручная запись):</b>\n\n👤 Клиент: ${html(session.customerName)}\n📞 Телефон: ${html(session.phone)}\n✂️ Услуга: ${html(serviceName)}\n👤 Мастер: ${html(staffName)}\n⏰ Время: ${timeFormatted}\n\nПодтвердить создание записи?`;
+      ? `📋 <b>Mijoz buyurtmasi ma'lumotlari:</b>\n\n👤 Mijoz: ${html(session.customerName)}\n📞 Telefon: ${html(session.phone)}\n✂️ Xizmat: ${html(serviceName)}\n👤 Mutaxassis: ${html(staffName)}\n⏰ Vaqt: ${timeFormatted}${priceText}\n\nBuyurtmani tasdiqlaysizmi?`
+      : `📋 <b>Данные записи клиента (ручная запись):</b>\n\n👤 Клиент: ${html(session.customerName)}\n📞 Телефон: ${html(session.phone)}\n✂️ Услуга: ${html(serviceName)}\n👤 Мастер: ${html(staffName)}\n⏰ Время: ${timeFormatted}${priceText}\n\nПодтвердить создание записи?`;
 
   session.runId ??= randomUUID().slice(0, 12);
   const kb = new InlineKeyboard()
@@ -173,7 +184,15 @@ export function registerAdminBookingHandlers(
       source: "MANUAL",
       createdByTgId: ctx.from.id,
       lockToken: session.lockToken,
+      expectedPriceUzs: session.priceUzs,
     });
+
+    if (!res.success && res.error === "PRICE_CHANGED") {
+      delete session.runId; // old confirm button must not confirm the new amount
+      await ctx.reply(priceChangedNotice(lang, res.priceUzs));
+      await showAdminBookingSummary(ctx, res.priceUzs);
+      return;
+    }
 
     if (res.success) {
       await releaseHeldBooking(ctx, redis).catch(() => {});

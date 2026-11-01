@@ -29,6 +29,7 @@ function serializeBooking(b: Booking) {
     staffId: b.staffId,
     serviceId: b.serviceId,
     serviceName: b.serviceName,
+    priceUzs: b.priceUzs,
     customerTgId: b.customerTgId ? b.customerTgId.toString() : null,
     customerName: b.customerName ?? "",
     customerPhone: b.customerPhone,

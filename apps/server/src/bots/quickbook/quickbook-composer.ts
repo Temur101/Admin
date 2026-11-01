@@ -14,6 +14,7 @@ import { resetClientFlow } from "../shared/flow-reset.js";
 import { registerAdminBookingHandlers, handleAdminBookingText } from "./admin-booking.js";
 import { registerClientBookingsHandlers } from "./client-bookings.js";
 import { registerOwnerSettingsHandlers } from "./owner-settings.js";
+import { registerOwnerLimitsHandlers } from "./owner-limits.js";
 import { handleAdminBookingsList } from "./admin-bookings-list.js";
 
 export {
@@ -35,6 +36,7 @@ export function registerQuickBookHandlers(
 ): void {
   const { prisma, redis } = opts;
 
+  registerOwnerLimitsHandlers(bot, opts);
   registerBookingSelectionHandlers(bot, opts);
   registerAdminBookingHandlers(bot, opts);
   registerClientBookingsHandlers(bot, opts);

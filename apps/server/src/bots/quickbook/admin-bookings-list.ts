@@ -7,6 +7,7 @@ import type { PlatformBotContext } from "../../gateway/types.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import { getTashkentTimeParts } from "./booking-validator.js";
 import { parseTashkentDate } from "./slot-generator.js";
+import { fmtUzs } from "./limits-texts.js";
 
 function formatAdminBookingLine(
   b: Booking,
@@ -33,7 +34,8 @@ function formatAdminBookingLine(
   const customer = name ? `${html(name)} (${html(phone)})` : html(phone);
   const serviceLabel = lang === "UZ" ? "Xizmat" : "Услуга";
 
-  return `${index + 1}. ${timeStr} — ${customer}\n   ${serviceLabel}: ${html(serviceName)} (${html(staffName)})${src}`;
+  const price = b.priceUzs == null ? "" : ` — ${fmtUzs(b.priceUzs)} ${lang === "UZ" ? "so'm" : "сум"}`;
+  return `${index + 1}. ${timeStr} — ${customer}\n   ${serviceLabel}: ${html(serviceName)} (${html(staffName)})${price}${src}`;
 }
 
 export async function handleAdminBookingsList(

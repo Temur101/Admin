@@ -1,4 +1,6 @@
 import { flushNotificationOutbox } from "../bots/shared/notification-outbox.js";
+import { applyDueChanges, ensureInitialMinLead } from "../bots/quickbook/setting-changes.js";
+import type { TenantResolver } from "../gateway/tenant-resolver.js";
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import type { TelegramTransport } from "../adapters/telegram/transport.js";
@@ -13,6 +15,7 @@ export interface SchedulerOptions {
   transport: TelegramTransport;
   logger: Logger;
   inboxService?: WebhookInboxService;
+  tenantResolver?: TenantResolver;
   recoveryIntervalMs?: number;
   subscriptionIntervalMs?: number;
   reminderIntervalMs?: number;
@@ -130,7 +133,14 @@ export class BackgroundWorkerScheduler {
     if (!this.isRunning) return Promise.resolve();
     if (this.activeRecoveryTask) return this.activeRecoveryTask;
 
-    const task = flushNotificationOutbox(this.opts)
+    const task = ensureInitialMinLead(this.opts.prisma)
+      .then(() =>
+        applyDueChanges(this.opts.prisma, {
+          redis: this.opts.redis,
+          tenantResolver: this.opts.tenantResolver,
+        }),
+      )
+      .then(() => flushNotificationOutbox(this.opts))
       .then(() => this.opts.inboxService?.recoverPending(50) ?? 0)
       .then((count) => {
         if (count > 0) {

@@ -14,6 +14,7 @@ import { getAlternativeSlots, type TimeSlot } from "./slot-generator.js";
 import { formatTashkentDateTime } from "../shared/payment-service.js";
 import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS } from "./booking-constants.js";
 import { getTashkentTimeParts, validateBookingSlotEligibility } from "./booking-validator.js";
+import { refreshConfigValues } from "./setting-changes.js";
 
 export { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS, formatTashkentDateTime };
 export { getTashkentTimeParts, validateBookingSlotEligibility };
@@ -42,6 +43,8 @@ export interface CreateBookingParams {
   now?: Date;
   source?: "TELEGRAM" | "MANUAL";
   createdByTgId?: number | bigint | null;
+  /** Price the customer/owner saw on the confirmation; a mismatch demands a fresh confirmation. */
+  expectedPriceUzs?: number;
 }
 
 export type CreateBookingError =
@@ -50,6 +53,7 @@ export type CreateBookingError =
   | "STAFF_NOT_FOUND"
   | "SERVICE_NOT_SUPPORTED"
   | "SLOT_IN_PAST"
+  | "TOO_SOON"
   | "OUTSIDE_HORIZON"
   | "NOT_IN_SCHEDULE"
   | "SLOT_IN_BREAK"
@@ -59,10 +63,16 @@ export type CreateBookingResult =
   | { success: true; booking: Booking }
   | { success: false; error: "INVALID_PHONE" }
   | { success: false; error: "SERVICE_NOT_FOUND" | "STAFF_NOT_FOUND" | "SERVICE_NOT_SUPPORTED" }
+  | { success: false; error: "PRICE_CHANGED"; priceUzs: number }
   | {
       success: false;
       error:
-        "SLOT_TAKEN" | "SLOT_IN_PAST" | "OUTSIDE_HORIZON" | "NOT_IN_SCHEDULE" | "SLOT_IN_BREAK";
+        | "SLOT_TAKEN"
+        | "SLOT_IN_PAST"
+        | "TOO_SOON"
+        | "OUTSIDE_HORIZON"
+        | "NOT_IN_SCHEDULE"
+        | "SLOT_IN_BREAK";
       alternativeSlots: TimeSlot[];
     };
 
@@ -80,9 +90,11 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     serviceId,
     staffId,
     slotTime,
-    config,
     lang = "RU",
   } = params;
+  // Fresh min lead + prices from PostgreSQL: stale buttons/sessions cannot bypass them.
+  const config = await refreshConfigValues(prisma, botId, params.config, params.now);
+  const isManual = (params.source ?? (customerTgId != null ? "TELEGRAM" : "MANUAL")) === "MANUAL";
 
   const parsedPhone = parseAndNormalizePhone(customerPhone);
   if (!parsedPhone.isValid || !parsedPhone.normalized) {
@@ -92,6 +104,9 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
   const service = config.services.find((s) => s.id === serviceId);
   if (!service) return { success: false, error: "SERVICE_NOT_FOUND" };
+  if (params.expectedPriceUzs !== undefined && params.expectedPriceUzs !== service.priceUzs) {
+    return { success: false, error: "PRICE_CHANGED", priceUzs: service.priceUzs };
+  }
 
   const staff = config.resources.find((r) => r.id === staffId);
   if (!staff) return { success: false, error: "STAFF_NOT_FOUND" };
@@ -106,6 +121,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     staff,
     slotDate,
     now: params.now,
+    skipMinLead: isManual,
   });
 
   if (!eligibility.valid) {
@@ -122,6 +138,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
       redis,
       now: params.now,
       lang,
+      skipMinLead: isManual,
     });
     return { success: false, error: eligibility.error, alternativeSlots };
   }
@@ -183,6 +200,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
             serviceName,
             staffId,
             durationMin: service.durationMin,
+            priceUzs: service.priceUzs,
             slotTime: slotDate,
             endTime,
             status: "CONFIRMED",
@@ -259,6 +277,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
         redis,
         now: params.now,
         lang,
+        skipMinLead: isManual,
       });
 
       return {

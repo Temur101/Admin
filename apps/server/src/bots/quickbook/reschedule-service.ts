@@ -11,6 +11,7 @@ import {
 } from "../shared/notification-outbox.js";
 import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS } from "./booking-constants.js";
 import { validateBookingSlotEligibility } from "./booking-validator.js";
+import { refreshConfigValues } from "./setting-changes.js";
 
 export interface RescheduleBookingParams {
   prisma: PrismaClient;
@@ -29,7 +30,10 @@ export interface RescheduleBookingParams {
 
 export type RescheduleBookingResult =
   | { success: true; booking: Booking }
-  | { success: false; error: "NOT_FOUND" | "FORBIDDEN" | "SLOT_TAKEN" | "INVALID_SLOT" };
+  | {
+      success: false;
+      error: "NOT_FOUND" | "FORBIDDEN" | "SLOT_TAKEN" | "INVALID_SLOT" | "TOO_SOON";
+    };
 
 export async function rescheduleBooking(
   params: RescheduleBookingParams,
@@ -44,10 +48,10 @@ export async function rescheduleBooking(
     newSlotTime,
     userId,
     isAdmin = false,
-    config,
   } = params;
 
   const now = params.now ?? new Date();
+  const config = await refreshConfigValues(prisma, botId, params.config, now);
   const slotDate = typeof newSlotTime === "string" ? new Date(newSlotTime) : newSlotTime;
 
   const booking = await prisma.booking.findUnique({
@@ -78,10 +82,12 @@ export async function rescheduleBooking(
     staff,
     slotDate,
     now,
+    skipMinLead: isAdmin,
   });
 
   if (!eligibility.valid) {
-    return { success: false, error: "SLOT_TAKEN" };
+    // The original booking is untouched on any failure.
+    return { success: false, error: eligibility.error === "TOO_SOON" ? "TOO_SOON" : "SLOT_TAKEN" };
   }
 
   const endTime = new Date(slotDate.getTime() + booking.durationMin * 60000);

@@ -16,6 +16,8 @@ function schemaIssues(issues: { path: PropertyKey[] }[], type: "quiz" | "booking
           return "Интервал начала записей должен быть целым числом от 5 до 120 минут.";
         if (collection === "bookingHorizonDays")
           return "Запись вперёд должна быть целым числом от 1 до 60 дней.";
+        if (collection === "minLeadMinutes")
+          return "Минимальное время до онлайн-записи должно быть целым числом не меньше 60 минут.";
         if (collection === "resourceLabel")
           return "Заполните название категории ресурса на двух языках.";
         return type === "quiz"

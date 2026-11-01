@@ -1,4 +1,3 @@
-import { escapeTelegramHtml as html, telegramHtmlPages } from "../../core/telegram-text.js";
 import { randomBytes } from "node:crypto";
 import { tashkentDateString } from "./booking-horizon.js";
 import { parseTashkentDate } from "./slot-generator.js";
@@ -15,6 +14,7 @@ import {
   listTimeBlocks,
 } from "./time-block-service.js";
 import type { QuickBookComposerOptions } from "./quickbook-handlers.js";
+import { showOwnerSettings } from "./owner-limits.js";
 
 export function registerOwnerSettingsHandlers(
   bot: import("grammy").Bot<PlatformBotContext>,
@@ -221,28 +221,10 @@ export function registerOwnerSettingsHandlers(
     await ctx.reply("✅ Блокировка сохранена / Blokirovka saqlandi");
   });
 
-  // 2. Owner Settings Menu
+  // 2. Owner Settings Menu (min lead time and prices of existing services; see owner-limits.ts)
   bot.hears(/^(⚙️ Настройки|⚙️ Sozlamalar)$/, async (ctx) => {
     if (!ctx.from) return;
     if (!(await allowed(ctx, "MANAGE_SETTINGS"))) return;
-
-    const lang = ctx.session.lang ?? "RU";
-    const config = getQuickBookConfig(ctx.botMeta.settings);
-    const loc = lang === "UZ" ? "uz" : "ru";
-
-    const servicesStr = config.services
-      .map((s) => `• ${html(s.name[loc])}: ${s.priceUzs.toLocaleString("ru-RU")} сум`)
-      .join("\n");
-
-    const workHoursStr = config.resources
-      .map((r) => `• ${html(r.name[loc])}: ${r.workHours.start} - ${r.workHours.end}`)
-      .join("\n");
-
-    const text =
-      lang === "UZ"
-        ? `⚙️ <b>Bot sozlamalari:</b>\n\n<b>Xizmatlar narxi:</b>\n${servicesStr}\n\n<b>Ish vaqtlari:</b>\n${workHoursStr}\n\n<i>To'liq va qulay tahrirlash uchun veb-boshqaruv panelidan foydalaning.</i>`
-        : `⚙️ <b>Настройки бота:</b>\n\n<b>Цены услуг:</b>\n${servicesStr}\n\n<b>Рабочие часы:</b>\n${workHoursStr}\n\n<i>Для быстрого изменения цен и часов используйте веб-панель или обратитесь к администратору.</i>`;
-
-    for (const page of telegramHtmlPages(text)) await ctx.reply(page, { parse_mode: "HTML" });
+    await showOwnerSettings(ctx, opts);
   });
 }

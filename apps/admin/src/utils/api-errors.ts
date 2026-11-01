@@ -9,6 +9,12 @@ const messages: Record<string, string> = {
     "Проверьте услуги и расписание: заполните названия, длительность и стоимость.",
   "Invalid bot token": "Токен бота не принят. Скопируйте его заново из @BotFather.",
   "Bot not found": "Бот не найден. Обновите список ботов.",
+  STALE_SETTINGS:
+    "Настройки бота были изменены (например, через Telegram). Обновите страницу и повторите сохранение.",
+  NO_WORKING_DAY:
+    "Не удалось определить следующий рабочий день. Проверьте рабочие дни и блокировки мастеров.",
+  INVALID_VALUE:
+    "Проверьте минимальное время до онлайн-записи (не меньше 60 минут) и цены услуг.",
 };
 
 function formatIssue(issue: unknown): string | null {
@@ -34,6 +40,7 @@ function formatIssue(issue: unknown): string | null {
     startNodeId: "Первый вопрос",
     slotIntervalMin: "Интервал записи",
     bookingHorizonDays: "Количество дней для записи",
+    minLeadMinutes: "Минимальное время до онлайн-записи (мин)",
     botToken: "Токен бота",
     tenantId: "Клиент",
   };

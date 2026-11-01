@@ -8,6 +8,7 @@ import { cancelBooking } from "./booking-cancel-service.js";
 import { rescheduleBooking } from "./reschedule-service.js";
 import { generateAvailableSlots } from "./slot-generator.js";
 import { getQuickBookConfig } from "./config-resolver.js";
+import { priceLine, tooSoonNotice } from "./limits-texts.js";
 import { bookingWindow, tashkentDateString } from "./booking-horizon.js";
 import { BOOKING_DATES_PAGE_SIZE } from "./booking-dates.js";
 import type { QuickBookComposerOptions } from "./quickbook-handlers.js";
@@ -48,7 +49,12 @@ export async function showMyBookings(
     const staffName = staff?.name[loc] || b.staffId;
     const timeFormatted = formatTashkentDateTime(b.slotTime);
 
-    const text = `🔹 <b>${html(serviceName)}</b>\n👤 ${html(staffName)}\n⏰ ${timeFormatted}`;
+    const text = [
+      `🔹 <b>${html(serviceName)}</b>\n👤 ${html(staffName)}\n⏰ ${timeFormatted}`,
+      priceLine(lang, b.priceUzs),
+    ]
+      .filter(Boolean)
+      .join("\n");
     const kb = new InlineKeyboard()
       .text(t(lang, "btn_reschedule_booking"), `qb:my:resched:${b.id}`)
       .text(t(lang, "btn_cancel_booking"), `qb:my:cancel:${b.id}`);
@@ -150,6 +156,10 @@ export function registerClientBookingsHandlers(
       await ctx.reply(
         t(lang, "reschedule_success", { time: formatTashkentDateTime(new Date(slotIso)) }),
       );
+    } else if (res.error === "TOO_SOON") {
+      // Original booking is untouched; explain and offer currently valid slots.
+      await ctx.reply(tooSoonNotice(lang, config.minLeadMinutes));
+      await showRescheduleSlots(ctx, bookingId, tashkentDateString(new Date(slotIso)), opts);
     } else {
       await ctx.reply(t(lang, "reschedule_failed"));
     }
@@ -183,6 +193,10 @@ export function registerClientBookingsHandlers(
       await ctx.reply(
         t(lang, "reschedule_success", { time: formatTashkentDateTime(new Date(slotIso)) }),
       );
+    } else if (res.error === "TOO_SOON") {
+      // Original booking is untouched; explain and offer currently valid slots.
+      await ctx.reply(tooSoonNotice(lang, config.minLeadMinutes));
+      await showRescheduleSlots(ctx, bookingId, tashkentDateString(new Date(slotIso)), opts);
     } else {
       await ctx.reply(t(lang, "reschedule_failed"));
     }

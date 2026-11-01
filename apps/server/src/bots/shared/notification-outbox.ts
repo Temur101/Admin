@@ -18,6 +18,7 @@ export function bookingNotification(
     time: formatTashkentDateTime(booking.slotTime),
     serviceId: booking.serviceId,
     staffId: booking.staffId,
+    priceUzs: booking.priceUzs,
   };
 }
 

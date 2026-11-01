@@ -217,7 +217,11 @@ export async function fetchRecentEntriesText(
     const name = isMasked ? maskName(b.customerName) : b.customerName || "—";
     const phone = isMasked ? maskPhone(b.customerPhone) : b.customerPhone;
     const verified = b.phoneVerified ? "✓" : "✎";
-    return `${idx + 1}. [${time}] ${b.serviceName} (${b.staffId}): ${name} | ${phone} (${verified})`;
+    const price =
+      b.priceUzs == null
+        ? ""
+        : ` | ${b.priceUzs.toLocaleString("ru-RU").replace(/[\u00A0\u202F]/g, " ")} ${l === "UZ" ? "so'm" : "сум"}`;
+    return `${idx + 1}. [${time}] ${b.serviceName} (${b.staffId}): ${name} | ${phone} (${verified})${price}`;
   });
 
   return `${t(l, "recent_entries_title")}\n\n${items.join("\n")}`;

@@ -59,10 +59,24 @@ export interface BotLead {
   createdAt: string;
 }
 
+export interface PendingSettingChange {
+  id: string;
+  kind: "MIN_LEAD" | "SERVICE_PRICE";
+  targetId: string;
+  oldValue: number | null;
+  newValue: number;
+  effectiveAt: string;
+  effectiveDate: string;
+  status: "PENDING" | "APPLIED" | "REPLACED" | "CANCELLED";
+  createdAt: string;
+}
+
 export interface BotDetails extends BotListItem {
   inviteLink: string | null;
   settings: unknown;
   admins: BotAdmin[];
+  pendingChanges?: PendingSettingChange[];
+  settingsRevision?: string;
 }
 
 export interface WebhookInfo {

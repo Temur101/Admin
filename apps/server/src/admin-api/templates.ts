@@ -6,6 +6,12 @@ import { authenticateAdmin } from "./auth.js";
 import { validateQuizDag } from "../bots/leadcatch/dag-validator.js";
 import type { TenantResolver } from "../gateway/tenant-resolver.js";
 import { TEMPLATES_CATALOG } from "./templates-catalog.js";
+import {
+  describeChange,
+  quickBookSettingsView,
+  replaceConfigInTx,
+  saveWebQuickBookConfig,
+} from "../bots/quickbook/web-config-save.js";
 
 export { TEMPLATES_CATALOG, type BotTemplateMeta } from "./templates-catalog.js";
 
@@ -60,17 +66,25 @@ export function registerTemplatesRoutes(
         });
       }
 
-      const updated = await prisma.bot.update({
-        where: { id },
-        data: { settings: template.config },
-      });
+      const adminId = (req.user as { adminId?: string } | undefined)?.adminId ?? null;
+      const settings =
+        bot.botType === "QUICKBOOK"
+          ? await prisma.$transaction((tx) =>
+              replaceConfigInTx(tx, id, template.config as Record<string, unknown>, { adminId }),
+            )
+          : (
+              await prisma.bot.update({
+                where: { id },
+                data: { settings: template.config },
+              })
+            ).settings;
 
       tenantResolver?.invalidate(bot.botTokenHash, bot.id);
 
       return reply.send({
         ok: true,
         message: `Template '${template.name}' applied successfully`,
-        settings: updated.settings,
+        settings,
       });
     },
   );
@@ -130,13 +144,27 @@ export function registerTemplatesRoutes(
           });
         }
 
-        const updated = await prisma.bot.update({
-          where: { id },
-          data: { settings: parsed.data },
+        // Min lead time and existing prices are delayed to the next working day (see web-config-save).
+        const revision = (req.query as { revision?: string }).revision;
+        const adminId = (req.user as { adminId?: string } | undefined)?.adminId ?? null;
+        const saved = await saveWebQuickBookConfig(prisma, {
+          botId: id,
+          incoming: parsed.data,
+          adminId,
+          revision,
         });
+        if (!saved.ok) {
+          const status = saved.error === "STALE_SETTINGS" ? 409 : saved.error === "BOT_NOT_FOUND" ? 404 : 400;
+          return reply.code(status).send({ ok: false, error: saved.error });
+        }
 
         tenantResolver?.invalidate(bot.botTokenHash, bot.id);
-        return reply.send({ ok: true, settings: updated.settings });
+        return reply.send({
+          ok: true,
+          settings: saved.settings,
+          scheduled: saved.scheduled.map(describeChange),
+          ...(await quickBookSettingsView(prisma, id)),
+        });
       }
 
       return reply.code(400).send({ ok: false, error: "Unknown bot type" });

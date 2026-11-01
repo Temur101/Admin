@@ -45,6 +45,8 @@ export interface QuickBookSessionState {
   customerName?: string;
   phone?: string;
   phoneVerified?: boolean;
+  /** Price (UZS) shown on the summary the client/owner is about to confirm. */
+  priceUzs?: number;
   step?:
     | "service"
     | "resource"
@@ -85,6 +87,16 @@ export interface PlatformBotSession {
     expiresAt: number;
   };
   reschedule?: { bookingId: string; token: string; expiresAt: number; slots: string[] };
+  limits?: {
+    step: "lead_input" | "price_input" | "confirm";
+    kind?: "MIN_LEAD" | "SERVICE_PRICE";
+    serviceId?: string;
+    newValue?: number;
+    oldValue?: number | null;
+    effectiveDate?: string;
+    token?: string;
+    expiresAt: number;
+  };
   [key: string]: unknown;
 }
 

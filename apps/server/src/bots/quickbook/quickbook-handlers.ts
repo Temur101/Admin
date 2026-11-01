@@ -14,6 +14,7 @@ import { parseAndNormalizePhone } from "../shared/phone.js";
 import { getQuickBookConfig } from "./config-resolver.js";
 import { type TimeSlot } from "./slot-generator.js";
 import { createBooking, formatTashkentDateTime } from "./booking-service.js";
+import { priceChangedNotice, priceLine, tooSoonNotice } from "./limits-texts.js";
 
 export interface QuickBookComposerOptions {
   prisma: PrismaClient;
@@ -53,6 +54,7 @@ export async function renderAlternativeSlots(
   slots: TimeSlot[],
   serviceId: string,
   _staffId: string,
+  notice?: string,
 ): Promise<void> {
   const lang = ctx.session.lang ?? "RU";
   const keyboard = new InlineKeyboard();
@@ -70,7 +72,7 @@ export async function renderAlternativeSlots(
     .text(t(lang, "btn_back"), `qb:back:res:${callbackId(serviceId)}`)
     .text(t(lang, "btn_restart"), "qb:restart");
 
-  await ctx.reply(t(lang, "qb_slot_taken"), { reply_markup: keyboard });
+  await ctx.reply(notice ?? t(lang, "qb_slot_taken"), { reply_markup: keyboard });
 }
 
 export async function promptQuickBookSummary(
@@ -78,6 +80,7 @@ export async function promptQuickBookSummary(
   rawPhone: string,
   phoneVerified: boolean,
   _opts: QuickBookComposerOptions,
+  priceOverride?: number,
 ): Promise<void> {
   const lang = ctx.session.lang ?? "RU";
   const session = ctx.session.quickbook;
@@ -106,6 +109,7 @@ export async function promptQuickBookSummary(
   session.runId = runId;
   session.phone = phoneRes.normalized;
   session.phoneVerified = phoneVerified;
+  session.priceUzs = priceOverride ?? srv?.priceUzs;
   session.step = "summary";
 
   const verifiedLabel = t(
@@ -122,6 +126,7 @@ export async function promptQuickBookSummary(
     verified: verifiedLabel,
   });
 
+  const summaryWithPrice = [summaryText, priceLine(lang, session.priceUzs)].filter(Boolean).join("\n");
   const kb = new InlineKeyboard()
     .text(t(lang, "btn_confirm_submit"), `qb:confirm_book:${runId}`)
     .text(t(lang, "btn_edit_field"), `qb:edit:${runId}`)
@@ -129,7 +134,7 @@ export async function promptQuickBookSummary(
     .text(t(lang, "btn_back"), `qb:back:phone:${runId}`)
     .text(t(lang, "btn_restart"), `qb:restart:${runId}`);
 
-  await ctx.reply(summaryText, { reply_markup: kb });
+  await ctx.reply(summaryWithPrice, { reply_markup: kb });
 }
 
 export async function sendQuickBookEditMenu(ctx: PlatformBotContext): Promise<void> {
@@ -196,6 +201,7 @@ export async function handleQuickBookContact(
       lockToken: session.lockToken,
       config,
       lang,
+      expectedPriceUzs: session.priceUzs,
     });
   } catch (err) {
     opts.logger.error(
@@ -226,23 +232,40 @@ export async function handleQuickBookContact(
       : RESOURCE_LABELS[config.resourceType][lang === "UZ" ? "uz" : "ru"];
 
     const timeStr = formatTashkentDateTime(bookingRes.booking.slotTime);
-    const successMsg = t(lang, "qb_booking_success", {
-      service: srvName,
-      label,
-      resource: staffName,
-      time: timeStr,
-    });
+    const successMsg = [
+      t(lang, "qb_booking_success", {
+        service: srvName,
+        label,
+        resource: staffName,
+        time: timeStr,
+      }),
+      priceLine(lang, bookingRes.booking.priceUzs),
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     await ctx.reply(successMsg, {
       reply_markup: navigationKeyboard(ctx),
     });
     if (ctx.session.quickbook === session) delete ctx.session.quickbook;
+  } else if (bookingRes.error === "PRICE_CHANGED") {
+    // New total needs its own confirmation: fresh run id invalidates the old confirm button.
+    delete session.runId;
+    await ctx.reply(priceChangedNotice(lang, bookingRes.priceUzs));
+    await promptQuickBookSummary(
+      ctx,
+      session.phone ?? rawPhone,
+      session.phoneVerified ?? phoneVerified,
+      opts,
+      bookingRes.priceUzs,
+    );
   } else if ("alternativeSlots" in bookingRes) {
     await renderAlternativeSlots(
       ctx,
       bookingRes.alternativeSlots,
       session.serviceId,
       session.resourceId,
+      bookingRes.error === "TOO_SOON" ? tooSoonNotice(lang, config.minLeadMinutes) : undefined,
     );
   } else {
     await ctx.reply(t(lang, "quiz_invalid_phone"));
