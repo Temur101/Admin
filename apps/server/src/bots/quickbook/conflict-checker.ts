@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { QuickBookConfig } from "@lcqb/contracts";
+import { tashkentDateString } from "./booking-horizon.js";
 import { parseTashkentDate, parseTimeToMinutes } from "./slot-generator.js";
 
 export interface AffectedBooking {
@@ -101,7 +102,7 @@ export async function findAffectedBookings(
         continue;
       }
 
-      const dateStr = b.slotTime.toISOString().slice(0, 10);
+      const dateStr = tashkentDateString(b.slotTime);
       const { dayOfWeek } = parseTashkentDate(dateStr);
       if (!resource.workDays.includes(dayOfWeek)) {
         affected.push({

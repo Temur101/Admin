@@ -1,3 +1,4 @@
+import { attachOutboxFixture } from "./helpers/outbox-fixture.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { PrismaClient, Lead } from "@prisma/client";
@@ -35,6 +36,7 @@ beforeEach(async () => {
     return structuredClone(create);
   });
   prisma = { lead: { upsert } } as unknown as PrismaClient;
+  attachOutboxFixture(prisma);
   bot = new Bot<PlatformBotContext>("123456:quiz-reliability-test-token");
   bot.api.config.use(transport.transformerFor("b1"));
   bot.use((ctx, next) => {

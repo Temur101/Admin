@@ -67,7 +67,7 @@ export async function registerAdminApi(
   registerAuthRoutes(app, prisma, redis);
   registerTenantRoutes(app, prisma);
   registerBotsRoutes(app, prisma, tenantResolver, logger, transport, pollingManager, redis);
-  registerBotsSimpleSettingsRoutes(app, prisma, redis);
+  registerBotsSimpleSettingsRoutes(app, prisma, redis, tenantResolver);
   registerTemplatesRoutes(app, prisma, tenantResolver);
   registerBookingsRoutes(app, prisma, redis, transport, logger);
   registerReceiptsRoutes(app, prisma, redis, transport, logger);

@@ -1,9 +1,16 @@
+import { bookingSetupIssues } from "@lcqb/contracts/validation";
+import type { TenantResolver } from "../gateway/tenant-resolver.js";
 import type { FastifyInstance } from "fastify";
 import type { PrismaClient } from "@prisma/client";
 import type { Redis } from "ioredis";
 import { z } from "zod";
 import { authenticateAdmin } from "./auth.js";
-import { createTimeBlock, deleteTimeBlock, listTimeBlocks } from "../bots/quickbook/time-block-service.js";
+import {
+  createTimeBlock,
+  deleteTimeBlock,
+  listTimeBlocks,
+  TimeBlockConflictError,
+} from "../bots/quickbook/time-block-service.js";
 import { findAffectedBookings } from "../bots/quickbook/conflict-checker.js";
 import { getQuickBookConfig } from "../bots/quickbook/config-resolver.js";
 import type { QuickBookConfig } from "@lcqb/contracts";
@@ -55,6 +62,7 @@ export function registerBotsSimpleSettingsRoutes(
   app: FastifyInstance,
   prisma: PrismaClient,
   redis?: Redis,
+  tenantResolver?: TenantResolver,
 ): void {
   // PATCH /api/v1/bots/:id/simple-settings
   app.patch<{ Params: BotParams }>(
@@ -82,7 +90,8 @@ export function registerBotsSimpleSettingsRoutes(
         if (prices && prices.length > 0) {
           for (const p of prices) {
             const s = config.services.find((item) => item.id === p.serviceId);
-            if (s) s.priceUzs = p.priceUzs;
+            if (!s) return reply.code(400).send({ error: "SERVICE_NOT_FOUND" });
+            s.priceUzs = p.priceUzs;
           }
         }
 
@@ -101,6 +110,7 @@ export function registerBotsSimpleSettingsRoutes(
             ? config.resources.filter((r) => r.id === workHours.resourceId)
             : config.resources;
 
+          if (!targetResources.length) return reply.code(400).send({ error: "RESOURCE_NOT_FOUND" });
           for (const res of targetResources) {
             res.workHours = { start: workHours.start, end: workHours.end };
             if (workHours.workDays) {
@@ -108,6 +118,9 @@ export function registerBotsSimpleSettingsRoutes(
             }
           }
 
+          const issues = bookingSetupIssues(config);
+          if (issues.length)
+            return reply.code(400).send({ error: "VALIDATION_ERROR", details: issues });
           const conflictCheck = await findAffectedBookings({
             botId: id,
             prisma,
@@ -123,6 +136,9 @@ export function registerBotsSimpleSettingsRoutes(
           }
         }
 
+        const issues = bookingSetupIssues(config);
+        if (issues.length)
+          return reply.code(400).send({ error: "VALIDATION_ERROR", details: issues });
         await prisma.bot.update({
           where: { id },
           data: { settings: config as unknown as object },
@@ -149,10 +165,8 @@ export function registerBotsSimpleSettingsRoutes(
       });
 
       // Invalidate Redis caches
-      if (redis) {
-        await redis.del(`bot:settings:${id}`).catch(() => {});
-        await redis.del(`bot:${id}`).catch(() => {});
-      }
+      if (tenantResolver) await tenantResolver.invalidate(bot.botTokenHash, id);
+      else if (redis) await redis.del(`bot:hash:${bot.botTokenHash}`, `bot:id:${id}`);
 
       return reply.send({ ok: true });
     },
@@ -196,29 +210,29 @@ export function registerBotsSimpleSettingsRoutes(
         return reply.status(400).send({ error: "startsAt must be before endsAt" });
       }
 
-      const conflictCheck = await findAffectedBookings({
-        botId: id,
-        prisma,
-        newBlock: { resourceId, startsAt: startDate, endsAt: endDate },
-      });
-
-      if (conflictCheck.hasConflicts && !confirmConflicts) {
-        return reply.status(409).send({
-          error: "CONFLICTS_DETECTED",
-          affectedCount: conflictCheck.affectedCount,
-          affectedBookings: conflictCheck.affectedBookings,
+      try {
+        const block = await createTimeBlock(prisma, {
+          botId: id,
+          resourceId,
+          startsAt: startDate,
+          endsAt: endDate,
+          reason,
+          confirmConflicts,
         });
+        return reply.status(201).send({ ok: true, timeBlock: block });
+      } catch (error) {
+        if (error instanceof TimeBlockConflictError)
+          return reply
+            .code(409)
+            .send({
+              error: "CONFLICTS_DETECTED",
+              affectedCount: error.bookings.length,
+              affectedBookings: error.bookings,
+            });
+        if ((error as Error).message === "RESOURCE_NOT_FOUND")
+          return reply.code(400).send({ error: "RESOURCE_NOT_FOUND" });
+        throw error;
       }
-
-      const block = await createTimeBlock(prisma, {
-        botId: id,
-        resourceId,
-        startsAt: startDate,
-        endsAt: endDate,
-        reason,
-      });
-
-      return reply.status(201).send({ ok: true, timeBlock: block });
     },
   );
 
