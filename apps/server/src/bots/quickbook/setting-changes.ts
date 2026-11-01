@@ -1,11 +1,6 @@
 import { loadEffectiveConfig, lockBotRow } from "./effective-settings.js";
 import { applyDueInTx } from "./setting-change-activation.js";
-export {
-  loadEffectiveConfig,
-  loadEffectiveSettings,
-  refreshConfigValues,
-  lockBotRow,
-} from "./effective-settings.js";
+export { loadEffectiveConfig, loadEffectiveSettings, lockBotRow } from "./effective-settings.js";
 export { applyDueChanges } from "./setting-change-activation.js";
 export { applyDueInTx };
 import type { Prisma, PrismaClient, BotSettingChange, SettingChangeKind } from "@prisma/client";

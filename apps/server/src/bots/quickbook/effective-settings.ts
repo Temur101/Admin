@@ -40,22 +40,3 @@ export async function loadEffectiveConfig(
   const config = getQuickBookConfig(settings);
   return config.services.length > 0 ? config : null;
 }
-
-export async function refreshConfigValues(
-  db: Db,
-  botId: string,
-  config: QuickBookConfig,
-  now = new Date(),
-): Promise<QuickBookConfig> {
-  if (!db.bot?.findUnique) return config;
-  const fresh = await loadEffectiveConfig(db, botId, now);
-  if (!fresh) return config;
-  return {
-    ...config,
-    minLeadMinutes: fresh.minLeadMinutes,
-    services: config.services.map((s) => {
-      const f = fresh.services.find((x) => x.id === s.id);
-      return f ? { ...s, priceUzs: f.priceUzs } : s;
-    }),
-  };
-}

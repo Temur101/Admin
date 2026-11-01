@@ -10,8 +10,7 @@ import {
   bookingNotification,
 } from "../shared/notification-outbox.js";
 import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS } from "./booking-constants.js";
-import { validateBookingSlotEligibility } from "./booking-validator.js";
-import { refreshConfigValues } from "./setting-changes.js";
+import { BookingPolicyError, checkBookingPolicy, lockBookingPolicy } from "./booking-policy.js";
 
 export interface RescheduleBookingParams {
   prisma: PrismaClient;
@@ -50,8 +49,6 @@ export async function rescheduleBooking(
     isAdmin = false,
   } = params;
 
-  const now = params.now ?? new Date();
-  const config = await refreshConfigValues(prisma, botId, params.config, now);
   const slotDate = typeof newSlotTime === "string" ? new Date(newSlotTime) : newSlotTime;
 
   const booking = await prisma.booking.findUnique({
@@ -70,38 +67,24 @@ export async function rescheduleBooking(
     return { success: false, error: "INVALID_SLOT" };
   }
 
-  const service = config.services.find((s) => s.id === booking.serviceId);
-  const staff = config.resources.find((r) => r.id === booking.staffId);
-  if (!service || !staff) {
-    return { success: false, error: "INVALID_SLOT" };
-  }
-
-  const eligibility = validateBookingSlotEligibility({
-    config,
-    service: { ...service, durationMin: booking.durationMin },
-    staff,
-    slotDate,
-    now,
-    skipMinLead: isAdmin,
-  });
-
-  if (!eligibility.valid) {
-    // The original booking is untouched on any failure.
-    return { success: false, error: eligibility.error === "TOO_SOON" ? "TOO_SOON" : "SLOT_TAKEN" };
-  }
-
-  const endTime = new Date(slotDate.getTime() + booking.durationMin * 60000);
-
   try {
     const eventKey = `booking:${bookingId}:rescheduled:${randomUUID()}`;
     const updated = await prisma.$transaction(
       async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${`calendar:${botId}`}));`;
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${booking.staffId}`}));`;
+        await lockBookingPolicy(tx, botId, booking.staffId);
 
         const current = await tx.booking.findUnique({ where: { id: bookingId } });
         if (!current || !["PENDING", "CONFIRMED"].includes(current.status))
           throw new Error("BOOKING_INACTIVE");
+        const { endTime } = await checkBookingPolicy(tx, {
+          botId,
+          serviceId: current.serviceId,
+          staffId: current.staffId,
+          slotDate,
+          durationMin: current.durationMin,
+          now: params.now,
+          skipMinLead: isAdmin,
+        });
         // Check for conflicting TimeBlock
         const timeBlock = await tx.timeBlock.findFirst({
           where: {
@@ -162,6 +145,16 @@ export async function rescheduleBooking(
 
     return { success: true, booking: updated };
   } catch (err: unknown) {
+    if (err instanceof BookingPolicyError)
+      return {
+        success: false,
+        error:
+          err.code === "TOO_SOON"
+            ? "TOO_SOON"
+            : err.code === "SERVICE_NOT_FOUND" || err.code === "STAFF_NOT_FOUND"
+              ? "INVALID_SLOT"
+              : "SLOT_TAKEN",
+      };
     const errorMsg = (err as Error).message ?? "";
     if (errorMsg.includes("BOOKING_INACTIVE")) return { success: false, error: "INVALID_SLOT" };
     const isConflict =

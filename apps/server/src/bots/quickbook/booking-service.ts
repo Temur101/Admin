@@ -14,7 +14,7 @@ import { getAlternativeSlots, type TimeSlot } from "./slot-generator.js";
 import { formatTashkentDateTime } from "../shared/payment-service.js";
 import { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS } from "./booking-constants.js";
 import { getTashkentTimeParts, validateBookingSlotEligibility } from "./booking-validator.js";
-import { refreshConfigValues } from "./setting-changes.js";
+import { BookingPolicyError, checkBookingPolicy, lockBookingPolicy } from "./booking-policy.js";
 
 export { REMINDER_ZSET_KEY, REMINDER_LEAD_TIME_MS, formatTashkentDateTime };
 export { getTashkentTimeParts, validateBookingSlotEligibility };
@@ -92,8 +92,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
     slotTime,
     lang = "RU",
   } = params;
-  // Fresh min lead + prices from PostgreSQL: stale buttons/sessions cannot bypass them.
-  const config = await refreshConfigValues(prisma, botId, params.config, params.now);
+  let config = params.config;
   const isManual = (params.source ?? (customerTgId != null ? "TELEGRAM" : "MANUAL")) === "MANUAL";
 
   const parsedPhone = parseAndNormalizePhone(customerPhone);
@@ -102,54 +101,28 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
   }
   const normalizedPhone = parsedPhone.normalized;
 
-  const service = config.services.find((s) => s.id === serviceId);
-  if (!service) return { success: false, error: "SERVICE_NOT_FOUND" };
-  if (params.expectedPriceUzs !== undefined && params.expectedPriceUzs !== service.priceUzs) {
-    return { success: false, error: "PRICE_CHANGED", priceUzs: service.priceUzs };
-  }
-
-  const staff = config.resources.find((r) => r.id === staffId);
-  if (!staff) return { success: false, error: "STAFF_NOT_FOUND" };
-
   const slotDate = typeof slotTime === "string" ? new Date(slotTime) : slotTime;
-  const serviceName = lang === "UZ" ? service.name.uz : service.name.ru;
   const dateStr = getTashkentTimeParts(slotDate).dateStr;
-
-  const eligibility = validateBookingSlotEligibility({
-    config,
-    service,
-    staff,
-    slotDate,
-    now: params.now,
-    skipMinLead: isManual,
-  });
-
-  if (!eligibility.valid) {
-    if (eligibility.error === "SERVICE_NOT_SUPPORTED") {
-      return { success: false, error: "SERVICE_NOT_SUPPORTED" };
-    }
-    const alternativeSlots = await getAlternativeSlots({
-      botId,
-      config,
-      serviceId,
-      staffId,
-      dateStr,
-      prisma,
-      redis,
-      now: params.now,
-      lang,
-      skipMinLead: isManual,
-    });
-    return { success: false, error: eligibility.error, alternativeSlots };
-  }
-
-  const endTime = new Date(slotDate.getTime() + service.durationMin * 60000);
 
   try {
     const booking = await prisma.$transaction(
       async (tx) => {
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtext(${`calendar:${botId}`}));`;
-        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`${botId}:${staffId}`}));`;
+        await lockBookingPolicy(tx, botId, staffId);
+        const {
+          config: liveConfig,
+          service: liveService,
+          endTime,
+        } = await checkBookingPolicy(tx, {
+          botId,
+          serviceId,
+          staffId,
+          slotDate,
+          now: params.now,
+          skipMinLead: isManual,
+          expectedPriceUzs: params.expectedPriceUzs,
+        });
+        config = liveConfig;
+        const serviceName = lang === "UZ" ? liveService.name.uz : liveService.name.ru;
 
         // Check for conflicting TimeBlock
         const timeBlock = tx.timeBlock?.findFirst
@@ -199,8 +172,8 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
             serviceId,
             serviceName,
             staffId,
-            durationMin: service.durationMin,
-            priceUzs: service.priceUzs,
+            durationMin: liveService.durationMin,
+            priceUzs: liveService.priceUzs,
             slotTime: slotDate,
             endTime,
             status: "CONFIRMED",
@@ -226,7 +199,7 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
         slotTime: slotDate,
         userId: customerTgId,
         lockToken: params.lockToken,
-        durationMin: service.durationMin,
+        durationMin: booking.durationMin,
         slotIntervalMin: config.slotIntervalMin,
       }).catch(() => {});
     }
@@ -245,6 +218,33 @@ export async function createBooking(params: CreateBookingParams): Promise<Create
 
     return { success: true, booking };
   } catch (err: unknown) {
+    if (err instanceof BookingPolicyError) {
+      if (err.code === "PRICE_CHANGED")
+        return { success: false, error: "PRICE_CHANGED", priceUzs: err.priceUzs! };
+      if (
+        err.code === "SERVICE_NOT_FOUND" ||
+        err.code === "STAFF_NOT_FOUND" ||
+        err.code === "SERVICE_NOT_SUPPORTED"
+      ) {
+        return { success: false, error: err.code };
+      }
+      return {
+        success: false,
+        error: err.code,
+        alternativeSlots: await getAlternativeSlots({
+          botId,
+          config: err.config ?? config,
+          serviceId,
+          staffId,
+          dateStr,
+          prisma,
+          redis,
+          now: params.now,
+          lang,
+          skipMinLead: isManual,
+        }),
+      };
+    }
     const errorMsg = (err as Error).message ?? "";
     const errObj = typeof err === "object" && err !== null ? (err as Record<string, unknown>) : {};
     const errCode =
