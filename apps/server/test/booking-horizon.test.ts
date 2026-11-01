@@ -88,7 +88,7 @@ describe("Единый срок записи по времени Ташкент�
   it("альтернативы не предлагают завтра при горизонте один день", async () => {
     const cfg = config();
     cfg.resources[0]!.workHours = { start: "09:00", end: "10:00" };
-    const now = new Date("2026-10-19T04:15:00Z");
+    const now = new Date("2026-10-19T03:15:00Z"); // 08:15 local: min lead leaves 09:30 today only
     const prisma = { booking: { findMany: vi.fn(async () => []) } } as unknown as PrismaClient;
     const result = await getAlternativeSlots(
       { botId: "b", config: cfg, serviceId: "s", dateStr: "2026-10-19", prisma, now },

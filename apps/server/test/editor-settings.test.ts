@@ -6,22 +6,41 @@ import type { PrismaClient } from "@prisma/client";
 import { createQuizChain, bookingSetupIssues } from "@lcqb/contracts/validation";
 import { registerTemplatesRoutes, TEMPLATES_CATALOG } from "../src/admin-api/templates.js";
 import { resolveInitialBotSettings } from "../src/admin-api/initial-bot-settings.js";
+import { settingsRevision } from "../src/bots/quickbook/web-config-save.js";
+import { getQuickBookConfig } from "../src/bots/quickbook/config-resolver.js";
 vi.mock("../src/core/env.js", () => ({ env: {} }));
 let app: FastifyInstance;
 let token: string;
 let type: "QUICKBOOK" | "LEADCATCH";
 const update = vi.fn();
+let storedSettings: unknown;
 beforeEach(async () => {
   type = "QUICKBOOK";
+  storedSettings = resolveInitialBotSettings({
+    botType: "QUICKBOOK",
+    templateId: "restaurant_tables",
+  });
+  const found = async () => ({
+    id: "bot1",
+    botType: type,
+    botTokenHash: "test-hash",
+    settings: storedSettings,
+    settingChanges: [],
+  });
   const prisma = {
+    $queryRaw: async () => [{ id: "bot1" }],
+    $transaction: async (fn: (tx: PrismaClient) => Promise<unknown>) => fn(prisma),
+    botSettingChange: { findMany: async () => [] },
     bot: {
-      findUnique: vi.fn(async () => ({ id: "bot1", botType: type, botTokenHash: "test-hash" })),
+      findUnique: vi.fn(found),
+      findUniqueOrThrow: vi.fn(found),
       update,
     },
   } as unknown as PrismaClient;
-  update.mockImplementation(async ({ data }: { data: { settings: unknown } }) => ({
-    settings: data.settings,
-  }));
+  update.mockImplementation(async ({ data }: { data: { settings: unknown } }) => {
+    storedSettings = data.settings;
+    return { settings: storedSettings };
+  });
   app = Fastify();
   await app.register(jwt, { secret: "editor-test-only" });
   registerTemplatesRoutes(app, prisma);
@@ -35,7 +54,7 @@ afterEach(async () => {
 const send = (payload: unknown) =>
   app.inject({
     method: "PUT",
-    url: "/api/v1/bots/bot1/settings",
+    url: `/api/v1/bots/bot1/settings?revision=${settingsRevision(getQuickBookConfig(storedSettings as Record<string, unknown>), [])}`,
     headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
     payload: JSON.stringify(payload),
   });

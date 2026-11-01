@@ -44,14 +44,26 @@ describe("Readiness stage 3: settings and time blocks", () => {
       method: "PATCH",
       url: `/api/v1/bots/${f.bot.id}/simple-settings`,
       headers,
-      payload: { prices: [{ serviceId: "haircut", priceUzs: 99999 }] },
+      payload: {
+        prices: [{ serviceId: "haircut", priceUzs: 99999 }],
+        workHours: { start: "10:00", end: "23:59" },
+      },
     });
     expect(r.statusCode).toBe(200);
     for (const meta of [
       await f.resolver.resolveById(f.bot.id),
       await f.resolver.resolve(f.bot.botTokenHash),
-    ])
-      expect((meta!.settings.services as { priceUzs: number }[])[0]!.priceUzs).toBe(99999);
+    ]) {
+      expect((meta!.settings.services as { priceUzs: number }[])[0]!.priceUzs).toBe(50000);
+      expect(
+        (meta!.settings.resources as { workHours: { start: string } }[])[0]!.workHours.start,
+      ).toBe("10:00");
+    }
+    const pending = await f.prisma.botSettingChange.findFirstOrThrow({
+      where: { botId: f.bot.id, kind: "SERVICE_PRICE", status: "PENDING" },
+    });
+    expect(pending.newValue).toBe(99999);
+    expect(pending.effectiveAt.getTime()).toBeGreaterThan(Date.now());
   });
   it("requires owner confirmation before blocking an existing booking", async () => {
     await f.booking();
