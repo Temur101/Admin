@@ -13,7 +13,10 @@ import { findNextWorkingDate } from "../src/bots/quickbook/setting-schedule.js";
 import { generateAvailableSlots } from "../src/bots/quickbook/slot-generator.js";
 import { createBooking, cancelBooking } from "../src/bots/quickbook/booking-service.js";
 import { rescheduleBooking } from "../src/bots/quickbook/reschedule-service.js";
-import { saveWebQuickBookConfig } from "../src/bots/quickbook/web-config-save.js";
+import {
+  quickBookSettingsView,
+  saveWebQuickBookConfig,
+} from "../src/bots/quickbook/web-config-save.js";
 import { resolveInitialBotSettings } from "../src/admin-api/initial-bot-settings.js";
 import { callbackId } from "../src/bots/shared/callback-id.js";
 import { actors, readinessConfig, readinessFixture } from "./helpers/readiness-fixture.js";
@@ -332,6 +335,7 @@ describe("QuickBook: min lead time & service prices (Stages 2–10)", () => {
       });
       const savedWeb = await saveWebQuickBookConfig(fx.prisma, {
         botId: fx.bot.id,
+        revision: (await quickBookSettingsView(fx.prisma, fx.bot.id, day0)).settingsRevision,
         incoming: {
           ...baseConfig,
           services: [baseConfig.services[0]!], // 'beard' removed!

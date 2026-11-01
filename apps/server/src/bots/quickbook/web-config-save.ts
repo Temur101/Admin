@@ -19,12 +19,25 @@ type Raw = Record<string, unknown>;
 
 /** Fingerprint of the current values + pending changes; lets web forms detect stale edits. */
 export function settingsRevision(config: QuickBookConfig, pending: BotSettingChange[]): string {
-  const material = JSON.stringify({
-    lead: config.minLeadMinutes ?? null,
-    prices: config.services.map((s) => [s.id, s.priceUzs]),
-    pending: pending.map((c) => [c.id, c.status]),
-  });
-  return createHash("sha1").update(material).digest("hex").slice(0, 16);
+  const material = JSON.stringify(
+    canonical({
+      config,
+      pending: pending.map((c) => [c.id, c.status, c.newValue, c.effectiveAt.toISOString()]).sort(),
+    }),
+  );
+  return createHash("sha256").update(material).digest("hex").slice(0, 32);
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object")
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([key, v]) => [key, canonical(v)]),
+    );
+  return value;
 }
 
 export type WebSaveResult =
@@ -48,65 +61,77 @@ export async function saveWebQuickBookConfig(
 ): Promise<WebSaveResult> {
   const now = p.now ?? new Date();
   const author: ChangeAuthor = { adminId: p.adminId };
-  return prisma.$transaction(async (tx): Promise<WebSaveResult> => {
-    if (!(await lockBotRow(tx, p.botId))) return { ok: false, error: "BOT_NOT_FOUND" };
-    await applyDueInTx(tx, p.botId, now);
-    const bot = await tx.bot.findUniqueOrThrow({
-      where: { id: p.botId },
-      select: { settings: true },
-    });
-    const current = getQuickBookConfig((bot.settings ?? {}) as Raw);
-    const pendingBefore = await listPendingChanges(tx, p.botId);
-    if (p.revision && p.revision !== settingsRevision(current, pendingBefore)) {
-      return { ok: false, error: "STALE_SETTINGS" };
-    }
-
-    const hasCurrent = current.services.length > 0;
-    const next: QuickBookConfig = { ...p.incoming };
-    const requests: { kind: "MIN_LEAD" | "SERVICE_PRICE"; targetId?: string; newValue: number }[] = [];
-
-    if (!hasCurrent) {
-      next.minLeadMinutes = p.incoming.minLeadMinutes ?? current.minLeadMinutes;
-    } else {
-      const wanted = p.incoming.minLeadMinutes;
-      if (wanted !== undefined && wanted !== current.minLeadMinutes) {
-        requests.push({ kind: "MIN_LEAD", newValue: wanted });
-      }
-      next.minLeadMinutes = current.minLeadMinutes;
-      next.services = p.incoming.services.map((svc) => {
-        const existing = current.services.find((s) => s.id === svc.id);
-        if (!existing) return svc;
-        if (existing.priceUzs !== svc.priceUzs) {
-          requests.push({ kind: "SERVICE_PRICE", targetId: svc.id, newValue: svc.priceUzs });
-        }
-        return { ...svc, priceUzs: existing.priceUzs };
+  return prisma
+    .$transaction(async (tx): Promise<WebSaveResult> => {
+      if (!(await lockBotRow(tx, p.botId))) return { ok: false, error: "BOT_NOT_FOUND" };
+      await applyDueInTx(tx, p.botId, now);
+      const bot = await tx.bot.findUniqueOrThrow({
+        where: { id: p.botId },
+        select: { settings: true },
       });
-      const kept = new Set(p.incoming.services.map((s) => s.id));
-      await cancelServicePriceChanges(
-        tx,
-        p.botId,
-        current.services.filter((s) => !kept.has(s.id)).map((s) => s.id),
-        author,
-        now,
-      );
-    }
+      const current = getQuickBookConfig((bot.settings ?? {}) as Raw);
+      const pendingBefore = await listPendingChanges(tx, p.botId);
+      if (!p.revision || p.revision !== settingsRevision(current, pendingBefore)) {
+        return { ok: false, error: "STALE_SETTINGS" };
+      }
 
-    await tx.bot.update({
-      where: { id: p.botId },
-      data: { settings: next as unknown as Prisma.InputJsonValue },
+      const hasCurrent = current.services.length > 0;
+      const next: QuickBookConfig = { ...p.incoming };
+      const requests: {
+        kind: "MIN_LEAD" | "SERVICE_PRICE";
+        targetId?: string;
+        newValue: number;
+      }[] = [];
+
+      if (!hasCurrent) {
+        next.minLeadMinutes = p.incoming.minLeadMinutes ?? current.minLeadMinutes;
+      } else {
+        const wanted = p.incoming.minLeadMinutes;
+        if (wanted !== undefined && wanted !== current.minLeadMinutes) {
+          requests.push({ kind: "MIN_LEAD", newValue: wanted });
+        }
+        next.minLeadMinutes = current.minLeadMinutes;
+        next.services = p.incoming.services.map((svc) => {
+          const existing = current.services.find((s) => s.id === svc.id);
+          if (!existing) return svc;
+          if (existing.priceUzs !== svc.priceUzs) {
+            requests.push({ kind: "SERVICE_PRICE", targetId: svc.id, newValue: svc.priceUzs });
+          }
+          return { ...svc, priceUzs: existing.priceUzs };
+        });
+        const kept = new Set(p.incoming.services.map((s) => s.id));
+        await cancelServicePriceChanges(
+          tx,
+          p.botId,
+          current.services.filter((s) => !kept.has(s.id)).map((s) => s.id),
+          author,
+          now,
+        );
+      }
+
+      await tx.bot.update({
+        where: { id: p.botId },
+        data: { settings: next as unknown as Prisma.InputJsonValue },
+      });
+
+      const scheduled: BotSettingChange[] = [];
+      for (const req of requests) {
+        const res = await scheduleChangeInTx(tx, {
+          botId: p.botId,
+          author,
+          now,
+          config: next,
+          ...req,
+        });
+        if (!res.ok) throw new WebSaveRollback(res.error);
+        if (!res.unchanged) scheduled.push(res.change);
+      }
+      return { ok: true, settings: next, scheduled };
+    })
+    .catch((err: unknown) => {
+      if (err instanceof WebSaveRollback) return { ok: false, error: err.code } as const;
+      throw err;
     });
-
-    const scheduled: BotSettingChange[] = [];
-    for (const req of requests) {
-      const res = await scheduleChangeInTx(tx, { botId: p.botId, author, now, config: next, ...req });
-      if (!res.ok) throw new WebSaveRollback(res.error);
-      if (!res.unchanged) scheduled.push(res.change);
-    }
-    return { ok: true, settings: next, scheduled };
-  }).catch((err: unknown) => {
-    if (err instanceof WebSaveRollback) return { ok: false, error: err.code } as const;
-    throw err;
-  });
 }
 
 class WebSaveRollback extends Error {
@@ -137,7 +162,13 @@ export async function replaceConfigInTx(
     where: { botId, kind: "SERVICE_PRICE", status: "PENDING" },
     select: { targetId: true },
   });
-  await cancelServicePriceChanges(tx, botId, pendingPrices.map((c) => c.targetId), author, now);
+  await cancelServicePriceChanges(
+    tx,
+    botId,
+    pendingPrices.map((c) => c.targetId),
+    author,
+    now,
+  );
   await tx.bot.update({ where: { id: botId }, data: { settings: next as Prisma.InputJsonValue } });
   return next;
 }

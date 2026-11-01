@@ -4,7 +4,7 @@ import { bookingSetupIssues } from "@lcqb/contracts/validation";
 import { useEditorChanges } from "../../hooks/useEditorChanges.js";
 import { ApiErrorAlert } from "../common/ApiErrorAlert.js";
 import { QuickBookDraftConfigSchema, createEmptyQuickBookConfig } from "@lcqb/contracts";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { QuickBookConfig } from "@lcqb/contracts";
 import type { BotDetails } from "../../api/bots.js";
@@ -33,17 +33,23 @@ export function BotScheduleEditorTab({ bot }: BotScheduleEditorTabProps) {
   const [jsonText, setJsonText] = useState(() => JSON.stringify(config, null, 2));
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [formRevision, setFormRevision] = useState(bot.settingsRevision);
 
   const { dirty, markSaved } = useEditorChanges(`bot:${bot.id}`, config, jsonText, mode);
 
   const saveMut = useMutation({
     mutationFn: (newSettings: unknown) =>
-      bot.settingsRevision
-        ? updateBotSettings(bot.id, newSettings, bot.settingsRevision)
+      formRevision
+        ? updateBotSettings(bot.id, newSettings, formRevision)
         : updateBotSettings(bot.id, newSettings),
-    onSuccess: (_saved, submitted) => {
-      markSaved(submitted);
-      void queryClient.invalidateQueries({ queryKey: ["bot", bot.id] });
+    onSuccess: async (saved, submitted) => {
+      const parsed = QuickBookDraftConfigSchema.safeParse(saved);
+      if (parsed.success) {
+        setConfig(parsed.data);
+        setJsonText(JSON.stringify(parsed.data, null, 2));
+      }
+      markSaved(parsed.success ? parsed.data : submitted);
+      await queryClient.invalidateQueries({ queryKey: ["bot", bot.id] });
       setSuccessMsg("Расписание и услуги QuickBook успешно сохранены.");
       setErrorMsg(null);
     },
@@ -52,6 +58,17 @@ export function BotScheduleEditorTab({ bot }: BotScheduleEditorTabProps) {
       setSuccessMsg(null);
     },
   });
+
+  useEffect(() => {
+    if (dirty || saveMut.isPending || formRevision === bot.settingsRevision) return;
+    const settings = bot.settings as { quickbook?: unknown } | null;
+    const parsed = QuickBookDraftConfigSchema.safeParse(settings?.quickbook ?? settings);
+    if (!parsed.success) return;
+    setConfig(parsed.data);
+    setJsonText(JSON.stringify(parsed.data, null, 2));
+    setFormRevision(bot.settingsRevision);
+    markSaved(parsed.data);
+  }, [bot.settings, bot.settingsRevision, dirty, saveMut.isPending, formRevision]);
 
   const handleModeChange = (newMode: "visual" | "json") => {
     if (newMode === mode) return;
